@@ -1,0 +1,23 @@
+# Quantsploit Configuration
+
+# Database settings
+database:
+  path: "./quantsploit.db"
+
+# Data fetcher settings
+data:
+  cache_enabled: true
+  cache_duration: 3600  # seconds
+  default_period: "1y"
+  default_interval: "1d"
+
+# Display settings
+display:
+  max_rows: 50
+  decimal_places: 4
+  color_scheme: "monokai"
+
+# Module paths
+modules:
+  paths:
+    - "./quantsploit/modules"

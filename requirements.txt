@@ -4,18 +4,22 @@ rich>=13.0.0
 pandas>=2.0.0
 numpy>=1.24.0
 pyyaml>=6.0
+scipy>=1.10.0
 
 # Market data
 yfinance>=0.2.0
-pandas-ta>=0.3.14b
 
-# Options pricing
-py_vollib>=1.0.1
-scipy>=1.10.0
-
-# Database
-sqlite3; python_version >= '3.0'
+# Note: pandas-ta not available - using custom ta_compat layer
+# Note: multitasking build issues - using mock implementation
+# Note: py_vollib optional for advanced options pricing
 
 # Utilities
 python-dateutil>=2.8.0
 tabulate>=0.9.0
+
+# Required by yfinance
+curl-cffi>=0.7.0
+requests>=2.31.0
+lxml
+html5lib
+beautifulsoup4

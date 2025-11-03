@@ -4,7 +4,7 @@ Mean Reversion Strategy with Z-Score Analysis
 
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
+from quantsploit.utils.ta_compat import ta
 from typing import Dict, Any
 from scipy import stats
 from quantsploit.core.module import BaseModule

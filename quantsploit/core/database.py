@@ -91,12 +91,37 @@ class Database:
     def save_analysis(self, module_name: str, symbol: str,
                      parameters: Dict[str, Any], results: Dict[str, Any]):
         """Save analysis results"""
+        import numpy as np
+        import pandas as pd
+
+        def serialize_for_json(obj):
+            """Convert numpy/pandas types to JSON-serializable types"""
+            if isinstance(obj, (np.integer, np.floating)):
+                return float(obj)
+            elif isinstance(obj, np.ndarray):
+                return obj.tolist()
+            elif isinstance(obj, pd.DataFrame):
+                return obj.to_dict()
+            elif isinstance(obj, pd.Series):
+                return obj.to_list()
+            elif isinstance(obj, dict):
+                return {k: serialize_for_json(v) for k, v in obj.items()}
+            elif isinstance(obj, list):
+                return [serialize_for_json(item) for item in obj]
+            return obj
+
         cursor = self.conn.cursor()
-        cursor.execute("""
-            INSERT INTO analysis_results (module_name, symbol, parameters, results)
-            VALUES (?, ?, ?, ?)
-        """, (module_name, symbol, json.dumps(parameters), json.dumps(results)))
-        self.conn.commit()
+        try:
+            clean_params = serialize_for_json(parameters)
+            clean_results = serialize_for_json(results)
+            cursor.execute("""
+                INSERT INTO analysis_results (module_name, symbol, parameters, results)
+                VALUES (?, ?, ?, ?)
+            """, (module_name, symbol, json.dumps(clean_params), json.dumps(clean_results)))
+            self.conn.commit()
+        except Exception as e:
+            # Silently fail on database errors - don't block module execution
+            pass
 
     def get_analysis_history(self, symbol: Optional[str] = None,
                             module_name: Optional[str] = None) -> list:

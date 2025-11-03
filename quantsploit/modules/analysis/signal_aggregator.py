@@ -4,7 +4,7 @@ Signal Aggregator - Combines Multiple Strategies for Consensus Signals
 
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
+from quantsploit.utils.ta_compat import ta
 from typing import Dict, Any, List
 from quantsploit.core.module import BaseModule
 from quantsploit.utils.data_fetcher import DataFetcher

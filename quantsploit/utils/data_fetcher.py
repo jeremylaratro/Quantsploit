@@ -7,17 +7,21 @@ import pandas as pd
 import json
 from typing import Optional, Dict, Any
 from datetime import datetime, timedelta
+from .sample_data import get_sample_data, get_sample_info, get_sample_options
 
 
 class DataFetcher:
     """
     Fetches market data from various sources with caching
+    Falls back to sample data when live data unavailable
     """
 
-    def __init__(self, database=None, cache_enabled=True, cache_duration=3600):
+    def __init__(self, database=None, cache_enabled=True, cache_duration=3600, use_sample_data=False):
         self.database = database
         self.cache_enabled = cache_enabled
         self.cache_duration = cache_duration
+        self.use_sample_data = use_sample_data
+        self._live_data_available = None  # Cache status
 
     def get_stock_data(self, symbol: str, period: str = "1y",
                        interval: str = "1d", force_refresh: bool = False) -> Optional[pd.DataFrame]:
@@ -37,27 +41,40 @@ class DataFetcher:
         if self.cache_enabled and not force_refresh and self.database:
             cached = self.database.get_cached_data(symbol, period, interval, self.cache_duration)
             if cached:
-                return pd.read_json(cached)
+                try:
+                    return pd.read_json(cached)
+                except:
+                    pass
 
-        # Fetch fresh data
+        # Use sample data if explicitly requested or if live data unavailable
+        if self.use_sample_data or self._live_data_available is False:
+            return get_sample_data(symbol, period, interval)
+
+        # Try fetching live data
         try:
             ticker = yf.Ticker(symbol)
             df = ticker.history(period=period, interval=interval)
 
-            if df.empty:
-                return None
+            if df is not None and not df.empty:
+                self._live_data_available = True
 
-            # Cache the data
-            if self.cache_enabled and self.database:
-                self.database.cache_market_data(
-                    symbol, period, interval, df.to_json()
-                )
+                # Cache the data
+                if self.cache_enabled and self.database:
+                    try:
+                        self.database.cache_market_data(
+                            symbol, period, interval, df.to_json()
+                        )
+                    except:
+                        pass
 
-            return df
+                return df
 
         except Exception as e:
-            print(f"Error fetching data for {symbol}: {str(e)}")
-            return None
+            pass
+
+        # Fallback to sample data
+        self._live_data_available = False
+        return get_sample_data(symbol, period, interval)
 
     def get_stock_info(self, symbol: str) -> Optional[Dict[str, Any]]:
         """
@@ -69,13 +86,20 @@ class DataFetcher:
         Returns:
             Dictionary with stock info
         """
+        # Use sample data if requested or unavailable
+        if self.use_sample_data or self._live_data_available is False:
+            return get_sample_info(symbol)
+
         try:
             ticker = yf.Ticker(symbol)
             info = ticker.info
-            return info
+            if info:
+                return info
         except Exception as e:
-            print(f"Error fetching info for {symbol}: {str(e)}")
-            return None
+            pass
+
+        # Fallback to sample data
+        return get_sample_info(symbol)
 
     def get_options_chain(self, symbol: str, expiration: Optional[str] = None) -> Optional[Dict]:
         """
@@ -88,13 +112,17 @@ class DataFetcher:
         Returns:
             Dictionary with calls and puts DataFrames
         """
+        # Use sample data if requested or unavailable
+        if self.use_sample_data or self._live_data_available is False:
+            return get_sample_options(symbol, expiration)
+
         try:
             ticker = yf.Ticker(symbol)
 
             if expiration is None:
                 expirations = ticker.options
                 if not expirations:
-                    return None
+                    return get_sample_options(symbol, expiration)
                 expiration = expirations[0]
 
             opt_chain = ticker.option_chain(expiration)
@@ -107,8 +135,10 @@ class DataFetcher:
             }
 
         except Exception as e:
-            print(f"Error fetching options for {symbol}: {str(e)}")
-            return None
+            pass
+
+        # Fallback to sample data
+        return get_sample_options(symbol, expiration)
 
     def get_multiple_stocks(self, symbols: list, period: str = "1y",
                           interval: str = "1d") -> Dict[str, pd.DataFrame]:

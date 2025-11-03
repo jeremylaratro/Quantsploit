@@ -4,7 +4,7 @@ Advanced Bulk Stock Screener with Parallel Processing
 
 import pandas as pd
 import numpy as np
-import pandas_ta as ta
+from quantsploit.utils.ta_compat import ta
 from typing import Dict, Any, List
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from quantsploit.core.module import BaseModule

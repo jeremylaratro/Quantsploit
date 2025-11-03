@@ -133,10 +133,14 @@ quantsploit (SMA Crossover Strategy) > run
 ### Analysis Modules
 
 - **technical_indicators** - Calculate technical indicators (RSI, MACD, SMA, EMA, Bollinger Bands)
+- **pattern_recognition** - Detect candlestick and chart patterns with automated signals
+- **signal_aggregator** - Aggregate multiple strategies for consensus buy/sell signals
 
 ### Scanner Modules
 
 - **price_momentum** - Scan multiple stocks for price momentum and volume patterns
+- **bulk_screener** - High-performance parallel screening of large stock universes (SP500, NASDAQ100)
+- **top_movers** - Identify top gainers, momentum leaders, and rank stocks by multiple criteria
 
 ### Options Modules
 
@@ -145,6 +149,23 @@ quantsploit (SMA Crossover Strategy) > run
 ### Strategy Modules
 
 - **sma_crossover** - Simple Moving Average crossover backtesting strategy
+- **mean_reversion** - Statistical mean reversion with z-score and Bollinger Bands analysis
+- **momentum_signals** - Advanced momentum and trend following with multiple confirmations
+- **multifactor_scoring** - Comprehensive multi-factor quantitative scoring system
+
+## 🔥 Advanced Features
+
+Quantsploit includes cutting-edge quantitative algorithms for serious traders:
+
+- **Bulk Analysis** - Analyze 100+ stocks in parallel with the Advanced Bulk Screener
+- **Pattern Recognition** - Automated detection of 10+ candlestick and chart patterns
+- **Mean Reversion** - Z-score analysis, percentile ranking, and reversion probability
+- **Momentum Strategies** - Multi-period momentum, acceleration, and relative strength
+- **Multi-Factor Models** - Combine momentum, technical, volatility, and volume factors
+- **Signal Aggregation** - Consensus signals from 5+ strategies with confidence scoring
+- **Top Movers** - Real-time rankings by gainers, momentum, breakouts, and quality
+
+See [ADVANCED_STRATEGIES.md](ADVANCED_STRATEGIES.md) for detailed usage guide.
 
 ## Creating Custom Modules
 

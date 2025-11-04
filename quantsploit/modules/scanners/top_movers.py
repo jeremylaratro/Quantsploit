@@ -79,7 +79,8 @@ class TopMovers(BaseModule):
         self.log(f"Analyzing {len(symbols)} stocks for top movers...")
 
         # Analyze stocks in parallel
-        fetcher = DataFetcher(self.framework.database)
+        # Note: Don't pass database to avoid SQLite threading issues
+        fetcher = DataFetcher(database=None, cache_enabled=False)
         results = []
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:

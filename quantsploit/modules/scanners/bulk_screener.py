@@ -97,7 +97,8 @@ class BulkScreener(BaseModule):
         self.log(f"Screening {len(symbols)} stocks in parallel...")
 
         # Screen stocks in parallel
-        fetcher = DataFetcher(self.framework.database)
+        # Note: Don't pass database to avoid SQLite threading issues
+        fetcher = DataFetcher(database=None, cache_enabled=False)
         results = []
 
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
@@ -112,8 +113,12 @@ class BulkScreener(BaseModule):
                     result = future.result()
                     if result:
                         results.append(result)
+                    else:
+                        self.log(f"No result for {symbol} (returned None)", "warning")
                 except Exception as e:
-                    self.log(f"Error analyzing {symbol}: {str(e)}", "warning")
+                    import traceback
+                    self.log(f"Error analyzing {symbol}: {str(e)}", "error")
+                    self.log(f"Traceback: {traceback.format_exc()}", "error")
 
         # Create DataFrame from all results first
         all_results_df = pd.DataFrame(results) if results else pd.DataFrame()
@@ -178,7 +183,7 @@ class BulkScreener(BaseModule):
         """Analyze a single stock"""
         df = fetcher.get_stock_data(symbol, period, interval)
 
-        if df is None or df.empty or len(df) < 50:
+        if df is None or df.empty or len(df) < 20:  # Reduced from 50 to 20
             return None
 
         # Calculate indicators

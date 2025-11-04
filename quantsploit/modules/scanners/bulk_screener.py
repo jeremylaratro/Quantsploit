@@ -115,6 +115,9 @@ class BulkScreener(BaseModule):
                 except Exception as e:
                     self.log(f"Error analyzing {symbol}: {str(e)}", "warning")
 
+        # Create DataFrame from all results first
+        all_results_df = pd.DataFrame(results) if results else pd.DataFrame()
+
         # Filter results
         filtered_results = self._apply_filters(results)
 
@@ -129,8 +132,10 @@ class BulkScreener(BaseModule):
 
         return {
             "total_analyzed": len(symbols),
+            "results_found": len(results),
             "passed_filters": len(sorted_results),
             "filter_rate": f"{(len(sorted_results)/len(symbols)*100):.1f}%" if symbols else "0%",
+            "all_results": all_results_df.head(20),  # Show first 20 unfiltered
             "results": df,
             "top_10": df.head(10) if not df.empty else pd.DataFrame()
         }
@@ -231,11 +236,11 @@ class BulkScreener(BaseModule):
             "Change%": round(price_change_pct, 2),
             "Volume": int(avg_volume),
             "Vol_Ratio": round(volume_ratio, 2),
-            "RSI": round(current_rsi, 2) if current_rsi else None,
-            "Momentum": round(momentum, 2) if momentum else None,
+            "RSI": round(current_rsi, 2) if current_rsi and not pd.isna(current_rsi) else 50.0,
+            "Momentum": round(momentum, 2) if momentum and not pd.isna(momentum) else 0.0,
             "Trend": trend,
             "MACD": "Bull" if macd_line and macd_signal and macd_line > macd_signal else "Bear",
-            "ATR": round(current_atr, 2) if current_atr else None,
+            "ATR": round(current_atr, 2) if current_atr and not pd.isna(current_atr) else 0.0,
             "Score": round(score, 2)
         }
 
@@ -277,6 +282,9 @@ class BulkScreener(BaseModule):
 
     def _apply_filters(self, results: List[Dict]) -> List[Dict]:
         """Apply user-defined filters"""
+        if not results:
+            return []
+
         filtered = results
 
         min_price = float(self.get_option("MIN_PRICE"))
@@ -292,13 +300,13 @@ class BulkScreener(BaseModule):
         # Volume filter
         filtered = [r for r in filtered if r['Volume'] >= min_volume]
 
-        # RSI filters
+        # RSI filters - only apply if value exists AND filter is set
         if rsi_min:
-            filtered = [r for r in filtered if r['RSI'] and r['RSI'] >= float(rsi_min)]
+            filtered = [r for r in filtered if r['RSI'] is not None and r['RSI'] >= float(rsi_min)]
         if rsi_max:
-            filtered = [r for r in filtered if r['RSI'] and r['RSI'] <= float(rsi_max)]
+            filtered = [r for r in filtered if r['RSI'] is not None and r['RSI'] <= float(rsi_max)]
 
-        # Trend filter
+        # Trend filter - only apply if filter is set
         if trend_filter:
             filtered = [r for r in filtered if r['Trend'] == trend_filter.lower()]
 

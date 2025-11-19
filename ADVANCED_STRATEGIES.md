@@ -174,7 +174,65 @@ quantsploit (Signal Aggregator) > run
 - Risk assessment (HIGH/MEDIUM/LOW)
 - Actionable insights
 
-### 7. Top Movers & Rankings (`scanners/top_movers`)
+### 7. Meta-Analysis (`analysis/meta_analysis`)
+
+**NEW!** Advanced meta-analysis that runs ALL strategies and correlates signals to find stocks with the most consistent signaling across different approaches.
+
+**Features:**
+- Runs 8+ trading strategies simultaneously
+- Normalizes signals across different strategy types
+- Calculates weighted consensus (strength & confidence)
+- Ranks stocks by signal consistency
+- Multi-symbol analysis support
+- Detailed strategy breakdown
+
+**Usage:**
+```
+quantsploit > use analysis/meta_analysis
+quantsploit (Meta-Analysis) > set SYMBOLS AAPL,MSFT,GOOGL,NVDA,TSLA
+quantsploit (Meta-Analysis) > set MIN_CONSENSUS 60
+quantsploit (Meta-Analysis) > set PERIOD 1y
+quantsploit (Meta-Analysis) > run
+```
+
+**Options:**
+- `SYMBOLS`: Comma-separated list of stocks to analyze (REQUIRED)
+- `PERIOD`: Historical data period (default: 1y)
+- `INTERVAL`: Data interval (default: 1d)
+- `MIN_CONSENSUS`: Minimum agreement % to highlight (default: 60)
+- `STRATEGIES`: Specific strategies to run, or 'all' (default: all)
+
+**Strategies Analyzed:**
+1. SMA Crossover
+2. Mean Reversion
+3. Momentum Signals
+4. ML Swing Trading
+5. Multi-Factor Scoring
+6. Volume Profile Swing
+7. Kalman Adaptive
+8. HMM Regime Detection
+
+**Output:**
+- Ranked list of symbols by consensus strength
+- Consensus signal (BUY/SELL/HOLD)
+- Agreement percentage across strategies
+- Buy/Sell/Hold counts
+- Detailed breakdown of each strategy's signal
+- Visual indicators for high-confidence signals
+
+**Interpretation:**
+- 🟢 Strong BUY: High agreement on bullish signals (≥ MIN_CONSENSUS)
+- 🔴 Strong SELL: High agreement on bearish signals (≥ MIN_CONSENSUS)
+- ⚪ Mixed/HOLD: Low consensus or neutral signals
+
+**Use Cases:**
+- Find stocks with the highest signal consensus
+- Identify which strategies agree/disagree for a symbol
+- Validate high-conviction trades across multiple methodologies
+- Compare signal strength across a portfolio of stocks
+- Discover the most "tradeable" stocks with clear signals
+
+### 8. Top Movers & Rankings (`scanners/top_movers`)
 
 Identifies and ranks top opportunities across multiple dimensions.
 
@@ -274,6 +332,23 @@ set TOP_N 15
 run
 ```
 
+### Example 5: Meta-Analysis for High-Conviction Trades
+
+```bash
+# Run all strategies on multiple stocks to find consensus
+use analysis/meta_analysis
+set SYMBOLS AAPL,MSFT,GOOGL,NVDA,TSLA,AMD,META,NFLX
+set MIN_CONSENSUS 70
+set PERIOD 1y
+run
+
+# This will:
+# 1. Run 8+ strategies on each symbol
+# 2. Show which stocks have the highest signal consensus
+# 3. Rank stocks by signal strength
+# 4. Display detailed breakdown of each strategy's signal
+```
+
 ## 🎯 Strategy Selection Guide
 
 ### When to Use Each Strategy
@@ -301,6 +376,11 @@ run
 **Signal Aggregator** → Final decision making
 - Use before entering a trade
 - Best for confirming high-conviction setups
+
+**Meta-Analysis** → Multi-stock consensus validation
+- Use when analyzing multiple stocks to find the best opportunities
+- Best for finding stocks with the most consistent signals across ALL strategies
+- Ideal for portfolio construction and high-conviction trade selection
 
 **Top Movers** → Finding opportunities
 - Use daily to scan for active stocks
@@ -360,6 +440,27 @@ Always check:
 3. Pattern Recognition for support/resistance
 4. Top Movers for relative performance
 
+### 5. Meta-Analysis Workflow
+For best results with meta-analysis:
+```bash
+# Step 1: Screen for candidates
+use scanners/bulk_screener
+set SYMBOLS SP500
+set MIN_VOLUME 2000000
+run
+
+# Step 2: Run meta-analysis on top 10 candidates
+use analysis/meta_analysis
+set SYMBOLS AAPL,MSFT,GOOGL,NVDA,TSLA,AMD,META,AMZN,NFLX,ADBE
+set MIN_CONSENSUS 65
+run
+
+# Step 3: Deep dive on stocks with highest consensus
+use analysis/signal_aggregator
+set SYMBOL NVDA  # The stock with highest consensus from meta-analysis
+run
+```
+
 ## ⚡ Performance Tips
 
 - Use `MAX_WORKERS` parameter to speed up large scans
@@ -374,12 +475,14 @@ Always check:
 
 ### Strong Buy Signals (High Conviction)
 - Signal Aggregator confidence > 80%
+- **Meta-Analysis consensus > 70% with BUY signal**
 - Multi-factor score > 75
 - Multiple bullish patterns detected
 - Momentum score > 60 with low risk
 
 ### Buy Signals (Moderate Conviction)
 - Signal Aggregator confidence 60-80%
+- **Meta-Analysis consensus 60-70% with BUY signal**
 - Multi-factor score 60-75
 - One or two bullish confirmations
 - Oversold with reversal signs

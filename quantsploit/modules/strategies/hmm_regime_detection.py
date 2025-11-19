@@ -65,58 +65,58 @@ class HMMRegimeDetectionStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
-            "default": "SPY"
-            },
-            "PERIOD": {
+            "value": "SPY"
+        },
+        "PERIOD": {
             "description": "Historical data period (2y, 5y, max)",
             "required": False,
-            "default": "2y"
+            "value": "2y"
         },
         "INTERVAL": {
             "description": "Data interval (1d for daily)",
             "required": False,
-            "default": "1d"
+            "value": "1d"
         },
         "NUM_REGIMES": {
             "description": "Number of market regimes to detect (2-5)",
             "required": False,
-            "default": 3
+            "value": 3
         },
         "LOOKBACK": {
             "description": "Lookback period for regime features",
             "required": False,
-            "default": 20
+            "value": 20
         },
         "INITIAL_CAPITAL": {
             "description": "Initial capital for backtesting",
             "required": False,
-            "default": 100000
+            "value": 100000
         },
         "POSITION_SIZE": {
             "description": "Position size as fraction of capital",
             "required": False,
-            "default": 0.5
+            "value": 0.5
         },
         "BULL_STRATEGY": {
             "description": "Strategy in bull regime: trend_follow, mean_revert, or hold",
             "required": False,
-            "default": "trend_follow"
+            "value": "trend_follow"
         },
         "BEAR_STRATEGY": {
             "description": "Strategy in bear regime: defensive, short, or cash",
             "required": False,
-            "default": "defensive"
+            "value": "defensive"
         },
         "SIDEWAYS_STRATEGY": {
             "description": "Strategy in sideways regime: mean_revert or wait",
             "required": False,
-            "default": "mean_revert"
-        }
+            "value": "mean_revert"
+        },
         })
+
 
     def extract_regime_features(self, df: pd.DataFrame, lookback: int) -> pd.DataFrame:
         """

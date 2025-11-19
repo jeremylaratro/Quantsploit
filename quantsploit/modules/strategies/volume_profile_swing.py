@@ -68,58 +68,58 @@ class VolumeProfileSwingStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
-            "default": "AAPL"
-            },
-            "PERIOD": {
+            "value": "AAPL"
+        },
+        "PERIOD": {
             "description": "Historical data period (1y, 2y)",
             "required": False,
-            "default": "1y"
+            "value": "1y"
         },
         "INTERVAL": {
             "description": "Data interval (1d for daily, 1h for hourly)",
             "required": False,
-            "default": "1d"
+            "value": "1d"
         },
         "PROFILE_PERIOD": {
             "description": "Number of bars for volume profile calculation",
             "required": False,
-            "default": 20
+            "value": 20
         },
         "NUM_PRICE_LEVELS": {
             "description": "Number of price levels for volume distribution",
             "required": False,
-            "default": 50
+            "value": 50
         },
         "VALUE_AREA_PCT": {
             "description": "Percentage of volume for value area (0.70 = 70%)",
             "required": False,
-            "default": 0.70
+            "value": 0.70
         },
         "POC_TOLERANCE": {
             "description": "POC proximity tolerance as % (e.g., 0.5 = 0.5%)",
             "required": False,
-            "default": 0.5
+            "value": 0.5
         },
         "INITIAL_CAPITAL": {
             "description": "Initial capital for backtesting",
             "required": False,
-            "default": 100000
+            "value": 100000
         },
         "POSITION_SIZE": {
             "description": "Position size as fraction of capital",
             "required": False,
-            "default": 0.5
+            "value": 0.5
         },
         "USE_DELTA": {
             "description": "Use delta analysis (requires intraday data)",
             "required": False,
-            "default": False
-        }
+            "value": False
+        },
         })
+
 
     def calculate_volume_profile(
         self,

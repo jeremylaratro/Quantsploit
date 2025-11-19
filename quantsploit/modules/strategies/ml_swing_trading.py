@@ -71,53 +71,53 @@ class MLSwingTradingStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
-            "default": "AAPL"
-            },
-            "PERIOD": {
+            "value": "AAPL"
+        },
+        "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y, max)",
             "required": False,
-            "default": "2y"
+            "value": "2y"
         },
         "INTERVAL": {
             "description": "Data interval (1d for daily, 1wk for weekly)",
             "required": False,
-            "default": "1d"
+            "value": "1d"
         },
         "PREDICTION_CONFIDENCE": {
             "description": "Minimum prediction confidence for signals (0.0-1.0)",
             "required": False,
-            "default": 0.65
+            "value": 0.65
         },
         "HOLDING_PERIOD": {
             "description": "Target holding period in days",
             "required": False,
-            "default": 5
+            "value": 5
         },
         "TRAIN_SIZE": {
             "description": "Training data percentage (0.0-1.0)",
             "required": False,
-            "default": 0.7
+            "value": 0.7
         },
         "INITIAL_CAPITAL": {
             "description": "Initial capital for backtesting",
             "required": False,
-            "default": 100000
+            "value": 100000
         },
         "POSITION_SIZE": {
             "description": "Position size as fraction of capital (0.0-1.0)",
             "required": False,
-            "default": 0.3
+            "value": 0.3
         },
         "USE_ENSEMBLE": {
             "description": "Use ensemble (RF + XGBoost) vs single model",
             "required": False,
-            "default": True
-        }
+            "value": True
+        },
         })
+
 
     def generate_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """

@@ -26,7 +26,30 @@ class MomentumSignals(BaseModule):
 
     @property
     def description(self) -> str:
-        return "Advanced momentum and trend following signals with multiple confirmations"
+        return """Multi-Factor Momentum - Scores stocks using 6+ momentum indicators.
+
+SYNOPSIS: Combines ROC, ADX, volume momentum, MA alignment, and relative strength
+into composite score. Score >60 = BUY, <-60 = SELL.
+
+SIMULATION POSITIONS:
+  - Analysis only (no backtested positions)
+  - Generates signal scores from -100 to +100
+  - Provides STRONG BUY/BUY/NEUTRAL/SELL/STRONG SELL recommendation
+
+RECOMMENDED ENTRY:
+  - STRONG BUY (score >60): Enter full position, strong uptrend confirmed
+  - BUY (score >30): Enter partial position, positive momentum detected
+  - SELL signals: Exit or avoid, downtrend in progress
+  - Confirm with ADX >25 for strong trend before entering
+
+KEY SIGNALS:
+  - 12-period ROC >10%: Strong momentum (+25 points)
+  - Bullish MA alignment (10>20>50): Trend confirmed (+20)
+  - Positive momentum acceleration (+20)
+  - Trading above VWAP (+10)
+  - Outperforming benchmark (+15)
+
+BEST USE: Screening tool for trending stocks before entering swing positions."""
 
     @property
     def author(self) -> str:

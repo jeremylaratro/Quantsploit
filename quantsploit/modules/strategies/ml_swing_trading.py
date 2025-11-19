@@ -50,9 +50,36 @@ class MLSwingTradingStrategy(BaseModule):
 
     @property
     def description(self) -> str:
+        return """ML Swing Trading - Random Forest + XGBoost predict profitable 5-day swings.
 
+SYNOPSIS: Trains ensemble ML models on 40+ technical features to predict if price
+will rise >2% in next 5 days. Confidence >0.65 triggers entry.
 
-        return "ML-based swing trading using Random Forest + XGBoost ensemble"
+SIMULATION POSITIONS:
+  - LONG: Enters when ML prediction >0.65 (65% confidence of profit)
+  - FLAT: Exits when prediction drops <0.5 or after 5-day holding period
+  - Position size: 30% of capital (configurable)
+  - Uses 70% data for training, 30% for testing
+
+RECOMMENDED ENTRY:
+  - Model confidence >0.70: Enter full position (high probability)
+  - Model confidence 0.65-0.70: Enter half position
+  - Model accuracy >60% on test set: Strategy is working
+  - Avoid if accuracy <55% (model not predictive)
+
+KEY FEATURES USED:
+  - Returns (1d, 3d, 5d, 10d, 20d)
+  - Volatility (5d, 10d, 20d rolling)
+  - RSI, MACD, Stochastic, ADX
+  - Moving averages and crossovers
+  - Volume indicators (VWAP, OBV)
+  - Bollinger Bands position
+
+REAL-WORLD APPLICATION:
+  - Best for liquid stocks with consistent patterns
+  - Retrain model monthly on latest data
+  - Monitor model accuracy - retrain if drops <58%
+  - Combine with other filters (e.g., only trade when ADX >25)"""
 
 
     @property

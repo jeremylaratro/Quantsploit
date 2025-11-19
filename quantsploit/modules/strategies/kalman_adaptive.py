@@ -44,9 +44,46 @@ class KalmanAdaptiveStrategy(BaseModule):
 
     @property
     def description(self) -> str:
+        return """Kalman Filter - Filters noise to estimate true price trend with high precision.
 
+SYNOPSIS: Applies Kalman Filter to smooth price data and remove noise. Buys when
+price deviates below filtered trend (oversold), sells when above (overbought).
 
-        return "Adaptive strategy using Kalman Filter for trend estimation"
+SIMULATION POSITIONS:
+  - LONG: Price <0.5% below Kalman filtered price (noise pullback)
+  - STRONG LONG: Deviation <-0.5% AND positive velocity (uptrend confirmed)
+  - FLAT/EXIT: Price >0.5% above filtered price
+  - Position size: 50% base, scaled by filter confidence
+
+FILTER TYPES:
+  1. Simple: Price only (smooth trend line)
+  2. Velocity: Price + velocity (detects acceleration)
+  3. Full: Price + velocity + acceleration (best for trends)
+
+RECOMMENDED ENTRY:
+  - Use 'full' filter for trending stocks
+  - Enter when deviation <-0.5% (price below trend)
+  - Strong buy if velocity >0 (upward momentum confirmed)
+  - Exit when deviation >+0.5% (price extended above trend)
+
+PARAMETERS:
+  - PROCESS_NOISE: 0.01 (lower = smoother, higher = reactive)
+  - MEASUREMENT_NOISE: 1.0 (higher = trust price less)
+  - SIGNAL_THRESHOLD: 0.5% (deviation trigger)
+  - USE_CONFIDENCE_SIZING: Scale position by filter confidence
+
+REAL-WORLD USE:
+  1. Run Kalman filter to get true trend (filters whipsaws)
+  2. Wait for price to deviate -0.5% from filtered price
+  3. Enter if velocity confirms direction
+  4. Exit when price reverts above filtered price
+  5. Works best on trending stocks with noise (volatility)
+
+ADVANTAGES:
+  - Reduces false signals vs simple moving averages
+  - Adapts quickly to regime changes
+  - Confidence-based sizing improves risk management
+  - Velocity signals catch momentum early"""
 
 
     @property

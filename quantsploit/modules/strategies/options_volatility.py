@@ -47,9 +47,42 @@ class OptionsVolatilityStrategy(BaseModule):
 
     @property
     def description(self) -> str:
+        return """Options Volatility - Profit from volatility expansion/contraction.
 
+SYNOPSIS: Analyzes IV vs HV, calculates IV rank/percentile. Recommends buying
+or selling options based on volatility regime.
 
-        return "Options strategies based on volatility analysis"
+STRATEGIES AVAILABLE:
+  1. Long Straddle: Buy ATM call+put (profit from big move either direction)
+  2. Short Straddle: Sell ATM call+put (profit from low volatility)
+  3. Long Strangle: Buy OTM call+put (cheaper than straddle, need bigger move)
+  4. Short Strangle: Sell OTM call+put (higher prob profit than short straddle)
+  5. IV Rank Analysis: Determine current IV regime
+
+LONG STRADDLE EXAMPLE (AAPL @ $150, 30 DTE, IV=30%):
+  - Buy 150 call: $5.00
+  - Buy 150 put: $4.50
+  - Total cost: $9.50 ($950 per contract)
+  - Upper breakeven: $159.50
+  - Lower breakeven: $140.50
+  - Profit if AAPL moves >$9.50 (6.3%) in 30 days
+
+RECOMMENDED ENTRY:
+  - LONG Straddle/Strangle: IV rank <25 (low volatility, cheap options)
+  - SHORT Straddle/Strangle: IV rank >75 (high volatility, expensive options)
+  - Enter before earnings if expecting big move
+  - Exit shorts before major catalyst events
+
+IV RANK GUIDE:
+  - IV Rank >75: HIGH - Sell premium (short straddles/strangles)
+  - IV Rank 25-75: NEUTRAL - Wait for better setup
+  - IV Rank <25: LOW - Buy options (long straddles/strangles)
+
+RISK MANAGEMENT:
+  - Long strategies: Max loss is premium paid (defined risk)
+  - Short strategies: UNLIMITED risk - use stops or hedge
+  - Close shorts at 50-80% max profit
+  - Avoid shorting around earnings/Fed announcements"""
 
 
     @property

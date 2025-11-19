@@ -50,9 +50,10 @@ class MLSwingTradingStrategy(BaseModule):
 
     @property
     def description(self) -> str:
-        return """ML Swing Trading - Random Forest + XGBoost predict profitable 5-day swings.
+        return "Ensemble ML models (Random Forest + XGBoost) predict profitable swings"
 
-SYNOPSIS: Trains ensemble ML models on 40+ technical features to predict if price
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Trains ensemble ML models on 40+ technical features to predict if price
 will rise >2% in next 5 days. Confidence >0.65 triggers entry.
 
 SIMULATION POSITIONS:
@@ -81,6 +82,10 @@ REAL-WORLD APPLICATION:
   - Monitor model accuracy - retrain if drops <58%
   - Combine with other filters (e.g., only trade when ADX >25)"""
 
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

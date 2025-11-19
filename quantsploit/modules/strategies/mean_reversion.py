@@ -23,9 +23,10 @@ class MeanReversion(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Mean Reversion - Trades oversold/overbought extremes back to average.
+        return "Statistical mean reversion using Z-score, Bollinger Bands, and RSI"
 
-SYNOPSIS: Z-score measures price deviation from 20-day mean. |Z| >2.0 signals
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Z-score measures price deviation from 20-day mean. |Z| >2.0 signals
 extreme, likely to revert. Uses Bollinger Bands, RSI for confirmation.
 
 SIMULATION POSITIONS:
@@ -46,6 +47,11 @@ POSITION SIZING:
 
 BEST USE: Range-bound stocks, avoid in strong trends. Works well on ETFs,
 stable large-caps. Check if historical mean reversion probability >60%."""
+
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

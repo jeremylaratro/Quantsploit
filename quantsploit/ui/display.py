@@ -70,6 +70,13 @@ class Display:
 
         self.console.print(table)
 
+        # Display detailed trading guide if available
+        if 'trading_guide' in module_info and module_info['trading_guide']:
+            self.console.print("\n")
+            self.console.print("[bold cyan]═══ TRADING GUIDE ═══[/bold cyan]")
+            self.console.print(module_info['trading_guide'])
+            self.console.print("[bold cyan]═" * 40 + "[/bold cyan]")
+
     def print_options(self, options: Dict[str, Any]):
         """Display module options"""
         table = Table(title="Module Options", show_header=True, header_style="bold magenta")

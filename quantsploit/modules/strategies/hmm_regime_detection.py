@@ -44,9 +44,10 @@ class HMMRegimeDetectionStrategy(BaseModule):
 
     @property
     def description(self) -> str:
-        return """HMM Regime Detection - Detects market regimes (Bull/Bear/Sideways) and adapts.
+        return "Hidden Markov Model detects Bull/Bear/Sideways regimes and adapts strategy"
 
-SYNOPSIS: Uses Hidden Markov Model to classify current market into 3 regimes
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Uses Hidden Markov Model to classify current market into 3 regimes
 based on returns, volatility, trend. Applies regime-specific strategy.
 
 SIMULATION POSITIONS:
@@ -82,6 +83,10 @@ PARAMETERS:
   - BULL_STRATEGY: trend_follow (buy dips) or mean_revert
   - BEAR_STRATEGY: defensive (cash) or short"""
 
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

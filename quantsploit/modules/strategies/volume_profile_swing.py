@@ -47,9 +47,10 @@ class VolumeProfileSwingStrategy(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Volume Profile - Identifies high-probability swing entries at key volume levels.
+        return "Swing entries at POC (Point of Control) and Value Area volume levels"
 
-SYNOPSIS: Calculates where most volume traded (POC = Point of Control). Value
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Calculates where most volume traded (POC = Point of Control). Value
 Area contains 70% of volume. Price bounces off POC/VA boundaries create entries.
 
 SIMULATION POSITIONS:
@@ -81,6 +82,10 @@ REAL-WORLD TRADING:
 BEST USE: Liquid stocks with clear volume distribution. Works best on daily
 timeframe for swings, hourly for day trading."""
 
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

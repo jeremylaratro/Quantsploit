@@ -47,9 +47,10 @@ class OptionsVolatilityStrategy(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Options Volatility - Profit from volatility expansion/contraction.
+        return "Straddles/Strangles based on IV rank and volatility regime analysis"
 
-SYNOPSIS: Analyzes IV vs HV, calculates IV rank/percentile. Recommends buying
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Analyzes IV vs HV, calculates IV rank/percentile. Recommends buying
 or selling options based on volatility regime.
 
 STRATEGIES AVAILABLE:
@@ -84,6 +85,10 @@ RISK MANAGEMENT:
   - Close shorts at 50-80% max profit
   - Avoid shorting around earnings/Fed announcements"""
 
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

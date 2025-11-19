@@ -20,9 +20,10 @@ class SMACrossover(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Simple Moving Average Crossover - Classic trend-following strategy.
+        return "Classic trend-following using fast/slow SMA crossovers"
 
-SYNOPSIS: Buys when fast SMA crosses above slow SMA, sells when crosses below.
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Buys when fast SMA crosses above slow SMA, sells when crosses below.
 
 SIMULATION POSITIONS:
   - LONG: Enters 100% of capital when fast SMA > slow SMA (crossover up)
@@ -39,6 +40,11 @@ PARAMETERS:
   - FAST_PERIOD: 10 (shorter timeframe)
   - SLOW_PERIOD: 30 (longer timeframe)
   - Works on any timeframe: daily for swings, hourly for day trading"""
+
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

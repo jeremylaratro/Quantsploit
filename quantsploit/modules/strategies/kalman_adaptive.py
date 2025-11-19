@@ -44,9 +44,10 @@ class KalmanAdaptiveStrategy(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Kalman Filter - Filters noise to estimate true price trend with high precision.
+        return "Kalman Filter removes noise to estimate true trend with velocity signals"
 
-SYNOPSIS: Applies Kalman Filter to smooth price data and remove noise. Buys when
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Applies Kalman Filter to smooth price data and remove noise. Buys when
 price deviates below filtered trend (oversold), sells when above (overbought).
 
 SIMULATION POSITIONS:
@@ -85,6 +86,10 @@ ADVANTAGES:
   - Confidence-based sizing improves risk management
   - Velocity signals catch momentum early"""
 
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

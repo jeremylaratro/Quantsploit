@@ -69,8 +69,8 @@ class KalmanAdaptiveStrategy(BaseModule):
             "description": "Stock symbol to analyze",
             "required": True,
             "value": "AAPL"
-        },
-        "PERIOD": {
+            },
+            "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y)",
             "required": False,
             "value": "1y"
@@ -114,7 +114,7 @@ class KalmanAdaptiveStrategy(BaseModule):
             "description": "Scale position size based on filter confidence",
             "required": False,
             "value": True
-        },
+        }
         })
 
 
@@ -455,20 +455,17 @@ class KalmanAdaptiveStrategy(BaseModule):
         position_size = float(self.options["POSITION_SIZE"]["value"])
         use_confidence_sizing = self.options["USE_CONFIDENCE_SIZING"]["value"]
 
-        self.print_status(f"Running Kalman Filter Adaptive Strategy for {symbol}")
 
         # Fetch data
         data_fetcher = DataFetcher(self.database)
         df = data_fetcher.get_stock_data(symbol, period=period, interval=interval)
 
         if df is None or len(df) < 50:
-            self.print_error("Insufficient data for analysis")
+            pass
             return {"error": "Insufficient data"}
 
-        self.print_info(f"Loaded {len(df)} bars of data")
 
         # Apply Kalman Filter
-        self.print_status(f"Applying {filter_type} Kalman Filter...")
 
         prices = df['Close']
 
@@ -500,11 +497,9 @@ class KalmanAdaptiveStrategy(BaseModule):
             )
 
         # Generate signals
-        self.print_status("Generating trading signals...")
         signals = self.generate_signals(df, filtered_price, velocity, signal_threshold)
 
         # Backtest
-        self.print_status("Running backtest...")
         results = self.backtest_strategy(
             signals,
             initial_capital,
@@ -514,54 +509,41 @@ class KalmanAdaptiveStrategy(BaseModule):
         )
 
         # Display results
-        self.print_good("\n=== Backtest Results ===")
         results_dict = results.to_dict()
 
         for key, value in results_dict.items():
-            self.print_info(f"{key}: {value}")
+            pass
 
         # Current signal
-        self.print_status("\n=== Current Analysis ===")
 
         current_price = df['Close'].iloc[-1]
         current_filtered = filtered_price.iloc[-1]
         current_deviation = (current_price - current_filtered) / current_filtered * 100
         current_signal = signals['signal'].iloc[-1]
 
-        self.print_info(f"Current Price: ${current_price:.2f}")
-        self.print_info(f"Filtered Price: ${current_filtered:.2f}")
-        self.print_info(f"Deviation: {current_deviation:.2f}%")
 
         if velocity is not None:
             current_velocity = velocity.iloc[-1]
-            self.print_info(f"Price Velocity: ${current_velocity:.2f}/day")
 
         if acceleration is not None:
             current_acceleration = acceleration.iloc[-1]
-            self.print_info(f"Price Acceleration: ${current_acceleration:.4f}/day²")
 
         # Interpret signal
         if current_signal >= 2:
             signal_str = "STRONG BUY"
-            self.print_good(f"\nSignal: {signal_str}")
         elif current_signal == 1:
             signal_str = "BUY"
-            self.print_good(f"\nSignal: {signal_str}")
         elif current_signal == -1:
             signal_str = "SELL"
-            self.print_warning(f"\nSignal: {signal_str}")
         elif current_signal <= -2:
             signal_str = "STRONG SELL"
-            self.print_warning(f"\nSignal: {signal_str}")
         else:
             signal_str = "NEUTRAL"
-            self.print_info(f"\nSignal: {signal_str}")
 
         # Confidence
         if use_confidence_sizing:
             current_error = errors.iloc[-1]
             confidence = 1.0 / (1.0 + current_error)
-            self.print_info(f"Signal Confidence: {confidence:.2%}")
 
         return {
             "symbol": symbol,

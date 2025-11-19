@@ -72,8 +72,8 @@ class OptionsVolatilityStrategy(BaseModule):
             "description": "Stock symbol to analyze",
             "required": True,
             "value": "AAPL"
-        },
-        "STRATEGY": {
+            },
+            "STRATEGY": {
             "description": "Strategy: long_straddle, short_straddle, long_strangle, short_strangle, iv_rank",
             "required": False,
             "value": "long_straddle"
@@ -112,7 +112,7 @@ class OptionsVolatilityStrategy(BaseModule):
             "description": "Number of option contracts to trade",
             "required": False,
             "value": 1
-        },
+        }
         })
 
 
@@ -416,29 +416,24 @@ class OptionsVolatilityStrategy(BaseModule):
         strangle_otm_pct = float(self.options["STRANGLE_OTM_PCT"]["value"]) / 100
         contracts = int(self.options["CONTRACTS"]["value"])
 
-        self.print_status(f"Running Options Volatility Strategy: {strategy}")
-        self.print_info(f"Symbol: {symbol}")
 
         # Fetch stock data
         data_fetcher = DataFetcher(self.database)
         df = data_fetcher.get_stock_data(symbol, period="1y", interval="1d")
 
         if df is None or len(df) < hv_window:
-            self.print_error("Insufficient data for analysis")
+            pass
             return {"error": "Insufficient data"}
 
         current_price = df['Close'].iloc[-1]
-        self.print_info(f"Current Price: ${current_price:.2f}")
 
         # Calculate historical volatility
         hv = calculate_historical_volatility(df['Close'].values, hv_window)
-        self.print_info(f"Historical Volatility ({hv_window}d): {hv:.2%}")
 
         # Estimate current IV (in practice, fetch from options chain)
         # For now, use HV as a proxy
         current_iv = hv * 1.2  # IV is typically higher than HV
 
-        self.print_info(f"Estimated Implied Volatility: {current_iv:.2%}")
 
         # Convert DTE to years
         T = dte / 365.0
@@ -448,7 +443,6 @@ class OptionsVolatilityStrategy(BaseModule):
             # ATM strike
             K = round(current_price / 5) * 5  # Round to nearest $5
 
-            self.print_status(f"\nAnalyzing Long Straddle (Strike: ${K})")
 
             analysis = self.long_straddle_analysis(
                 current_price, K, T, risk_free_rate, current_iv, dividend_yield
@@ -458,7 +452,6 @@ class OptionsVolatilityStrategy(BaseModule):
             # ATM strike
             K = round(current_price / 5) * 5
 
-            self.print_status(f"\nAnalyzing Short Straddle (Strike: ${K})")
 
             analysis = self.short_straddle_analysis(
                 current_price, K, T, risk_free_rate, current_iv, dividend_yield
@@ -469,9 +462,6 @@ class OptionsVolatilityStrategy(BaseModule):
             K_call = round(current_price * (1 + strangle_otm_pct) / 5) * 5
             K_put = round(current_price * (1 - strangle_otm_pct) / 5) * 5
 
-            self.print_status(f"\nAnalyzing Long Strangle")
-            self.print_info(f"Call Strike: ${K_call}")
-            self.print_info(f"Put Strike: ${K_put}")
 
             analysis = self.long_strangle_analysis(
                 current_price, K_call, K_put, T, risk_free_rate, current_iv, dividend_yield
@@ -482,9 +472,6 @@ class OptionsVolatilityStrategy(BaseModule):
             K_call = round(current_price * (1 + strangle_otm_pct) / 5) * 5
             K_put = round(current_price * (1 - strangle_otm_pct) / 5) * 5
 
-            self.print_status(f"\nAnalyzing Short Strangle")
-            self.print_info(f"Call Strike: ${K_call}")
-            self.print_info(f"Put Strike: ${K_put}")
 
             # Calculate long strangle first, then invert
             long_analysis = self.long_strangle_analysis(
@@ -514,27 +501,26 @@ class OptionsVolatilityStrategy(BaseModule):
             }
 
         elif strategy == "iv_rank":
-            self.print_status("\nIV Rank Analysis")
+            pass
 
             analysis = self.iv_rank_analysis(df, current_iv, hv_window)
 
         else:
-            self.print_error(f"Unknown strategy: {strategy}")
+            pass
             return {"error": f"Unknown strategy: {strategy}"}
 
         # Display results
-        self.print_good("\n=== Strategy Analysis ===")
 
         for key, value in analysis.items():
             if isinstance(value, float):
                 if key in ['implied_volatility', 'historical_volatility']:
-                    self.print_info(f"{key}: {value:.2%}")
+                    pass
                 elif 'probability' in key.lower() or 'rank' in key.lower() or 'percentile' in key.lower():
-                    self.print_info(f"{key}: {value:.2f}%")
+                    pass
                 else:
-                    self.print_info(f"{key}: {value:.4f}")
+                    pass
             else:
-                self.print_info(f"{key}: {value}")
+                pass
 
         # Calculate position costs/credits
         if strategy != "iv_rank":
@@ -544,22 +530,12 @@ class OptionsVolatilityStrategy(BaseModule):
                 cost_per_contract = analysis['total_premium'] * multiplier
                 total_cost = cost_per_contract * contracts
 
-                self.print_info(f"\n=== Position Details ===")
-                self.print_info(f"Contracts: {contracts}")
-                self.print_info(f"Cost per contract: ${cost_per_contract:.2f}")
-                self.print_info(f"Total cost: ${total_cost:.2f}")
 
             elif "total_credit" in analysis:
                 credit_per_contract = analysis['total_credit'] * multiplier
                 total_credit = credit_per_contract * contracts
 
-                self.print_info(f"\n=== Position Details ===")
-                self.print_info(f"Contracts: {contracts}")
-                self.print_info(f"Credit per contract: ${credit_per_contract:.2f}")
-                self.print_info(f"Total credit: ${total_credit:.2f}")
 
-        self.print_good(f"\n=== Recommendation ===")
-        self.print_info(analysis.get('recommendation', 'No recommendation available'))
 
         return {
             "symbol": symbol,

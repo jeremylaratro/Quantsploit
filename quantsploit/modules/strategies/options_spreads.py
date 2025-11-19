@@ -74,8 +74,8 @@ class OptionsSpreadStrategy(BaseModule):
             "description": "Stock symbol to analyze",
             "required": True,
             "value": "SPY"
-        },
-        "STRATEGY": {
+            },
+            "STRATEGY": {
             "description": "Spread: iron_condor, iron_butterfly, butterfly, calendar, bull_call, bear_put",
             "required": False,
             "value": "iron_condor"
@@ -109,7 +109,7 @@ class OptionsSpreadStrategy(BaseModule):
             "description": "Number of contracts to trade",
             "required": False,
             "value": 1
-        },
+        }
         })
 
 
@@ -546,25 +546,21 @@ class OptionsSpreadStrategy(BaseModule):
         profit_target_pct = float(self.options["PROFIT_TARGET_PCT"]["value"])
         contracts = int(self.options["CONTRACTS"]["value"])
 
-        self.print_status(f"Running Options Spread Strategy: {strategy}")
-        self.print_info(f"Symbol: {symbol}")
 
         # Fetch stock data
         data_fetcher = DataFetcher(self.database)
         df = data_fetcher.get_stock_data(symbol, period="1y", interval="1d")
 
         if df is None or len(df) < 30:
-            self.print_error("Insufficient data for analysis")
+            pass
             return {"error": "Insufficient data"}
 
         current_price = df['Close'].iloc[-1]
-        self.print_info(f"Current Price: ${current_price:.2f}")
 
         # Calculate volatility
         hv = calculate_historical_volatility(df['Close'].values, 30)
         sigma = hv * 1.2  # Estimate IV
 
-        self.print_info(f"Estimated IV: {sigma:.2%}")
 
         # Convert DTE to years
         T = dte / 365.0
@@ -604,20 +600,19 @@ class OptionsSpreadStrategy(BaseModule):
             )
 
         else:
-            self.print_error(f"Unknown strategy: {strategy}")
+            pass
             return {"error": f"Unknown strategy: {strategy}"}
 
         # Display results
-        self.print_good("\n=== Strategy Analysis ===")
 
         for key, value in analysis.items():
             if isinstance(value, float):
                 if 'probability' in key.lower() or 'return' in key.lower():
-                    self.print_info(f"{key}: {value:.2f}%")
+                    pass
                 else:
-                    self.print_info(f"{key}: {value:.4f}")
+                    pass
             else:
-                self.print_info(f"{key}: {value}")
+                pass
 
         # Calculate position details
         multiplier = 100
@@ -627,16 +622,9 @@ class OptionsSpreadStrategy(BaseModule):
             total_credit = credit_per_contract * contracts
             max_loss_total = analysis['max_loss'] * multiplier * contracts
 
-            self.print_info(f"\n=== Position Details (Credit Spread) ===")
-            self.print_info(f"Contracts: {contracts}")
-            self.print_info(f"Credit per contract: ${credit_per_contract:.2f}")
-            self.print_info(f"Total credit received: ${total_credit:.2f}")
-            self.print_info(f"Max loss: ${max_loss_total:.2f}")
-            self.print_info(f"Capital required: ${max_loss_total:.2f}")
 
             # Profit target
             profit_target = total_credit * (profit_target_pct / 100)
-            self.print_info(f"Profit target ({profit_target_pct}%): ${profit_target:.2f}")
 
         elif "net_debit" in analysis:
             debit_per_contract = analysis['net_debit'] * multiplier
@@ -645,12 +633,8 @@ class OptionsSpreadStrategy(BaseModule):
             if isinstance(max_profit_total, (int, float)):
                 max_profit_total = max_profit_total * multiplier * contracts
 
-            self.print_info(f"\n=== Position Details (Debit Spread) ===")
-            self.print_info(f"Contracts: {contracts}")
-            self.print_info(f"Debit per contract: ${debit_per_contract:.2f}")
-            self.print_info(f"Total cost: ${total_debit:.2f}")
             if isinstance(max_profit_total, (int, float)):
-                self.print_info(f"Max profit: ${max_profit_total:.2f}")
+                pass
 
         return {
             "symbol": symbol,

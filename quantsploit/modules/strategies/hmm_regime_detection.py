@@ -69,8 +69,8 @@ class HMMRegimeDetectionStrategy(BaseModule):
             "description": "Stock symbol to analyze",
             "required": True,
             "value": "SPY"
-        },
-        "PERIOD": {
+            },
+            "PERIOD": {
             "description": "Historical data period (2y, 5y, max)",
             "required": False,
             "value": "2y"
@@ -114,7 +114,7 @@ class HMMRegimeDetectionStrategy(BaseModule):
             "description": "Strategy in sideways regime: mean_revert or wait",
             "required": False,
             "value": "mean_revert"
-        },
+        }
         })
 
 
@@ -448,20 +448,17 @@ class HMMRegimeDetectionStrategy(BaseModule):
         bear_strategy = self.options["BEAR_STRATEGY"]["value"]
         sideways_strategy = self.options["SIDEWAYS_STRATEGY"]["value"]
 
-        self.print_status(f"Running HMM Regime Detection for {symbol}")
 
         # Fetch data
         data_fetcher = DataFetcher(self.database)
         df = data_fetcher.get_stock_data(symbol, period=period, interval=interval)
 
         if df is None or len(df) < 100:
-            self.print_error("Insufficient data for analysis")
+            pass
             return {"error": "Insufficient data"}
 
-        self.print_info(f"Loaded {len(df)} bars of data")
 
         # Extract features
-        self.print_status("Extracting regime features...")
         features = self.extract_regime_features(df, lookback)
         features = features.dropna()
 
@@ -475,7 +472,6 @@ class HMMRegimeDetectionStrategy(BaseModule):
         observations_norm = (observations - obs_mean) / (obs_std + 1e-8)
 
         # Fit HMM
-        self.print_status(f"Fitting HMM with {num_regimes} regimes...")
         states, transition_matrix, means, covs = self.simple_hmm(
             observations_norm,
             num_regimes,
@@ -485,12 +481,10 @@ class HMMRegimeDetectionStrategy(BaseModule):
         # Classify regimes
         regime_mapping, regimes = self.classify_regimes(states, features, num_regimes)
 
-        self.print_good("\n=== Regime Mapping ===")
         for state, regime in regime_mapping.items():
-            self.print_info(f"State {state} -> {regime}")
+            pass
 
         # Regime statistics
-        self.print_good("\n=== Regime Statistics ===")
         for regime_name in set(regimes):
             mask = (regimes == regime_name)
             count = mask.sum()
@@ -499,21 +493,14 @@ class HMMRegimeDetectionStrategy(BaseModule):
             regime_returns = features.loc[mask, 'returns_20d'].mean() * 100
             regime_vol = features.loc[mask, 'volatility'].mean() * 100
 
-            self.print_info(f"{regime_name}:")
-            self.print_info(f"  Frequency: {count} bars ({pct:.1f}%)")
-            self.print_info(f"  Avg 20d Return: {regime_returns:.2f}%")
-            self.print_info(f"  Avg Volatility: {regime_vol:.2f}%")
 
         # Transition probabilities
-        self.print_good("\n=== Transition Probabilities ===")
         for i, regime_i in regime_mapping.items():
-            self.print_info(f"From {regime_i}:")
+            pass
             for j, regime_j in regime_mapping.items():
                 prob = transition_matrix[i, j]
-                self.print_info(f"  To {regime_j}: {prob:.2%}")
 
         # Generate signals
-        self.print_status("\nGenerating regime-based signals...")
 
         # Align regimes with original dataframe
         aligned_regimes = pd.Series(index=df.index, dtype=object)
@@ -529,39 +516,32 @@ class HMMRegimeDetectionStrategy(BaseModule):
         )
 
         # Backtest
-        self.print_status("Running backtest...")
         results = self.backtest_strategy(signals, initial_capital, position_size)
 
         # Display results
-        self.print_good("\n=== Backtest Results ===")
         results_dict = results.to_dict()
 
         for key, value in results_dict.items():
-            self.print_info(f"{key}: {value}")
+            pass
 
         # Current regime
-        self.print_status("\n=== Current Market Regime ===")
         current_regime = regimes[-1]
         current_price = df['Close'].iloc[-1]
 
-        self.print_good(f"Current Regime: {current_regime}")
-        self.print_info(f"Current Price: ${current_price:.2f}")
 
         # Regime transition probabilities
         current_state = states[-1]
-        self.print_info("\nTransition Probabilities:")
         for state, regime in regime_mapping.items():
             prob = transition_matrix[current_state, state]
-            self.print_info(f"  To {regime}: {prob:.2%}")
 
         # Trading recommendation
         current_signal = signals['signal'].iloc[-1]
         if current_signal == 1:
-            self.print_good("\nRecommendation: BUY")
+            pass
         elif current_signal == -1:
-            self.print_warning("\nRecommendation: SELL/EXIT")
+            pass
         else:
-            self.print_info("\nRecommendation: HOLD/WAIT")
+            pass
 
         return {
             "symbol": symbol,

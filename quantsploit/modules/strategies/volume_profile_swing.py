@@ -72,8 +72,8 @@ class VolumeProfileSwingStrategy(BaseModule):
             "description": "Stock symbol to analyze",
             "required": True,
             "value": "AAPL"
-        },
-        "PERIOD": {
+            },
+            "PERIOD": {
             "description": "Historical data period (1y, 2y)",
             "required": False,
             "value": "1y"
@@ -117,7 +117,7 @@ class VolumeProfileSwingStrategy(BaseModule):
             "description": "Use delta analysis (requires intraday data)",
             "required": False,
             "value": False
-        },
+        }
         })
 
 
@@ -455,20 +455,17 @@ class VolumeProfileSwingStrategy(BaseModule):
         position_size = float(self.options["POSITION_SIZE"]["value"])
         use_delta = self.options["USE_DELTA"]["value"]
 
-        self.print_status(f"Running Volume Profile Swing Strategy for {symbol}")
 
         # Fetch data
         data_fetcher = DataFetcher(self.database)
         df = data_fetcher.get_stock_data(symbol, period=period, interval=interval)
 
         if df is None or len(df) < profile_period * 2:
-            self.print_error("Insufficient data for analysis")
+            pass
             return {"error": "Insufficient data"}
 
-        self.print_info(f"Loaded {len(df)} bars of data")
 
         # Calculate current volume profile
-        self.print_status("Calculating volume profile...")
 
         recent_df = df.iloc[-profile_period:]
         price_levels, volume_at_levels = self.calculate_volume_profile(
@@ -488,19 +485,11 @@ class VolumeProfileSwingStrategy(BaseModule):
         lvn_prices = self.find_low_volume_nodes(price_levels, volume_at_levels)
 
         # Display volume profile analysis
-        self.print_good("\n=== Volume Profile Analysis ===")
-        self.print_info(f"Profile Period: Last {profile_period} bars")
-        self.print_info(f"Point of Control (POC): ${poc:.2f}")
-        self.print_info(f"Value Area High: ${va_high:.2f}")
-        self.print_info(f"Value Area Low: ${va_low:.2f}")
-        self.print_info(f"Value Area Range: ${va_high - va_low:.2f} ({(va_high - va_low) / poc * 100:.2f}%)")
 
-        self.print_info(f"\nHigh Volume Nodes (support/resistance):")
         for hvn in sorted(hvn_prices)[-5:]:  # Show top 5
-            self.print_info(f"  ${hvn:.2f}")
+            pass
 
         # Generate signals
-        self.print_status("\nGenerating volume-based signals...")
         signals = self.generate_volume_signals(
             df,
             profile_period,
@@ -511,65 +500,46 @@ class VolumeProfileSwingStrategy(BaseModule):
         )
 
         # Backtest
-        self.print_status("Running backtest...")
         results = self.backtest_strategy(signals, initial_capital, position_size)
 
         # Display results
-        self.print_good("\n=== Backtest Results ===")
         results_dict = results.to_dict()
 
         for key, value in results_dict.items():
-            self.print_info(f"{key}: {value}")
+            pass
 
         # Current analysis
-        self.print_status("\n=== Current Analysis ===")
 
         current_price = df['Close'].iloc[-1]
-        self.print_info(f"Current Price: ${current_price:.2f}")
 
         # Position relative to volume profile
         if current_price > va_high:
             position = "Above Value Area"
             interpretation = "Price is expensive, potential short or wait for pullback"
-            self.print_warning(f"Position: {position}")
-            self.print_info(f"Interpretation: {interpretation}")
 
         elif current_price < va_low:
             position = "Below Value Area"
             interpretation = "Price is cheap, potential long opportunity"
-            self.print_good(f"Position: {position}")
-            self.print_info(f"Interpretation: {interpretation}")
 
         elif abs(current_price - poc) / poc * 100 < poc_tolerance:
             position = "At Point of Control"
             interpretation = "Key decision point - watch for direction"
-            self.print_info(f"Position: {position}")
-            self.print_info(f"Interpretation: {interpretation}")
 
         else:
             position = "Within Value Area"
             interpretation = "Fair value zone, wait for better setup"
-            self.print_info(f"Position: {position}")
-            self.print_info(f"Interpretation: {interpretation}")
 
         # Trading recommendation
         current_signal = signals['signal'].iloc[-1]
 
-        self.print_info("\n=== Trading Recommendation ===")
         if current_signal == 1:
-            self.print_good("Signal: BUY")
-            self.print_info(f"Entry: ${current_price:.2f}")
-            self.print_info(f"Target: ${poc:.2f} (POC)")
-            self.print_info(f"Stop Loss: ${va_low * 0.98:.2f}")
+            pass
 
         elif current_signal == -1:
-            self.print_warning("Signal: SELL/SHORT")
-            self.print_info(f"Entry: ${current_price:.2f}")
-            self.print_info(f"Target: ${poc:.2f} (POC)")
-            self.print_info(f"Stop Loss: ${va_high * 1.02:.2f}")
+            pass
 
         else:
-            self.print_info("Signal: NEUTRAL - Wait for better setup")
+            pass
 
         return {
             "symbol": symbol,

@@ -43,6 +43,11 @@ class MetaAnalysis(BaseModule):
     def _init_options(self):
         """Initialize module options."""
         super()._init_options()
+
+        # Override SYMBOL to be optional since we use SYMBOLS instead
+        if "SYMBOL" in self.options:
+            self.options["SYMBOL"]["required"] = False
+
         self.options.update({
             "SYMBOLS": {
                 "value": "",

@@ -42,46 +42,31 @@ class MLSwingTradingStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "ml_swing_trading"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "ML-based swing trading using Random Forest + XGBoost ensemble"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
-
-
-
-    
 
     def _init_options(self):
         super()._init_options()

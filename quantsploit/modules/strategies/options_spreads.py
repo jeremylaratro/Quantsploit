@@ -41,46 +41,31 @@ class OptionsSpreadStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "options_spreads"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Advanced options spreads: Iron Condor, Butterfly, Calendar, etc."
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
-
-
-
-    
 
     def _init_options(self):
         super()._init_options()

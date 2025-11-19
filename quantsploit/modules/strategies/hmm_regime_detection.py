@@ -36,46 +36,31 @@ class HMMRegimeDetectionStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "hmm_regime_detection"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Market regime detection using Hidden Markov Models"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
-
-
-
-    
 
     def _init_options(self):
         super()._init_options()

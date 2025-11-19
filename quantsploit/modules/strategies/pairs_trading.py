@@ -38,46 +38,31 @@ class PairsTradingStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "pairs_trading"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Statistical arbitrage using cointegration and mean reversion"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
-
-
-
-    
 
     def _init_options(self):
         super()._init_options()

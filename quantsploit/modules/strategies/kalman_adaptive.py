@@ -36,46 +36,31 @@ class KalmanAdaptiveStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "kalman_adaptive"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Adaptive strategy using Kalman Filter for trend estimation"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
-
-
-
-    
 
     def _init_options(self):
         super()._init_options()

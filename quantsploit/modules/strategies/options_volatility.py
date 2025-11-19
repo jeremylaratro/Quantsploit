@@ -39,46 +39,31 @@ class OptionsVolatilityStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "options_volatility"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Options strategies based on volatility analysis"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
-
-
-
-    
 
     def _init_options(self):
         super()._init_options()

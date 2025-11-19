@@ -39,46 +39,31 @@ class VolumeProfileSwingStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "volume_profile_swing"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Swing trading using volume profile and POC analysis"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
-
-
-
-    
 
     def _init_options(self):
         super()._init_options()

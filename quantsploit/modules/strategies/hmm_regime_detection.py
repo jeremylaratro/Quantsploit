@@ -35,16 +35,76 @@ class HMMRegimeDetectionStrategy(BaseModule):
     Uses HMM to detect market regimes and adapt trading accordingly
     """
 
-    name = "hmm_regime_detection"
-    description = "Market regime detection using Hidden Markov Models"
-    category = "strategies"
+    @property
 
-    options = {
+
+    def name(self) -> str:
+
+
+        return "hmm_regime_detection"
+
+
+
+    @property
+
+
+    def description(self) -> str:
+
+
+        return "Market regime detection using Hidden Markov Models"
+
+
+
+    @property
+
+
+    def author(self) -> str:
+
+
+        return "Quantsploit Team"
+
+
+
+    @property
+
+
+    def category(self) -> str:
+
+
+        return "strategy"
+
+
+
+    
+
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "SPY"
-        },
+
+
+
+
+    
+
+        })
+,
         "PERIOD": {
             "description": "Historical data period (2y, 5y, max)",
             "required": False,

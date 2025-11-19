@@ -37,16 +37,76 @@ class PairsTradingStrategy(BaseModule):
     Identifies cointegrated pairs and trades mean-reversion opportunities
     """
 
-    name = "pairs_trading"
-    description = "Statistical arbitrage using cointegration and mean reversion"
-    category = "strategies"
+    @property
 
-    options = {
+
+    def name(self) -> str:
+
+
+        return "pairs_trading"
+
+
+
+    @property
+
+
+    def description(self) -> str:
+
+
+        return "Statistical arbitrage using cointegration and mean reversion"
+
+
+
+    @property
+
+
+    def author(self) -> str:
+
+
+        return "Quantsploit Team"
+
+
+
+    @property
+
+
+    def category(self) -> str:
+
+
+        return "strategy"
+
+
+
+    
+
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOLS": {
             "description": "Comma-separated list of symbols to find pairs (min 2)",
             "required": True,
             "default": "AAPL,MSFT,GOOGL,META,AMZN"
-        },
+
+
+
+
+    
+
+        })
+,
         "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y)",
             "required": False,

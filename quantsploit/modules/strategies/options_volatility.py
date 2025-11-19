@@ -38,16 +38,76 @@ class OptionsVolatilityStrategy(BaseModule):
     Implements various volatility-based options strategies
     """
 
-    name = "options_volatility"
-    description = "Options strategies based on volatility analysis"
-    category = "strategies"
+    @property
 
-    options = {
+
+    def name(self) -> str:
+
+
+        return "options_volatility"
+
+
+
+    @property
+
+
+    def description(self) -> str:
+
+
+        return "Options strategies based on volatility analysis"
+
+
+
+    @property
+
+
+    def author(self) -> str:
+
+
+        return "Quantsploit Team"
+
+
+
+    @property
+
+
+    def category(self) -> str:
+
+
+        return "strategy"
+
+
+
+    
+
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "AAPL"
-        },
+
+
+
+
+    
+
+        })
+,
         "STRATEGY": {
             "description": "Strategy: long_straddle, short_straddle, long_strangle, short_strangle, iv_rank",
             "required": False,

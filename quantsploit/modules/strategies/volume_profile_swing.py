@@ -38,16 +38,76 @@ class VolumeProfileSwingStrategy(BaseModule):
     Uses volume distribution analysis for swing trading
     """
 
-    name = "volume_profile_swing"
-    description = "Swing trading using volume profile and POC analysis"
-    category = "strategies"
+    @property
 
-    options = {
+
+    def name(self) -> str:
+
+
+        return "volume_profile_swing"
+
+
+
+    @property
+
+
+    def description(self) -> str:
+
+
+        return "Swing trading using volume profile and POC analysis"
+
+
+
+    @property
+
+
+    def author(self) -> str:
+
+
+        return "Quantsploit Team"
+
+
+
+    @property
+
+
+    def category(self) -> str:
+
+
+        return "strategy"
+
+
+
+    
+
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "AAPL"
-        },
+
+
+
+
+    
+
+        })
+,
         "PERIOD": {
             "description": "Historical data period (1y, 2y)",
             "required": False,

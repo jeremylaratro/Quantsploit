@@ -40,16 +40,76 @@ class OptionsSpreadStrategy(BaseModule):
     Implements various options spread strategies with full analysis
     """
 
-    name = "options_spreads"
-    description = "Advanced options spreads: Iron Condor, Butterfly, Calendar, etc."
-    category = "strategies"
+    @property
 
-    options = {
+
+    def name(self) -> str:
+
+
+        return "options_spreads"
+
+
+
+    @property
+
+
+    def description(self) -> str:
+
+
+        return "Advanced options spreads: Iron Condor, Butterfly, Calendar, etc."
+
+
+
+    @property
+
+
+    def author(self) -> str:
+
+
+        return "Quantsploit Team"
+
+
+
+    @property
+
+
+    def category(self) -> str:
+
+
+        return "strategy"
+
+
+
+    
+
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "SPY"
-        },
+
+
+
+
+    
+
+        })
+,
         "STRATEGY": {
             "description": "Spread: iron_condor, iron_butterfly, butterfly, calendar, bull_call, bear_put",
             "required": False,

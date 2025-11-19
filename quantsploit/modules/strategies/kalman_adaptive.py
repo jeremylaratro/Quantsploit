@@ -35,16 +35,76 @@ class KalmanAdaptiveStrategy(BaseModule):
     and generate adaptive trading signals
     """
 
-    name = "kalman_adaptive"
-    description = "Adaptive strategy using Kalman Filter for trend estimation"
-    category = "strategies"
+    @property
 
-    options = {
+
+    def name(self) -> str:
+
+
+        return "kalman_adaptive"
+
+
+
+    @property
+
+
+    def description(self) -> str:
+
+
+        return "Adaptive strategy using Kalman Filter for trend estimation"
+
+
+
+    @property
+
+
+    def author(self) -> str:
+
+
+        return "Quantsploit Team"
+
+
+
+    @property
+
+
+    def category(self) -> str:
+
+
+        return "strategy"
+
+
+
+    
+
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "AAPL"
-        },
+
+
+
+
+    
+
+        })
+,
         "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y)",
             "required": False,

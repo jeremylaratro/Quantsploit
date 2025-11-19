@@ -16,8 +16,6 @@ from datetime import datetime
 from collections import defaultdict
 
 from quantsploit.core.module import BaseModule
-from quantsploit.utils.data_fetcher import DataFetcher
-from quantsploit.utils.display import print_info, print_success, print_warning, print_error
 
 
 class MetaAnalysis(BaseModule):
@@ -111,7 +109,7 @@ class MetaAnalysis(BaseModule):
                         strategies[strategy_file] = obj
                         break
             except Exception as e:
-                print_warning(f"Could not load strategy {strategy_file}: {str(e)}")
+                print(f"[!] Could not load strategy {strategy_file}: {str(e)}")
                 continue
 
         return strategies
@@ -300,7 +298,7 @@ class MetaAnalysis(BaseModule):
         Returns:
             Dictionary containing analysis results
         """
-        print_info("Starting Meta-Analysis...")
+        print("\n[*] Starting Meta-Analysis...")
 
         # Get options
         symbols_input = self.get_option("SYMBOLS")
@@ -318,7 +316,7 @@ class MetaAnalysis(BaseModule):
                 "error": "No symbols provided"
             }
 
-        print_info(f"Analyzing {len(symbols)} symbol(s): {', '.join(symbols)}")
+        print(f"[*] Analyzing {len(symbols)} symbol(s): {', '.join(symbols)}")
 
         # Load available strategies
         available_strategies = self._load_available_strategies()
@@ -337,14 +335,14 @@ class MetaAnalysis(BaseModule):
                 if k in requested
             }
 
-        print_info(f"Running {len(available_strategies)} strategies: {', '.join(available_strategies.keys())}")
+        print(f"[*] Running {len(available_strategies)} strategies: {', '.join(available_strategies.keys())}")
 
         # Results storage
         all_results = {}
 
         # Run analysis for each symbol
         for symbol in symbols:
-            print_info(f"\nAnalyzing {symbol}...")
+            print(f"\n[*] Analyzing {symbol}...")
 
             symbol_results = {
                 'symbol': symbol,
@@ -364,7 +362,7 @@ class MetaAnalysis(BaseModule):
                     strategy.set_option('INTERVAL', interval)
 
                     # Run strategy
-                    print_info(f"  Running {strategy_name}...")
+                    print(f"  [*] Running {strategy_name}...")
                     results = strategy.run()
 
                     # Extract signal
@@ -386,7 +384,7 @@ class MetaAnalysis(BaseModule):
                     }
 
                 except Exception as e:
-                    print_warning(f"  Strategy {strategy_name} failed: {str(e)}")
+                    print(f"  [!] Strategy {strategy_name} failed: {str(e)}")
                     continue
 
             # Calculate consensus

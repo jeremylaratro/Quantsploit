@@ -67,7 +67,6 @@ class PairsTradingStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOLS": {
             "description": "Comma-separated list of symbols to find pairs (min 2)",
             "required": True,
@@ -124,6 +123,7 @@ class PairsTradingStrategy(BaseModule):
             "value": True
         }
         })
+
 
     def test_cointegration(self, y: pd.Series, x: pd.Series) -> Tuple[bool, float, float]:
         """

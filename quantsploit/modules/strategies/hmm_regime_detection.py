@@ -65,7 +65,6 @@ class HMMRegimeDetectionStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
@@ -117,6 +116,7 @@ class HMMRegimeDetectionStrategy(BaseModule):
             "value": "mean_revert"
         }
         })
+
 
     def extract_regime_features(self, df: pd.DataFrame, lookback: int) -> pd.DataFrame:
         """

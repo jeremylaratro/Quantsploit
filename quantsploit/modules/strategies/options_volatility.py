@@ -68,7 +68,6 @@ class OptionsVolatilityStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
@@ -115,6 +114,7 @@ class OptionsVolatilityStrategy(BaseModule):
             "value": 1
         }
         })
+
 
     def calculate_iv_rank(
         self,

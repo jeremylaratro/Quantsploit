@@ -68,7 +68,6 @@ class VolumeProfileSwingStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
@@ -120,6 +119,7 @@ class VolumeProfileSwingStrategy(BaseModule):
             "value": False
         }
         })
+
 
     def calculate_volume_profile(
         self,

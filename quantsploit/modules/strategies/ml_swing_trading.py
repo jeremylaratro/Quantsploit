@@ -71,7 +71,6 @@ class MLSwingTradingStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
@@ -118,6 +117,7 @@ class MLSwingTradingStrategy(BaseModule):
             "value": True
         }
         })
+
 
     def generate_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """

@@ -70,7 +70,6 @@ class OptionsSpreadStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
@@ -112,6 +111,7 @@ class OptionsSpreadStrategy(BaseModule):
             "value": 1
         }
         })
+
 
     def iron_condor_analysis(
         self,

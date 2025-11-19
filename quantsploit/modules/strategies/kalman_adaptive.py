@@ -65,7 +65,6 @@ class KalmanAdaptiveStrategy(BaseModule):
     def _init_options(self):
         super()._init_options()
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
@@ -117,6 +116,7 @@ class KalmanAdaptiveStrategy(BaseModule):
             "value": True
         }
         })
+
 
     def kalman_filter_simple(self, prices: pd.Series, Q: float, R: float) -> Tuple[pd.Series, pd.Series]:
         """

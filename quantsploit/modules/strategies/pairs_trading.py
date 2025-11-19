@@ -46,9 +46,34 @@ class PairsTradingStrategy(BaseModule):
 
     @property
     def description(self) -> str:
+        return """Pairs Trading - Market-neutral arbitrage on correlated stock pairs.
 
+SYNOPSIS: Finds cointegrated pairs (e.g., AAPL/MSFT), calculates spread. When
+spread Z-score >2.0, go long cheap/short expensive. Exit when spread normalizes.
 
-        return "Statistical arbitrage using cointegration and mean reversion"
+SIMULATION POSITIONS:
+  - LONG SPREAD (Z < -2.0): Buy stock1, Sell stock2 at hedge ratio
+  - SHORT SPREAD (Z > +2.0): Sell stock1, Buy stock2 at hedge ratio
+  - FLAT: Exit both legs when |Z| <0.5
+  - Stop loss: |Z| >3.0 (spread diverging further)
+  - Position size: 50% capital per pair (25% each leg)
+
+RECOMMENDED ENTRY:
+  - Entry: Spread Z-score exceeds ±2.0
+  - Exit: Z-score returns to ±0.5 (take profit)
+  - Only trade pairs with correlation >0.7 and p-value <0.05
+  - Use Kalman Filter for dynamic hedge ratios (more accurate)
+
+HEDGE RATIO EXAMPLE:
+  - If AAPL=$150, MSFT=$300, hedge ratio=0.5
+  - Long spread: Buy 100 AAPL, Sell 50 MSFT
+  - Short spread: Sell 100 AAPL, Buy 50 MSFT
+
+BEST PAIRS:
+  - Same sector (tech, banks, energy)
+  - Similar market cap and fundamentals
+  - Historical correlation >0.8
+  - Examples: XLE/USO, JPM/BAC, GOOGL/META"""
 
 
     @property

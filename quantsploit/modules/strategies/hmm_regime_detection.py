@@ -44,9 +44,43 @@ class HMMRegimeDetectionStrategy(BaseModule):
 
     @property
     def description(self) -> str:
+        return """HMM Regime Detection - Detects market regimes (Bull/Bear/Sideways) and adapts.
 
+SYNOPSIS: Uses Hidden Markov Model to classify current market into 3 regimes
+based on returns, volatility, trend. Applies regime-specific strategy.
 
-        return "Market regime detection using Hidden Markov Models"
+SIMULATION POSITIONS:
+  - BULL regime: Trend-follow (buy dips) or Mean-revert (buy RSI <30)
+  - BEAR regime: Defensive (exit to cash) or Short (short rallies)
+  - SIDEWAYS regime: Mean-revert (RSI extremes) or Wait
+  - Position size: 50% of capital
+
+REGIME CHARACTERISTICS:
+  - BULL: High returns, positive trend, moderate volatility
+  - BEAR: Negative returns, downtrend, often high volatility
+  - SIDEWAYS/VOLATILE: Low directional movement, choppy
+
+RECOMMENDED USE:
+  - Check current regime before entering trades
+  - BULL regime: Buy breakouts, hold winners, avoid shorts
+  - BEAR regime: Raise cash, tighten stops, consider hedges
+  - SIDEWAYS regime: Use mean reversion, avoid trend-following
+
+REAL-WORLD APPLICATION:
+  1. Run on SPY/QQQ to determine market regime
+  2. If BULL: Use momentum/trend strategies on stocks
+  3. If BEAR: Reduce exposure, focus on quality/defensive
+  4. If SIDEWAYS: Trade ranges, sell premium, avoid breakouts
+
+TRANSITION PROBABILITIES:
+  - Shows likelihood of regime change
+  - High BULL→BEAR probability = warning signal
+  - Use to adjust position sizing and strategy
+
+PARAMETERS:
+  - NUM_REGIMES: 3 (Bull/Bear/Sideways) recommended
+  - BULL_STRATEGY: trend_follow (buy dips) or mean_revert
+  - BEAR_STRATEGY: defensive (cash) or short"""
 
 
     @property

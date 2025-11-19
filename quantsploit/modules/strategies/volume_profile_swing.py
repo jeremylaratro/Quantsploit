@@ -47,9 +47,39 @@ class VolumeProfileSwingStrategy(BaseModule):
 
     @property
     def description(self) -> str:
+        return """Volume Profile - Identifies high-probability swing entries at key volume levels.
 
+SYNOPSIS: Calculates where most volume traded (POC = Point of Control). Value
+Area contains 70% of volume. Price bounces off POC/VA boundaries create entries.
 
-        return "Swing trading using volume profile and POC analysis"
+SIMULATION POSITIONS:
+  - LONG: Price at/below Value Area Low or bouncing off POC from below
+  - SHORT/EXIT: Price at/above Value Area High or rejection at POC
+  - Position size: 50% of capital
+  - Backtest includes all volume-based signals
+
+RECOMMENDED ENTRY:
+  - LONG: Price touches Value Area Low + rising delta (buying pressure)
+  - LONG: Price bounces off POC support in uptrend
+  - EXIT: Price reaches Value Area High or POC resistance
+  - SHORT: Price above Value Area High showing rejection
+
+VOLUME PROFILE ZONES:
+  - POC: Price with highest volume (strongest support/resistance)
+  - Value Area High: Top of 70% volume distribution
+  - Value Area Low: Bottom of 70% volume distribution
+  - High Volume Nodes: Additional support/resistance levels
+  - Low Volume Nodes: Price moves fast through (low liquidity)
+
+REAL-WORLD TRADING:
+  - Calculate 20-day volume profile for swing trades
+  - Price below VA Low = undervalued, potential long
+  - Price above VA High = overvalued, potential short
+  - POC acts as magnet - price tends to revert
+  - Combine with market structure (higher highs/lows)
+
+BEST USE: Liquid stocks with clear volume distribution. Works best on daily
+timeframe for swings, hourly for day trading."""
 
 
     @property

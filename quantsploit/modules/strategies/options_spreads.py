@@ -49,9 +49,38 @@ class OptionsSpreadStrategy(BaseModule):
 
     @property
     def description(self) -> str:
+        return """Options Spreads - Limited-risk options strategies with defined profit zones.
 
+SYNOPSIS: Analyzes multiple spread strategies (Iron Condor, Butterfly, Bull Call,
+Bear Put, Calendar). Calculates max profit/loss, breakevens, Greeks, probability.
 
-        return "Advanced options spreads: Iron Condor, Butterfly, Calendar, etc."
+STRATEGIES AVAILABLE:
+  1. Iron Condor: Sell OTM call+put, buy further OTM for protection (neutral)
+  2. Iron Butterfly: Sell ATM call+put, buy OTM protection (higher credit)
+  3. Bull Call Spread: Buy ATM call, sell higher strike (bullish, limited risk)
+  4. Bear Put Spread: Buy ATM put, sell lower strike (bearish, limited risk)
+  5. Butterfly: Buy ITM+OTM, sell 2x ATM (low-cost directional bet)
+  6. Calendar: Sell near-term, buy long-term same strike (profit from theta)
+
+IRON CONDOR EXAMPLE (SPY @ $450, 30 DTE):
+  - Sell 455 call, buy 460 call (call spread)
+  - Sell 445 put, buy 440 put (put spread)
+  - Net credit: $2.00 ($200 per contract)
+  - Max profit: $200 (if SPY between 445-455 at expiry)
+  - Max loss: $300 (if SPY >460 or <440)
+  - Breakevens: $443/$457
+  - Probability of profit: ~65%
+
+RECOMMENDED USE:
+  - Iron Condor: Range-bound stocks, IV rank >50, theta decay
+  - Bull/Bear spreads: Directional bias with defined risk
+  - Butterfly: Low-volatility, expect price near strike
+  - Calendar: Profit from time decay, IV expansion
+
+POSITION SIZING:
+  - Risk 1-2% of capital per spread
+  - Close at 50% max profit (recommended)
+  - Avoid earnings/major events unless trading IV crush"""
 
 
     @property

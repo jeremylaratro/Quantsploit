@@ -23,7 +23,29 @@ class MeanReversion(BaseModule):
 
     @property
     def description(self) -> str:
-        return "Identify mean reversion opportunities using z-score and statistical analysis"
+        return """Mean Reversion - Trades oversold/overbought extremes back to average.
+
+SYNOPSIS: Z-score measures price deviation from 20-day mean. |Z| >2.0 signals
+extreme, likely to revert. Uses Bollinger Bands, RSI for confirmation.
+
+SIMULATION POSITIONS:
+  - Analysis only (no backtested trades)
+  - Provides signal strength score and reversion probability
+  - Calculates expected return to mean
+
+RECOMMENDED ENTRY:
+  - LONG: Z-score < -2.0 (oversold) + RSI <30 + below lower BB
+  - SHORT/EXIT: Z-score > +2.0 (overbought) + RSI >70 + above upper BB
+  - Take profit when Z-score returns to ±0.5 (near mean)
+  - Stop loss if Z-score exceeds ±3.0 (extreme extension)
+
+POSITION SIZING:
+  - Full position: Z-score < -2.5 (very oversold)
+  - Half position: Z-score -1.5 to -2.0 (moderately oversold)
+  - Increase size when reversion probability >70%
+
+BEST USE: Range-bound stocks, avoid in strong trends. Works well on ETFs,
+stable large-caps. Check if historical mean reversion probability >60%."""
 
     @property
     def author(self) -> str:

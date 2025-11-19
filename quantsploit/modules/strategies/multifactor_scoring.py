@@ -28,7 +28,33 @@ class MultiFactorScoring(BaseModule):
 
     @property
     def description(self) -> str:
-        return "Comprehensive multi-factor quantitative scoring system"
+        return """Multi-Factor Scoring - Ranks multiple stocks across 4 factor categories.
+
+SYNOPSIS: Scores each stock 0-100 in momentum, technical, volatility (inverted),
+and volume. Weighted composite determines rank.
+
+SIMULATION POSITIONS:
+  - Analysis/ranking only (no backtested trades)
+  - Processes multiple symbols in parallel
+  - Returns sorted list by composite score
+
+RECOMMENDED ENTRY:
+  - Composite score ≥75: STRONG BUY - Enter full position
+  - Composite score 60-74: BUY - Enter partial position
+  - Composite score <40: Avoid or reduce exposure
+  - Focus on top 3-5 ranked stocks from screened universe
+
+DEFAULT WEIGHTS:
+  - Momentum: 30% (ROC, acceleration)
+  - Technical: 30% (RSI, MACD, MA crossovers, ADX)
+  - Volatility: 20% (lower is better - ATR, BB width)
+  - Volume: 20% (volume trend, OBV, spikes)
+
+REAL-WORLD USE:
+  1. Screen 20-50 stocks (e.g., S&P sectors, watchlist)
+  2. Run multifactor scoring
+  3. Take top 5 scores ≥70 for further analysis
+  4. Combine with other strategies for entry timing"""
 
     @property
     def author(self) -> str:

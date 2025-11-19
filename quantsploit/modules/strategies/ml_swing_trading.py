@@ -147,15 +147,15 @@ class MLSwingTradingStrategy(BaseModule):
         )
 
         # Moving averages
-        features['sma_5'] = sma(df, 5)['SMA_5']
-        features['sma_10'] = sma(df, 10)['SMA_10']
-        features['sma_20'] = sma(df, 20)['SMA_20']
-        features['sma_50'] = sma(df, 50)['SMA_50']
-        features['sma_200'] = sma(df, 200)['SMA_200']
+        features['sma_5'] = sma(df['Close'], 5)
+        features['sma_10'] = sma(df['Close'], 10)
+        features['sma_20'] = sma(df['Close'], 20)
+        features['sma_50'] = sma(df['Close'], 50)
+        features['sma_200'] = sma(df['Close'], 200)
 
-        features['ema_5'] = ema(df, 5)['EMA_5']
-        features['ema_10'] = ema(df, 10)['EMA_10']
-        features['ema_20'] = ema(df, 20)['EMA_20']
+        features['ema_5'] = ema(df['Close'], 5)
+        features['ema_10'] = ema(df['Close'], 10)
+        features['ema_20'] = ema(df['Close'], 20)
 
         # MA crossover features
         features['price_to_sma20'] = df['Close'] / features['sma_20']

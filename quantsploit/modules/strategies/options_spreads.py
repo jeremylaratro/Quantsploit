@@ -74,42 +74,42 @@ class OptionsSpreadStrategy(BaseModule):
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
-            "default": "SPY"
+            "value": "SPY"
             },
             "STRATEGY": {
             "description": "Spread: iron_condor, iron_butterfly, butterfly, calendar, bull_call, bear_put",
             "required": False,
-            "default": "iron_condor"
+            "value": "iron_condor"
         },
         "DAYS_TO_EXPIRATION": {
             "description": "Target days to expiration",
             "required": False,
-            "default": 30
+            "value": 30
         },
         "RISK_FREE_RATE": {
             "description": "Risk-free interest rate (annual)",
             "required": False,
-            "default": 0.05
+            "value": 0.05
         },
         "DIVIDEND_YIELD": {
             "description": "Dividend yield (annual)",
             "required": False,
-            "default": 0.02
+            "value": 0.02
         },
         "WING_WIDTH": {
             "description": "Width of wings for Iron Condor/Butterfly ($)",
             "required": False,
-            "default": 5
+            "value": 5
         },
         "PROFIT_TARGET_PCT": {
             "description": "Profit target as % of max profit (50 = 50%)",
             "required": False,
-            "default": 50
+            "value": 50
         },
         "CONTRACTS": {
             "description": "Number of contracts to trade",
             "required": False,
-            "default": 1
+            "value": 1
         }
         })
 

@@ -72,47 +72,47 @@ class OptionsVolatilityStrategy(BaseModule):
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
-            "default": "AAPL"
+            "value": "AAPL"
             },
             "STRATEGY": {
             "description": "Strategy: long_straddle, short_straddle, long_strangle, short_strangle, iv_rank",
             "required": False,
-            "default": "long_straddle"
+            "value": "long_straddle"
         },
         "DAYS_TO_EXPIRATION": {
             "description": "Target days to expiration",
             "required": False,
-            "default": 30
+            "value": 30
         },
         "RISK_FREE_RATE": {
             "description": "Risk-free interest rate (annual)",
             "required": False,
-            "default": 0.05
+            "value": 0.05
         },
         "DIVIDEND_YIELD": {
             "description": "Dividend yield (annual)",
             "required": False,
-            "default": 0.0
+            "value": 0.0
         },
         "IV_PERCENTILE_THRESHOLD": {
             "description": "IV percentile threshold for entry (e.g., 50 = median)",
             "required": False,
-            "default": 50
+            "value": 50
         },
         "HV_WINDOW": {
             "description": "Historical volatility lookback window (days)",
             "required": False,
-            "default": 30
+            "value": 30
         },
         "STRANGLE_OTM_PCT": {
             "description": "OTM percentage for strangle strikes (e.g., 5 = 5%)",
             "required": False,
-            "default": 5
+            "value": 5
         },
         "CONTRACTS": {
             "description": "Number of option contracts to trade",
             "required": False,
-            "default": 1
+            "value": 1
         }
         })
 

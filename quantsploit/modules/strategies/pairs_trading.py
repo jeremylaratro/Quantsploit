@@ -71,57 +71,57 @@ class PairsTradingStrategy(BaseModule):
         "SYMBOLS": {
             "description": "Comma-separated list of symbols to find pairs (min 2)",
             "required": True,
-            "default": "AAPL,MSFT,GOOGL,META,AMZN"
+            "value": "AAPL,MSFT,GOOGL,META,AMZN"
             },
             "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y)",
             "required": False,
-            "default": "2y"
+            "value": "2y"
         },
         "INTERVAL": {
             "description": "Data interval (1d for daily)",
             "required": False,
-            "default": "1d"
+            "value": "1d"
         },
         "LOOKBACK": {
             "description": "Lookback period for z-score calculation",
             "required": False,
-            "default": 20
+            "value": 20
         },
         "ENTRY_THRESHOLD": {
             "description": "Z-score threshold for entry (e.g., 2.0 = 2 std dev)",
             "required": False,
-            "default": 2.0
+            "value": 2.0
         },
         "EXIT_THRESHOLD": {
             "description": "Z-score threshold for exit (e.g., 0.5)",
             "required": False,
-            "default": 0.5
+            "value": 0.5
         },
         "STOP_LOSS": {
             "description": "Z-score stop loss (e.g., 3.0)",
             "required": False,
-            "default": 3.0
+            "value": 3.0
         },
         "MIN_CORRELATION": {
             "description": "Minimum correlation for pair selection",
             "required": False,
-            "default": 0.7
+            "value": 0.7
         },
         "INITIAL_CAPITAL": {
             "description": "Initial capital for backtesting",
             "required": False,
-            "default": 100000
+            "value": 100000
         },
         "POSITION_SIZE": {
             "description": "Position size as fraction of capital per pair",
             "required": False,
-            "default": 0.5
+            "value": 0.5
         },
         "USE_KALMAN": {
             "description": "Use Kalman Filter for dynamic hedge ratios",
             "required": False,
-            "default": True
+            "value": True
         }
         })
 

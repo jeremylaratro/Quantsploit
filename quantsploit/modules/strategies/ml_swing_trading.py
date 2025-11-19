@@ -42,76 +42,42 @@ class MLSwingTradingStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "ml_swing_trading"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "ML-based swing trading using Random Forest + XGBoost ensemble"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
 
-
-
-    
-
     def _init_options(self):
-
-
-
-
-    
-
         super()._init_options()
-
-
-
-
-    
-
         self.options.update({
 
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "AAPL"
-
-
-
-
-    
-
-        })
-,
-        "PERIOD": {
+            },
+            "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y, max)",
             "required": False,
             "default": "2y"
@@ -150,8 +116,8 @@ class MLSwingTradingStrategy(BaseModule):
             "description": "Use ensemble (RF + XGBoost) vs single model",
             "required": False,
             "default": True
-        },
-    }
+        }
+        })
 
     def generate_features(self, df: pd.DataFrame) -> pd.DataFrame:
         """

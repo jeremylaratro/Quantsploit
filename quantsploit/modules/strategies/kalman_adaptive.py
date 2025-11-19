@@ -36,76 +36,42 @@ class KalmanAdaptiveStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "kalman_adaptive"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Adaptive strategy using Kalman Filter for trend estimation"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
 
-
-
-    
-
     def _init_options(self):
-
-
-
-
-    
-
         super()._init_options()
-
-
-
-
-    
-
         self.options.update({
 
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "AAPL"
-
-
-
-
-    
-
-        })
-,
-        "PERIOD": {
+            },
+            "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y)",
             "required": False,
             "default": "1y"
@@ -149,8 +115,8 @@ class KalmanAdaptiveStrategy(BaseModule):
             "description": "Scale position size based on filter confidence",
             "required": False,
             "default": True
-        },
-    }
+        }
+        })
 
     def kalman_filter_simple(self, prices: pd.Series, Q: float, R: float) -> Tuple[pd.Series, pd.Series]:
         """

@@ -38,9 +38,47 @@ class OptionsVolatilityStrategy(BaseModule):
     Implements various volatility-based options strategies
     """
 
-    name = "options_volatility"
-    description = "Options strategies based on volatility analysis"
-    category = "strategies"
+    @property
+
+
+    def name(self) -> str:
+
+
+        return "options_volatility"
+
+
+
+    @property
+
+
+    def description(self) -> str:
+
+
+        return "Options strategies based on volatility analysis"
+
+
+
+    @property
+
+
+    def author(self) -> str:
+
+
+        return "Quantsploit Team"
+
+
+
+    @property
+
+
+    def category(self) -> str:
+
+
+        return "strategy"
+
+
+
+    
 
     options = {
         "SYMBOL": {

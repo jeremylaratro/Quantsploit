@@ -46,9 +46,10 @@ class PairsTradingStrategy(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Pairs Trading - Market-neutral arbitrage on correlated stock pairs.
+        return "Market-neutral statistical arbitrage on cointegrated stock pairs"
 
-SYNOPSIS: Finds cointegrated pairs (e.g., AAPL/MSFT), calculates spread. When
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Finds cointegrated pairs (e.g., AAPL/MSFT), calculates spread. When
 spread Z-score >2.0, go long cheap/short expensive. Exit when spread normalizes.
 
 SIMULATION POSITIONS:
@@ -75,6 +76,10 @@ BEST PAIRS:
   - Historical correlation >0.8
   - Examples: XLE/USO, JPM/BAC, GOOGL/META"""
 
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

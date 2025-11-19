@@ -49,9 +49,10 @@ class OptionsSpreadStrategy(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Options Spreads - Limited-risk options strategies with defined profit zones.
+        return "Limited-risk options strategies: Iron Condor, Butterfly, Bull/Bear spreads"
 
-SYNOPSIS: Analyzes multiple spread strategies (Iron Condor, Butterfly, Bull Call,
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Analyzes multiple spread strategies (Iron Condor, Butterfly, Bull Call,
 Bear Put, Calendar). Calculates max profit/loss, breakevens, Greeks, probability.
 
 STRATEGIES AVAILABLE:
@@ -82,6 +83,10 @@ POSITION SIZING:
   - Close at 50% max profit (recommended)
   - Avoid earnings/major events unless trading IV crush"""
 
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

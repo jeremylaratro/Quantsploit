@@ -26,9 +26,10 @@ class MomentumSignals(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Multi-Factor Momentum - Scores stocks using 6+ momentum indicators.
+        return "Multi-factor momentum scoring using ROC, ADX, volume, MA alignment"
 
-SYNOPSIS: Combines ROC, ADX, volume momentum, MA alignment, and relative strength
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Combines ROC, ADX, volume momentum, MA alignment, and relative strength
 into composite score. Score >60 = BUY, <-60 = SELL.
 
 SIMULATION POSITIONS:
@@ -50,6 +51,11 @@ KEY SIGNALS:
   - Outperforming benchmark (+15)
 
 BEST USE: Screening tool for trending stocks before entering swing positions."""
+
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

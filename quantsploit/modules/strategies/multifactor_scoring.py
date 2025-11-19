@@ -28,9 +28,10 @@ class MultiFactorScoring(BaseModule):
 
     @property
     def description(self) -> str:
-        return """Multi-Factor Scoring - Ranks multiple stocks across 4 factor categories.
+        return "Ranks stocks using momentum, technical, volatility, and volume factors"
 
-SYNOPSIS: Scores each stock 0-100 in momentum, technical, volatility (inverted),
+    def trading_guide(self) -> str:
+        return """SYNOPSIS: Scores each stock 0-100 in momentum, technical, volatility (inverted),
 and volume. Weighted composite determines rank.
 
 SIMULATION POSITIONS:
@@ -55,6 +56,11 @@ REAL-WORLD USE:
   2. Run multifactor scoring
   3. Take top 5 scores ≥70 for further analysis
   4. Combine with other strategies for entry timing"""
+
+    def show_info(self):
+        info = super().show_info()
+        info['trading_guide'] = self.trading_guide()
+        return info
 
     @property
     def author(self) -> str:

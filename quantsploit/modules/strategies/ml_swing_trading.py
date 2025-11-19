@@ -164,40 +164,40 @@ class MLSwingTradingStrategy(BaseModule):
         features['sma50_to_sma200'] = features['sma_50'] / features['sma_200']
 
         # Momentum indicators
-        features['rsi_14'] = rsi(df, 14)['RSI_14']
-        features['rsi_7'] = rsi(df, 7)['RSI_7']
-        features['rsi_21'] = rsi(df, 21)['RSI_21']
+        features['rsi_14'] = rsi(df['Close'], 14)
+        features['rsi_7'] = rsi(df['Close'], 7)
+        features['rsi_21'] = rsi(df['Close'], 21)
 
-        macd_data = macd(df)
-        features['macd'] = macd_data['MACD']
-        features['macd_signal'] = macd_data['MACD_signal']
-        features['macd_hist'] = macd_data['MACD_hist']
+        macd_data = macd(df['Close'])
+        features['macd'] = macd_data['MACD_12_26_9']
+        features['macd_signal'] = macd_data['MACDs_12_26_9']
+        features['macd_hist'] = macd_data['MACDh_12_26_9']
 
         # Rate of change
-        features['roc_5'] = roc(df, 5)['ROC_5']
-        features['roc_10'] = roc(df, 10)['ROC_10']
-        features['roc_20'] = roc(df, 20)['ROC_20']
+        features['roc_5'] = roc(df['Close'], 5)
+        features['roc_10'] = roc(df['Close'], 10)
+        features['roc_20'] = roc(df['Close'], 20)
 
         # Stochastic
-        stoch_data = stoch(df)
-        features['stoch_k'] = stoch_data['STOCH_k']
-        features['stoch_d'] = stoch_data['STOCH_d']
+        stoch_data = stoch(df['High'], df['Low'], df['Close'])
+        features['stoch_k'] = stoch_data['STOCHk_14_3_3']
+        features['stoch_d'] = stoch_data['STOCHd_14_3_3']
 
         # Bollinger Bands
-        bb_data = bbands(df, 20, 2.0)
-        features['bb_upper'] = bb_data['BB_upper']
-        features['bb_middle'] = bb_data['BB_middle']
-        features['bb_lower'] = bb_data['BB_lower']
-        features['bb_width'] = (bb_data['BB_upper'] - bb_data['BB_lower']) / bb_data['BB_middle']
-        features['bb_position'] = (df['Close'] - bb_data['BB_lower']) / (bb_data['BB_upper'] - bb_data['BB_lower'])
+        bb_data = bbands(df['Close'], 20, 2.0)
+        features['bb_upper'] = bb_data['BBU_20_2.0']
+        features['bb_middle'] = bb_data['BBM_20_2.0']
+        features['bb_lower'] = bb_data['BBL_20_2.0']
+        features['bb_width'] = (bb_data['BBU_20_2.0'] - bb_data['BBL_20_2.0']) / bb_data['BBM_20_2.0']
+        features['bb_position'] = (df['Close'] - bb_data['BBL_20_2.0']) / (bb_data['BBU_20_2.0'] - bb_data['BBL_20_2.0'])
 
         # ATR (Average True Range)
-        features['atr_14'] = atr(df, 14)['ATR_14']
+        features['atr_14'] = atr(df['High'], df['Low'], df['Close'], 14)
         features['atr_ratio'] = features['atr_14'] / df['Close']
 
         # ADX (Trend Strength)
-        adx_data = adx(df)
-        features['adx'] = adx_data['ADX']
+        adx_data = adx(df['High'], df['Low'], df['Close'])
+        features['adx'] = adx_data['ADX_14']
         features['plus_di'] = adx_data['Plus_DI']
         features['minus_di'] = adx_data['Minus_DI']
 

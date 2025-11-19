@@ -152,17 +152,15 @@ class HMMRegimeDetectionStrategy(BaseModule):
         features['volume_change'] = df['Volume'].pct_change(lookback)
 
         # RSI
-        rsi_data = rsi(df, 14)
-        features['rsi'] = rsi_data['RSI_14']
+        features['rsi'] = rsi(df['Close'], 14)
 
         # ATR (volatility measure)
-        atr_data = atr(df, 14)
-        features['atr'] = atr_data['ATR_14']
+        features['atr'] = atr(df['High'], df['Low'], df['Close'], 14)
         features['atr_pct'] = features['atr'] / df['Close']
 
         # ADX (trend strength)
-        adx_data = adx(df)
-        features['adx'] = adx_data['ADX']
+        adx_data = adx(df['High'], df['Low'], df['Close'])
+        features['adx'] = adx_data['ADX_14']
 
         return features
 

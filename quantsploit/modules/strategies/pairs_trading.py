@@ -79,12 +79,34 @@ class PairsTradingStrategy(BaseModule):
 
     
 
-    options = {
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOLS": {
             "description": "Comma-separated list of symbols to find pairs (min 2)",
             "required": True,
             "default": "AAPL,MSFT,GOOGL,META,AMZN"
-        },
+
+
+
+
+    
+
+        })
+,
         "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y)",
             "required": False,

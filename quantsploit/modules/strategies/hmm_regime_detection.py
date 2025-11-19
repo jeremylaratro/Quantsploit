@@ -77,12 +77,34 @@ class HMMRegimeDetectionStrategy(BaseModule):
 
     
 
-    options = {
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "SPY"
-        },
+
+
+
+
+    
+
+        })
+,
         "PERIOD": {
             "description": "Historical data period (2y, 5y, max)",
             "required": False,

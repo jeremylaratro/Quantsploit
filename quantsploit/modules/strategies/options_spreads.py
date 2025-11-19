@@ -82,12 +82,34 @@ class OptionsSpreadStrategy(BaseModule):
 
     
 
-    options = {
+    def _init_options(self):
+
+
+
+
+    
+
+        super()._init_options()
+
+
+
+
+    
+
+        self.options.update({
+
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "SPY"
-        },
+
+
+
+
+    
+
+        })
+,
         "STRATEGY": {
             "description": "Spread: iron_condor, iron_butterfly, butterfly, calendar, bull_call, bear_put",
             "required": False,

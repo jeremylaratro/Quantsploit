@@ -548,7 +548,7 @@ class OptionsSpreadStrategy(BaseModule):
 
 
         # Fetch stock data
-        data_fetcher = DataFetcher(self.database)
+        data_fetcher = DataFetcher(self.framework.database)
         df = data_fetcher.get_stock_data(symbol, period="1y", interval="1d")
 
         if df is None or len(df) < 30:

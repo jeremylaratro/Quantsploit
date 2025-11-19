@@ -450,7 +450,7 @@ class HMMRegimeDetectionStrategy(BaseModule):
 
 
         # Fetch data
-        data_fetcher = DataFetcher(self.database)
+        data_fetcher = DataFetcher(self.framework.database)
         df = data_fetcher.get_stock_data(symbol, period=period, interval=interval)
 
         if df is None or len(df) < 100:

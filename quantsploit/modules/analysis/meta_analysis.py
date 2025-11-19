@@ -128,7 +128,7 @@ class MetaAnalysis(BaseModule):
             signal_type: 'BUY', 'SELL', 'HOLD', or 'NEUTRAL'
             confidence: 0-100 confidence level
         """
-        if not results or not results.get('success', False):
+        if not results:
             return 0.0, 'NEUTRAL', 0.0
 
         signal_strength = 0.0
@@ -137,8 +137,82 @@ class MetaAnalysis(BaseModule):
 
         # Extract signals based on strategy type
 
-        # Check for direct signal field
-        if 'signal' in results:
+        # Priority 1: Check for signal_score (momentum_signals)
+        if 'signal_score' in results:
+            signal_strength = float(results['signal_score'])
+            if signal_strength > 50:
+                signal_type = 'BUY'
+            elif signal_strength < -50:
+                signal_type = 'SELL'
+            else:
+                signal_type = 'HOLD'
+            confidence = abs(signal_strength)
+
+        # Priority 2: Check for signal_strength field (mean_reversion)
+        if 'signal_strength' in results and signal_strength == 0.0:
+            signal_strength = float(results.get('signal_strength', 0))
+            if signal_strength > 20:
+                signal_type = 'BUY'
+            elif signal_strength < -20:
+                signal_type = 'SELL'
+            else:
+                signal_type = 'HOLD'
+            confidence = abs(signal_strength) * 2  # Scale to 0-100
+
+        # Priority 3: Check for overall_signal text
+        if 'overall_signal' in results:
+            overall = results['overall_signal'].upper()
+            if 'STRONG BUY' in overall:
+                if signal_strength == 0:
+                    signal_strength = 85.0
+                signal_type = 'BUY'
+                confidence = 80.0
+            elif 'BUY' in overall:
+                if signal_strength == 0:
+                    signal_strength = 70.0
+                signal_type = 'BUY'
+                if confidence == 50.0:
+                    confidence = 70.0
+            elif 'STRONG SELL' in overall:
+                if signal_strength == 0:
+                    signal_strength = -85.0
+                signal_type = 'SELL'
+                confidence = 80.0
+            elif 'SELL' in overall:
+                if signal_strength == 0:
+                    signal_strength = -70.0
+                signal_type = 'SELL'
+                if confidence == 50.0:
+                    confidence = 70.0
+            elif 'NEUTRAL' in overall or 'NO CLEAR' in overall:
+                if signal_strength == 0:
+                    signal_type = 'NEUTRAL'
+                    confidence = 30.0
+
+        # Priority 4: Check for recommendation field
+        if 'recommendation' in results and signal_strength == 0:
+            rec = results['recommendation'].upper()
+            if 'BUY' in rec or 'LONG' in rec:
+                signal_strength = 70.0
+                signal_type = 'BUY'
+            elif 'SELL' in rec or 'SHORT' in rec:
+                signal_strength = -70.0
+                signal_type = 'SELL'
+
+        # Priority 5: Check for composite_score (multifactor scoring)
+        if 'composite_score' in results:
+            score = float(results['composite_score'])
+            signal_strength = (score - 50) * 2  # Convert 0-100 to -100 to +100
+            if score > 60:
+                signal_type = 'BUY'
+            elif score < 40:
+                signal_type = 'SELL'
+            else:
+                signal_type = 'HOLD'
+            confidence = abs(score - 50) * 2
+
+        # Priority 6: Check for direct signal field
+        if 'signal' in results and signal_strength == 0:
             signal = results['signal']
             if isinstance(signal, str):
                 if 'BUY' in signal.upper():
@@ -158,71 +232,15 @@ class MetaAnalysis(BaseModule):
                 else:
                     signal_type = 'HOLD'
 
-        # Check for signal_strength field
-        if 'signal_strength' in results:
-            signal_strength = float(results.get('signal_strength', 0))
-            if signal_strength > 50:
-                signal_type = 'BUY'
-            elif signal_strength < -50:
-                signal_type = 'SELL'
-            else:
-                signal_type = 'HOLD'
-
-        # Check for recommendation
-        if 'recommendation' in results:
-            rec = results['recommendation'].upper()
-            if 'BUY' in rec or 'LONG' in rec:
-                if signal_strength == 0:
-                    signal_strength = 70.0
-                signal_type = 'BUY'
-            elif 'SELL' in rec or 'SHORT' in rec:
-                if signal_strength == 0:
-                    signal_strength = -70.0
-                signal_type = 'SELL'
-
-        # Check for trades (backtesting results)
-        if 'trades' in results and results['trades']:
-            # Last trade signal
-            last_trade = results['trades'][-1] if results['trades'] else None
-            if last_trade:
-                if last_trade.get('type') == 'BUY' or last_trade.get('side') == 'BUY':
-                    signal_strength = 60.0
-                    signal_type = 'BUY'
-                elif last_trade.get('type') == 'SELL' or last_trade.get('side') == 'SELL':
-                    signal_strength = -60.0
-                    signal_type = 'SELL'
-
-        # Check for metrics that indicate performance
-        if 'metrics' in results:
-            metrics = results['metrics']
-
-            # Use win rate as confidence
-            if 'win_rate' in metrics:
-                confidence = float(metrics['win_rate'])
-
-            # Use Sharpe ratio to adjust signal
-            if 'sharpe_ratio' in metrics:
-                sharpe = float(metrics.get('sharpe_ratio', 0))
-                if sharpe > 1.5:
-                    signal_strength *= 1.2  # Boost signal for good Sharpe
-                elif sharpe < 0:
-                    signal_strength *= 0.5  # Reduce signal for negative Sharpe
-
-        # Check for confidence field
-        if 'confidence' in results:
-            confidence = float(results['confidence'])
-
-        # Check for score (multifactor scoring)
-        if 'composite_score' in results:
-            score = float(results['composite_score'])
-            signal_strength = (score - 50) * 2  # Convert 0-100 to -100 to +100
-            if score > 60:
-                signal_type = 'BUY'
-            elif score < 40:
-                signal_type = 'SELL'
-            else:
-                signal_type = 'HOLD'
-            confidence = abs(score - 50) * 2
+        # Adjust confidence based on backtesting metrics if available
+        if 'win_rate' in results:
+            confidence = float(results['win_rate'])
+        elif 'sharpe_ratio' in results:
+            sharpe = float(results.get('sharpe_ratio', 0))
+            if sharpe > 1.0:
+                confidence = min(confidence * 1.2, 100.0)
+            elif sharpe < 0:
+                confidence = max(confidence * 0.5, 10.0)
 
         # Clamp values
         signal_strength = max(-100, min(100, signal_strength))

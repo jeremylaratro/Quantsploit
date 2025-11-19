@@ -502,7 +502,7 @@ class PairsTradingStrategy(BaseModule):
 
 
         # Fetch data for all symbols
-        data_fetcher = DataFetcher(self.database)
+        data_fetcher = DataFetcher(self.framework.database)
         data_dict = {}
 
         for symbol in symbols:

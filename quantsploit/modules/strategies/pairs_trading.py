@@ -204,7 +204,6 @@ class PairsTradingStrategy(BaseModule):
         """
         pairs = []
 
-        self.print_status(f"Testing {len(symbols)} symbols for cointegration...")
 
         for i, sym1 in enumerate(symbols):
             for sym2 in symbols[i + 1:]:
@@ -232,10 +231,7 @@ class PairsTradingStrategy(BaseModule):
                 is_coint, p_value, hedge_ratio = self.test_cointegration(price1, price2)
 
                 if is_coint:
-                    self.print_good(f"Found cointegrated pair: {sym1}/{sym2}")
-                    self.print_info(f"  Correlation: {correlation:.3f}")
-                    self.print_info(f"  P-value: {p_value:.4f}")
-                    self.print_info(f"  Hedge Ratio: {hedge_ratio:.4f}")
+                    pass
 
                     pairs.append({
                         'symbol1': sym1,
@@ -490,7 +486,7 @@ class PairsTradingStrategy(BaseModule):
         symbols = [s.strip().upper() for s in symbols_str.split(",")]
 
         if len(symbols) < 2:
-            self.print_error("Need at least 2 symbols for pairs trading")
+            pass
             return {"error": "Insufficient symbols"}
 
         period = self.options["PERIOD"]["value"]
@@ -504,8 +500,6 @@ class PairsTradingStrategy(BaseModule):
         position_size = float(self.options["POSITION_SIZE"]["value"])
         use_kalman = self.options["USE_KALMAN"]["value"]
 
-        self.print_status(f"Running Pairs Trading Strategy")
-        self.print_info(f"Analyzing {len(symbols)} symbols: {', '.join(symbols)}")
 
         # Fetch data for all symbols
         data_fetcher = DataFetcher(self.database)
@@ -516,10 +510,10 @@ class PairsTradingStrategy(BaseModule):
             if df is not None and len(df) > 100:
                 data_dict[symbol] = df
             else:
-                self.print_warning(f"Insufficient data for {symbol}")
+                pass
 
         if len(data_dict) < 2:
-            self.print_error("Need at least 2 symbols with valid data")
+            pass
             return {"error": "Insufficient data"}
 
         # Find cointegrated pairs
@@ -530,13 +524,11 @@ class PairsTradingStrategy(BaseModule):
         )
 
         if len(pairs) == 0:
-            self.print_warning("No cointegrated pairs found")
+            pass
             return {"error": "No pairs found", "pairs": []}
 
-        self.print_good(f"\nFound {len(pairs)} cointegrated pair(s)")
 
         # Backtest each pair
-        self.print_status("\nBacktesting pairs...")
 
         results = []
         for pair in pairs:
@@ -553,33 +545,25 @@ class PairsTradingStrategy(BaseModule):
             results.append(result)
 
         # Display results
-        self.print_good("\n=== Pairs Trading Results ===\n")
 
         for result in results:
-            self.print_info(f"Pair: {result['pair']}")
-            self.print_info(f"  Total Trades: {result['total_trades']}")
+            pass
 
             if result['total_trades'] > 0:
-                self.print_info(f"  Win Rate: {result['win_rate']:.2f}%")
-                self.print_info(f"  Total P&L: ${result['total_pnl']:.2f}")
-                self.print_info(f"  Avg Win: ${result['avg_win']:.2f}")
-                self.print_info(f"  Avg Loss: ${result['avg_loss']:.2f}")
-                self.print_info(f"  Profit Factor: {result['profit_factor']:.2f}")
+                pass
 
-            self.print_info(f"  Current Z-Score: {result['current_zscore']:.2f}")
 
             # Generate current signal
             z = result['current_zscore']
             if z > entry_threshold:
-                self.print_warning(f"  Signal: SHORT SPREAD (z={z:.2f} > {entry_threshold})")
+                pass
             elif z < -entry_threshold:
-                self.print_good(f"  Signal: LONG SPREAD (z={z:.2f} < {-entry_threshold})")
+                pass
             elif abs(z) < exit_threshold:
-                self.print_info(f"  Signal: NEUTRAL (z={z:.2f})")
+                pass
             else:
-                self.print_info(f"  Signal: WAIT (z={z:.2f})")
+                pass
 
-            self.print_info("")
 
         return {
             "pairs": results,

@@ -281,7 +281,7 @@ class MLSwingTradingStrategy(BaseModule):
             )
             xgb_model.fit(X_train_scaled, y_train)
         except ImportError:
-            self.print_info("XGBoost not available, using Random Forest only")
+            pass
 
         return rf_model, xgb_model, scaler
 
@@ -381,20 +381,17 @@ class MLSwingTradingStrategy(BaseModule):
         position_size = float(self.options["POSITION_SIZE"]["value"])
         use_ensemble = self.options["USE_ENSEMBLE"]["value"]
 
-        self.print_status(f"Running ML Swing Trading Strategy for {symbol}")
 
         # Fetch data
         data_fetcher = DataFetcher(self.database)
         df = data_fetcher.get_stock_data(symbol, period=period, interval=interval)
 
         if df is None or len(df) < 100:
-            self.print_error("Insufficient data for analysis")
+            pass
             return {"error": "Insufficient data"}
 
-        self.print_info(f"Loaded {len(df)} bars of data")
 
         # Generate features
-        self.print_status("Generating technical features...")
         features_df = self.generate_features(df)
 
         # Create labels
@@ -407,10 +404,9 @@ class MLSwingTradingStrategy(BaseModule):
         features_df = features_df.dropna()
 
         if len(features_df) < 100:
-            self.print_error("Insufficient data after feature engineering")
+            pass
             return {"error": "Insufficient data after feature engineering"}
 
-        self.print_info(f"Generated {len(features_df.columns) - 1} features")
 
         # Split into train/test
         split_idx = int(len(features_df) * train_size)
@@ -428,15 +424,11 @@ class MLSwingTradingStrategy(BaseModule):
         X_test = test_df[feature_cols]
         y_test = test_df['label']
 
-        self.print_info(f"Training set: {len(X_train)} samples")
-        self.print_info(f"Test set: {len(X_test)} samples")
 
         # Train models
-        self.print_status("Training ML models (Random Forest + XGBoost)...")
         models = self.train_models(X_train, y_train)
 
         # Make predictions on test set
-        self.print_status("Generating predictions...")
         predictions = self.predict(models, X_test, use_ensemble)
 
         # Calculate model accuracy
@@ -448,8 +440,6 @@ class MLSwingTradingStrategy(BaseModule):
         recall = recall_score(y_test, pred_labels, zero_division=0)
         f1 = f1_score(y_test, pred_labels, zero_division=0)
 
-        self.print_good(f"Model Accuracy: {accuracy:.2%}")
-        self.print_info(f"Precision: {precision:.2%}, Recall: {recall:.2%}, F1: {f1:.3f}")
 
         # Feature importance
         rf_model = models[0]
@@ -458,12 +448,10 @@ class MLSwingTradingStrategy(BaseModule):
             'importance': rf_model.feature_importances_
         }).sort_values('importance', ascending=False)
 
-        self.print_info("\nTop 10 Most Important Features:")
         for idx, row in feature_importance.head(10).iterrows():
-            self.print_info(f"  {row['feature']}: {row['importance']:.4f}")
+            pass
 
         # Backtest the strategy
-        self.print_status("\nRunning backtest...")
 
         # Use test data for backtesting
         test_price_df = test_df[['Open', 'High', 'Low', 'Close', 'Volume']].copy()
@@ -477,14 +465,12 @@ class MLSwingTradingStrategy(BaseModule):
         )
 
         # Display results
-        self.print_good("\n=== Backtest Results ===")
         results_dict = backtest_results.to_dict()
 
         for key, value in results_dict.items():
-            self.print_info(f"{key}: {value}")
+            pass
 
         # Current signal
-        self.print_status("\n=== Current Signal ===")
 
         # Generate features for latest data
         latest_features = self.generate_features(df)
@@ -499,21 +485,11 @@ class MLSwingTradingStrategy(BaseModule):
             if latest_prediction > confidence_threshold:
                 signal = "BUY"
                 confidence = latest_prediction
-                self.print_good(f"Signal: {signal}")
-                self.print_good(f"Confidence: {confidence:.2%}")
-                self.print_info(f"Current Price: ${current_price:.2f}")
-                self.print_info(f"Suggested holding period: {holding_period} days")
             elif latest_prediction < (1 - confidence_threshold):
                 signal = "AVOID"
                 confidence = 1 - latest_prediction
-                self.print_warning(f"Signal: {signal}")
-                self.print_info(f"Confidence: {confidence:.2%}")
-                self.print_info(f"Current Price: ${current_price:.2f}")
             else:
                 signal = "NEUTRAL"
-                self.print_info(f"Signal: {signal}")
-                self.print_info(f"Prediction: {latest_prediction:.2%}")
-                self.print_info(f"Current Price: ${current_price:.2f}")
 
         return {
             "symbol": symbol,

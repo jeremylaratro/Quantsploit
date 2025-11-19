@@ -36,76 +36,42 @@ class HMMRegimeDetectionStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "hmm_regime_detection"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Market regime detection using Hidden Markov Models"
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
 
-
-
-    
-
     def _init_options(self):
-
-
-
-
-    
-
         super()._init_options()
-
-
-
-
-    
-
         self.options.update({
 
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "SPY"
-
-
-
-
-    
-
-        })
-,
-        "PERIOD": {
+            },
+            "PERIOD": {
             "description": "Historical data period (2y, 5y, max)",
             "required": False,
             "default": "2y"
@@ -149,8 +115,8 @@ class HMMRegimeDetectionStrategy(BaseModule):
             "description": "Strategy in sideways regime: mean_revert or wait",
             "required": False,
             "default": "mean_revert"
-        },
-    }
+        }
+        })
 
     def extract_regime_features(self, df: pd.DataFrame, lookback: int) -> pd.DataFrame:
         """

@@ -41,76 +41,42 @@ class OptionsSpreadStrategy(BaseModule):
     """
 
     @property
-
-
     def name(self) -> str:
 
 
         return "options_spreads"
 
 
-
     @property
-
-
     def description(self) -> str:
 
 
         return "Advanced options spreads: Iron Condor, Butterfly, Calendar, etc."
 
 
-
     @property
-
-
     def author(self) -> str:
 
 
         return "Quantsploit Team"
 
 
-
     @property
-
-
     def category(self) -> str:
 
 
         return "strategy"
 
-
-
-    
-
     def _init_options(self):
-
-
-
-
-    
-
         super()._init_options()
-
-
-
-
-    
-
         self.options.update({
 
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
             "default": "SPY"
-
-
-
-
-    
-
-        })
-,
-        "STRATEGY": {
+            },
+            "STRATEGY": {
             "description": "Spread: iron_condor, iron_butterfly, butterfly, calendar, bull_call, bear_put",
             "required": False,
             "default": "iron_condor"
@@ -144,8 +110,8 @@ class OptionsSpreadStrategy(BaseModule):
             "description": "Number of contracts to trade",
             "required": False,
             "default": 1
-        },
-    }
+        }
+        })
 
     def iron_condor_analysis(
         self,

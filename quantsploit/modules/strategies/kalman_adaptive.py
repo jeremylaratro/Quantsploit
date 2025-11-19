@@ -78,79 +78,60 @@ class KalmanAdaptiveStrategy(BaseModule):
     
 
     def _init_options(self):
-
-
-
-
-    
-
         super()._init_options()
-
-
-
-
-    
-
         self.options.update({
-
         "SYMBOL": {
             "description": "Stock symbol to analyze",
             "required": True,
-            "default": "AAPL"
-
-
-
-
-    
-
-        })
-,
+            "value": "AAPL"
+        },
         "PERIOD": {
             "description": "Historical data period (1y, 2y, 5y)",
             "required": False,
-            "default": "1y"
+            "value": "1y"
         },
         "INTERVAL": {
             "description": "Data interval (1d for daily)",
             "required": False,
-            "default": "1d"
+            "value": "1d"
         },
         "FILTER_TYPE": {
             "description": "Filter type: simple, velocity, or full (price+velocity+acceleration)",
             "required": False,
-            "default": "full"
+            "value": "full"
         },
         "PROCESS_NOISE": {
             "description": "Process noise variance (lower = smoother filter)",
             "required": False,
-            "default": 0.01
+            "value": 0.01
         },
         "MEASUREMENT_NOISE": {
             "description": "Measurement noise variance (higher = trust measurements less)",
             "required": False,
-            "default": 1.0
+            "value": 1.0
         },
         "SIGNAL_THRESHOLD": {
             "description": "Signal threshold as % deviation from filtered price",
             "required": False,
-            "default": 0.5
+            "value": 0.5
         },
         "INITIAL_CAPITAL": {
             "description": "Initial capital for backtesting",
             "required": False,
-            "default": 100000
+            "value": 100000
         },
         "POSITION_SIZE": {
             "description": "Base position size as fraction of capital",
             "required": False,
-            "default": 0.5
+            "value": 0.5
         },
         "USE_CONFIDENCE_SIZING": {
             "description": "Scale position size based on filter confidence",
             "required": False,
-            "default": True
+            "value": True
         },
-    }
+        })
+
 
     def kalman_filter_simple(self, prices: pd.Series, Q: float, R: float) -> Tuple[pd.Series, pd.Series]:
         """

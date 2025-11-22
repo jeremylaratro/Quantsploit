@@ -110,7 +110,11 @@ REAL-WORLD USE:
         # Parse factor weights
         factor_weights = self._parse_weights(self.get_option("FACTOR_WEIGHTS"))
 
-        symbols = [s.strip().upper() for s in symbols_str.split(",")]
+        # Handle both string and list inputs
+        if isinstance(symbols_str, list):
+            symbols = [s.strip().upper() for s in symbols_str]
+        else:
+            symbols = [s.strip().upper() for s in symbols_str.split(",")]
 
         self.log(f"Scoring {len(symbols)} stocks using multi-factor model...")
 
@@ -148,6 +152,41 @@ REAL-WORLD USE:
         # Analyze factor performance
         factor_analysis = self._analyze_factors(results) if results else {}
 
+        # If only one symbol (called from meta_analysis), return simplified format
+        if len(symbols) == 1 and results:
+            result = results[0]
+
+            # Map composite score to signal strength (-100 to +100)
+            # Composite is 0-100, map to signal strength centered at 50
+            # 75-100 -> 50-100 (strong buy)
+            # 50-75 -> 0-50 (buy)
+            # 40-50 -> -20-0 (hold)
+            # 0-40 -> -100 to -20 (sell)
+            composite = result["composite_score"]
+            if composite >= 75:
+                signal_strength = 50 + (composite - 75)  # 50-100
+            elif composite >= 60:
+                signal_strength = (composite - 60) * (50/15)  # 0-50
+            elif composite >= 40:
+                signal_strength = (composite - 50) * 2  # -20-0
+            else:
+                signal_strength = -100 + (composite / 40) * 80  # -100 to -20
+
+            return {
+                "symbol": result["Symbol"],
+                "composite_score": result["composite_score"],
+                "signal_strength": signal_strength,  # For meta_analysis
+                "signal": result["Signal"],
+                "momentum_score": result["momentum_score"],
+                "technical_score": result["technical_score"],
+                "volatility_score": result["volatility_score"],
+                "volume_score": result["volume_score"],
+                "current_price": result["Price"],
+                "overall_signal": result["Signal"],  # For meta_analysis signal extraction
+                "recommendation": result["Signal"]
+            }
+
+        # Multiple symbols - return full analysis
         return {
             "total_scored": len(results),
             "factor_weights": factor_weights,

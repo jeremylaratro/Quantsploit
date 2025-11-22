@@ -15,6 +15,8 @@ from typing import Dict, List, Optional
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
+# Disable caching for API responses
+app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 # Path to backtest results
 RESULTS_DIR = Path(__file__).parent.parent / 'backtest_results'
@@ -50,7 +52,9 @@ class DashboardDataLoader:
 
     def __init__(self, results_dir: Path):
         self.results_dir = results_dir
+        # Disable caching to always show latest results
         self._cache = {}
+        self._cache_enabled = False
 
     def get_available_runs(self) -> List[Dict]:
         """Get list of all available backtest runs"""
@@ -185,6 +189,16 @@ class DashboardDataLoader:
 
 # Initialize data loader
 data_loader = DashboardDataLoader(RESULTS_DIR)
+
+
+@app.after_request
+def add_no_cache_headers(response):
+    """Add no-cache headers to all responses to ensure fresh data"""
+    if request.path.startswith('/api/'):
+        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+        response.headers['Pragma'] = 'no-cache'
+        response.headers['Expires'] = '0'
+    return response
 
 
 @app.route('/')

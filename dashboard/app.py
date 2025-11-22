@@ -19,6 +19,21 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 RESULTS_DIR = Path(__file__).parent.parent / 'backtest_results'
 
 
+def convert_numpy_types(obj):
+    """Convert numpy types to native Python types for JSON serialization"""
+    if isinstance(obj, np.integer):
+        return int(obj)
+    elif isinstance(obj, np.floating):
+        return float(obj)
+    elif isinstance(obj, np.ndarray):
+        return obj.tolist()
+    elif isinstance(obj, dict):
+        return {key: convert_numpy_types(value) for key, value in obj.items()}
+    elif isinstance(obj, list):
+        return [convert_numpy_types(item) for item in obj]
+    return obj
+
+
 class DashboardDataLoader:
     """Load and process backtest data for dashboard"""
 
@@ -96,10 +111,10 @@ class DashboardDataLoader:
                 'total_trades': period_data['total_trades'].sum()
             })
 
-        return {
+        return convert_numpy_types({
             'periods': quarterly_data,
             'period_names': df['period_name'].unique().tolist()
-        }
+        })
 
     def get_strategy_comparison(self, timestamp: str) -> Dict:
         """Generate strategy comparison data"""
@@ -126,10 +141,10 @@ class DashboardDataLoader:
         # Sort by average return
         strategy_stats.sort(key=lambda x: x['avg_return'], reverse=True)
 
-        return {
+        return convert_numpy_types({
             'strategies': strategy_stats,
             'strategy_names': df['strategy_name'].unique().tolist()
-        }
+        })
 
     def get_symbol_performance(self, timestamp: str) -> Dict:
         """Generate per-symbol performance data"""
@@ -151,10 +166,10 @@ class DashboardDataLoader:
                 'total_trades': symbol_data['total_trades'].sum()
             })
 
-        return {
+        return convert_numpy_types({
             'symbols': symbol_stats,
             'symbol_names': df['symbol'].unique().tolist()
-        }
+        })
 
 
 # Initialize data loader
@@ -194,8 +209,8 @@ def api_detailed(timestamp):
     if df is None:
         return jsonify({'error': 'Run not found'}), 404
 
-    # Convert to JSON
-    return jsonify(df.to_dict(orient='records'))
+    # Convert to JSON and handle numpy types
+    return jsonify(convert_numpy_types(df.to_dict(orient='records')))
 
 
 @app.route('/api/quarterly/<timestamp>')
@@ -253,11 +268,11 @@ def api_heatmap(timestamp):
         aggfunc='mean'
     )
 
-    return jsonify({
+    return jsonify(convert_numpy_types({
         'strategies': pivot.index.tolist(),
         'periods': pivot.columns.tolist(),
         'values': pivot.values.tolist()
-    })
+    }))
 
 
 if __name__ == '__main__':

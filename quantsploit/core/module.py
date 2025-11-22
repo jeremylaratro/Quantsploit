@@ -68,6 +68,49 @@ class BaseModule(ABC):
             return self.options[key.upper()]["value"]
         return None
 
+    def parse_symbols(self, symbols_input: str = None) -> List[str]:
+        """
+        Parse a comma-separated list of symbols with smart handling.
+
+        Handles:
+        - Comma-separated lists with or without spaces: "SPY,AAPL,MSFT" or "SPY, AAPL, MSFT"
+        - Single symbols: "AAPL"
+        - Automatic uppercase conversion
+        - Whitespace trimming
+
+        Args:
+            symbols_input: String of symbols, or None to use SYMBOLS option
+
+        Returns:
+            List of cleaned, uppercase symbol strings
+
+        Example:
+            symbols = self.parse_symbols("SPY, AAPL, MSFT")
+            # Returns: ['SPY', 'AAPL', 'MSFT']
+        """
+        # Get symbols from parameter or option
+        if symbols_input is None:
+            symbols_input = self.get_option("SYMBOLS")
+            if symbols_input is None:
+                # Try singular SYMBOL as fallback
+                symbols_input = self.get_option("SYMBOL")
+
+        if not symbols_input:
+            return []
+
+        # Handle single symbol or comma-separated list
+        if isinstance(symbols_input, str):
+            # Split by comma, strip whitespace, convert to uppercase, remove empty strings
+            symbols = [s.strip().upper() for s in symbols_input.split(',') if s.strip()]
+        elif isinstance(symbols_input, list):
+            # Already a list, just clean each item
+            symbols = [str(s).strip().upper() for s in symbols_input if s]
+        else:
+            # Convert to string and process
+            symbols = [str(symbols_input).strip().upper()]
+
+        return symbols
+
     def validate_options(self) -> tuple[bool, str]:
         """Validate that all required options are set"""
         for key, opt in self.options.items():

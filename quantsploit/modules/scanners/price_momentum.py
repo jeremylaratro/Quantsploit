@@ -53,16 +53,15 @@ class PriceMomentumScanner(BaseModule):
 
     def run(self) -> Dict[str, Any]:
         """Execute momentum scan"""
-        symbols_str = self.get_option("SYMBOLS")
+        # Parse symbols with smart handling (handles "SPY, AAPL, MSFT" with spaces)
+        symbols = self.parse_symbols()
         period = self.get_option("PERIOD")
         interval = self.get_option("INTERVAL")
         min_volume = float(self.get_option("MIN_VOLUME"))
         min_gain_pct = float(self.get_option("MIN_GAIN_PCT"))
 
-        if not symbols_str:
+        if not symbols:
             return {"success": False, "error": "SYMBOLS option is required"}
-
-        symbols = [s.strip().upper() for s in symbols_str.split(",")]
 
         # Fetch data for all symbols
         fetcher = DataFetcher(self.framework.database)

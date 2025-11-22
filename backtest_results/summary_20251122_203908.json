@@ -1,0 +1,606 @@
+{
+  "best_by_total_return": [
+    {
+      "strategy_name": "Kalman Adaptive (Sensitive)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": 11.875799430159445,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 3.149271007831202
+    },
+    {
+      "strategy_name": "Volume Profile Swing",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": 7.200896139616976,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 1.4599826412089734
+    },
+    {
+      "strategy_name": "HMM Regime (Long-term)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": 6.363406763626539,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 1.3065289108747908
+    },
+    {
+      "strategy_name": "Volume Profile (Fast)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": 3.2065711093326392,
+      "win_rate": 50.0,
+      "signal_accuracy": 50.0,
+      "sharpe_ratio": 0.6359907969005628
+    },
+    {
+      "strategy_name": "Kalman Adaptive Filter",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": 1.081184751920402,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 0.1547903145810194
+    },
+    {
+      "strategy_name": "SMA Crossover (20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "HMM Regime Detection",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Multi-Factor Scoring",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Momentum (10/20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": -7.825034038934886,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": -1.3283435013937037
+    },
+    {
+      "strategy_name": "Mean Reversion (20 day)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "total_return": -16.917757502804875,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": -2.7978883295465122
+    }
+  ],
+  "best_by_sharpe_ratio": [
+    {
+      "strategy_name": "Kalman Adaptive (Sensitive)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": 3.149271007831202,
+      "total_return": 11.875799430159445,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0
+    },
+    {
+      "strategy_name": "Volume Profile Swing",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": 1.4599826412089734,
+      "total_return": 7.200896139616976,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0
+    },
+    {
+      "strategy_name": "HMM Regime (Long-term)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": 1.3065289108747908,
+      "total_return": 6.363406763626539,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0
+    },
+    {
+      "strategy_name": "Volume Profile (Fast)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": 0.6359907969005628,
+      "total_return": 3.2065711093326392,
+      "win_rate": 50.0,
+      "signal_accuracy": 50.0
+    },
+    {
+      "strategy_name": "Kalman Adaptive Filter",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": 0.1547903145810194,
+      "total_return": 1.081184751920402,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0
+    },
+    {
+      "strategy_name": "SMA Crossover (20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0
+    },
+    {
+      "strategy_name": "HMM Regime Detection",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0
+    },
+    {
+      "strategy_name": "Multi-Factor Scoring",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0
+    },
+    {
+      "strategy_name": "Momentum (10/20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": -1.3283435013937037,
+      "total_return": -7.825034038934886,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0
+    },
+    {
+      "strategy_name": "Mean Reversion (20 day)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "sharpe_ratio": -2.7978883295465122,
+      "total_return": -16.917757502804875,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0
+    }
+  ],
+  "best_by_win_rate": [
+    {
+      "strategy_name": "Kalman Adaptive Filter",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 100.0,
+      "total_return": 1.081184751920402,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 0.1547903145810194
+    },
+    {
+      "strategy_name": "Kalman Adaptive (Sensitive)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 100.0,
+      "total_return": 11.875799430159445,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 3.149271007831202
+    },
+    {
+      "strategy_name": "HMM Regime (Long-term)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 100.0,
+      "total_return": 6.363406763626539,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 1.3065289108747908
+    },
+    {
+      "strategy_name": "Volume Profile Swing",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 100.0,
+      "total_return": 7.200896139616976,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 1.4599826412089734
+    },
+    {
+      "strategy_name": "Volume Profile (Fast)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 50.0,
+      "total_return": 3.2065711093326392,
+      "signal_accuracy": 50.0,
+      "sharpe_ratio": 0.6359907969005628
+    },
+    {
+      "strategy_name": "SMA Crossover (20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 0.0,
+      "total_return": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Mean Reversion (20 day)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 0.0,
+      "total_return": -16.917757502804875,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": -2.7978883295465122
+    },
+    {
+      "strategy_name": "Multi-Factor Scoring",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 0.0,
+      "total_return": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Momentum (10/20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 0.0,
+      "total_return": -7.825034038934886,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": -1.3283435013937037
+    },
+    {
+      "strategy_name": "HMM Regime Detection",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "win_rate": 0.0,
+      "total_return": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    }
+  ],
+  "best_by_signal_accuracy": [
+    {
+      "strategy_name": "Kalman Adaptive Filter",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 100.0,
+      "total_return": 1.081184751920402,
+      "win_rate": 100.0,
+      "sharpe_ratio": 0.1547903145810194
+    },
+    {
+      "strategy_name": "Kalman Adaptive (Sensitive)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 100.0,
+      "total_return": 11.875799430159445,
+      "win_rate": 100.0,
+      "sharpe_ratio": 3.149271007831202
+    },
+    {
+      "strategy_name": "HMM Regime (Long-term)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 100.0,
+      "total_return": 6.363406763626539,
+      "win_rate": 100.0,
+      "sharpe_ratio": 1.3065289108747908
+    },
+    {
+      "strategy_name": "Volume Profile Swing",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 100.0,
+      "total_return": 7.200896139616976,
+      "win_rate": 100.0,
+      "sharpe_ratio": 1.4599826412089734
+    },
+    {
+      "strategy_name": "Volume Profile (Fast)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 50.0,
+      "total_return": 3.2065711093326392,
+      "win_rate": 50.0,
+      "sharpe_ratio": 0.6359907969005628
+    },
+    {
+      "strategy_name": "SMA Crossover (20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Mean Reversion (20 day)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 0.0,
+      "total_return": -16.917757502804875,
+      "win_rate": 0.0,
+      "sharpe_ratio": -2.7978883295465122
+    },
+    {
+      "strategy_name": "Multi-Factor Scoring",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Momentum (10/20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 0.0,
+      "total_return": -7.825034038934886,
+      "win_rate": 0.0,
+      "sharpe_ratio": -1.3283435013937037
+    },
+    {
+      "strategy_name": "HMM Regime Detection",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "signal_accuracy": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "sharpe_ratio": 0.0
+    }
+  ],
+  "best_by_profit_factor": [
+    {
+      "strategy_name": "Volume Profile (Fast)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 3.8947432624870397,
+      "total_return": 3.2065711093326392,
+      "win_rate": 50.0,
+      "signal_accuracy": 50.0,
+      "sharpe_ratio": 0.6359907969005628
+    },
+    {
+      "strategy_name": "SMA Crossover (20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Mean Reversion (20 day)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": -16.917757502804875,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": -2.7978883295465122
+    },
+    {
+      "strategy_name": "Momentum (10/20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": -7.825034038934886,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": -1.3283435013937037
+    },
+    {
+      "strategy_name": "Kalman Adaptive Filter",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": 1.081184751920402,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 0.1547903145810194
+    },
+    {
+      "strategy_name": "Multi-Factor Scoring",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Kalman Adaptive (Sensitive)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": 11.875799430159445,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 3.149271007831202
+    },
+    {
+      "strategy_name": "Volume Profile Swing",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": 7.200896139616976,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 1.4599826412089734
+    },
+    {
+      "strategy_name": "HMM Regime Detection",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "HMM Regime (Long-term)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "profit_factor": 0.0,
+      "total_return": 6.363406763626539,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 1.3065289108747908
+    }
+  ],
+  "best_excess_return": [
+    {
+      "strategy_name": "Kalman Adaptive (Sensitive)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": 11.875799430159445,
+      "total_return": 11.875799430159445,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 3.149271007831202
+    },
+    {
+      "strategy_name": "Volume Profile Swing",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": 7.200896139616976,
+      "total_return": 7.200896139616976,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 1.4599826412089734
+    },
+    {
+      "strategy_name": "HMM Regime (Long-term)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": 6.363406763626539,
+      "total_return": 6.363406763626539,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 1.3065289108747908
+    },
+    {
+      "strategy_name": "Volume Profile (Fast)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": 3.2065711093326392,
+      "total_return": 3.2065711093326392,
+      "win_rate": 50.0,
+      "signal_accuracy": 50.0,
+      "sharpe_ratio": 0.6359907969005628
+    },
+    {
+      "strategy_name": "Kalman Adaptive Filter",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": 1.081184751920402,
+      "total_return": 1.081184751920402,
+      "win_rate": 100.0,
+      "signal_accuracy": 100.0,
+      "sharpe_ratio": 0.1547903145810194
+    },
+    {
+      "strategy_name": "SMA Crossover (20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "HMM Regime Detection",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Multi-Factor Scoring",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": 0.0,
+      "total_return": 0.0,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": 0.0
+    },
+    {
+      "strategy_name": "Momentum (10/20/50)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": -7.825034038934886,
+      "total_return": -7.825034038934886,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": -1.3283435013937037
+    },
+    {
+      "strategy_name": "Mean Reversion (20 day)",
+      "symbol": "AAPL",
+      "period_name": "Custom Period 1 (Aug 2025 - Nov 2025)",
+      "excess_return": -16.917757502804875,
+      "total_return": -16.917757502804875,
+      "win_rate": 0.0,
+      "signal_accuracy": 0.0,
+      "sharpe_ratio": -2.7978883295465122
+    }
+  ],
+  "performance_by_period": {
+    "Custom Period 1 (Aug 2025 - Nov 2025)": {
+      "total_return_mean": 0.4985,
+      "total_return_std": 8.0952,
+      "total_return_min": -16.9178,
+      "total_return_max": 11.8758,
+      "sharpe_ratio_mean": 0.258,
+      "sharpe_ratio_std": 1.6025,
+      "win_rate_mean": 45.0,
+      "signal_accuracy_mean": 45.0,
+      "excess_return_mean": 0.4985
+    }
+  },
+  "performance_by_symbol": {
+    "AAPL": {
+      "total_return_mean": 0.4985,
+      "total_return_std": 8.0952,
+      "sharpe_ratio_mean": 0.258,
+      "win_rate_mean": 45.0,
+      "signal_accuracy_mean": 45.0,
+      "excess_return_mean": 0.4985
+    }
+  },
+  "overall_stats": {
+    "total_backtests": 10,
+    "avg_return": 0.4985066652916238,
+    "avg_sharpe": 0.25803318404563325,
+    "avg_win_rate": 45.0,
+    "avg_signal_accuracy": 45.0,
+    "strategies_beating_buy_hold": "5",
+    "percentage_beating_buy_hold": 50.0
+  }
+}

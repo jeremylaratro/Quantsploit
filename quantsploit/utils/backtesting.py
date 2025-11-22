@@ -393,7 +393,8 @@ class Backtester:
         self,
         data: pd.DataFrame,
         strategy_func: Callable,
-        benchmark_data: pd.DataFrame = None
+        benchmark_data: pd.DataFrame = None,
+        symbol: str = 'symbol'
     ) -> BacktestResults:
         """
         Run a backtest with the given strategy function
@@ -402,6 +403,7 @@ class Backtester:
             data: DataFrame with OHLCV data
             strategy_func: Function that takes (backtester, date, row) and generates signals
             benchmark_data: Optional benchmark data for comparison
+            symbol: Symbol name for position tracking
 
         Returns:
             BacktestResults object with performance metrics
@@ -412,8 +414,8 @@ class Backtester:
         for idx, row in data.iterrows():
             date = idx if isinstance(idx, datetime) else pd.to_datetime(idx)
 
-            # Update positions with current prices
-            self.update(date, {'symbol': row['Close']})
+            # Update positions with current prices (use actual symbol, not hardcoded 'symbol')
+            self.update(date, {symbol: row['Close']})
 
             # Run strategy logic
             strategy_func(self, date, row)
@@ -421,8 +423,19 @@ class Backtester:
         # Close any remaining positions at final price
         final_date = data.index[-1]
         final_price = data.iloc[-1]['Close']
-        for symbol in list(self.positions.keys()):
-            self.exit_position(symbol, final_date, final_price)
+        for sym in list(self.positions.keys()):
+            self.exit_position(sym, final_date, final_price)
+
+        # Update equity curve one final time after closing all positions
+        # This ensures the final equity reflects exit commissions/slippage
+        if len(self.positions) == 0:  # All positions closed
+            self.equity = self.cash  # No position value, just cash
+            self.equity_curve.append({
+                'date': final_date,
+                'equity': self.equity,
+                'cash': self.cash,
+                'positions': 0
+            })
 
         # Calculate results
         return self.calculate_results(data, benchmark_data)

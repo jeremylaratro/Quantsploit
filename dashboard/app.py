@@ -276,12 +276,36 @@ def api_heatmap(timestamp):
 
 
 if __name__ == '__main__':
-    print("\n" + "="*60)
-    print("  Quantsploit Backtesting Dashboard")
-    print("="*60)
-    print(f"\n  📊 Dashboard URL: http://localhost:5000")
-    print(f"  📁 Results Directory: {RESULTS_DIR}")
-    print(f"  🔄 Available Runs: {len(data_loader.get_available_runs())}")
-    print("\n" + "="*60 + "\n")
+    import argparse
+    import logging
 
-    app.run(debug=True, host='0.0.0.0', port=5000)
+    parser = argparse.ArgumentParser(description='Quantsploit Backtesting Dashboard')
+    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
+    parser.add_argument('--port', type=int, default=5000, help='Port to bind to')
+    parser.add_argument('--production', action='store_true', help='Run in production mode (suppresses request logging)')
+    args = parser.parse_args()
+
+    # Configure logging based on mode
+    if args.production:
+        # Suppress Flask's request logging in production
+        log = logging.getLogger('werkzeug')
+        log.setLevel(logging.ERROR)
+
+        # Only log startup info
+        print(f"Quantsploit Dashboard started on http://{args.host}:{args.port}")
+        print(f"Results directory: {RESULTS_DIR}")
+        print(f"Available runs: {len(data_loader.get_available_runs())}")
+
+        # Run in production mode
+        app.run(debug=False, host=args.host, port=args.port, threaded=True)
+    else:
+        # Development mode with full output
+        print("\n" + "="*60)
+        print("  Quantsploit Backtesting Dashboard")
+        print("="*60)
+        print(f"\n  📊 Dashboard URL: http://{args.host}:{args.port}")
+        print(f"  📁 Results Directory: {RESULTS_DIR}")
+        print(f"  🔄 Available Runs: {len(data_loader.get_available_runs())}")
+        print("\n" + "="*60 + "\n")
+
+        app.run(debug=True, host=args.host, port=args.port)

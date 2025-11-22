@@ -40,6 +40,7 @@ class CommandHandler:
             "watchlist": self.cmd_watchlist,
             "quote": self.cmd_quote,
             "sessions": self.cmd_sessions,
+            "webserver": self.cmd_webserver,
         }
 
     def get_command_descriptions(self) -> Dict[str, str]:
@@ -59,6 +60,7 @@ class CommandHandler:
             "watchlist": "Manage watchlist (watchlist add/remove/show <SYMBOL>)",
             "history": "Show command history",
             "sessions": "Show session information",
+            "webserver": "Manage analytics dashboard webserver (webserver start/stop/status/restart)",
             "clear": "Clear the screen",
             "exit/quit": "Exit Quantsploit",
         }
@@ -315,6 +317,47 @@ class CommandHandler:
         """Clear the screen"""
         import os
         os.system('clear' if os.name != 'nt' else 'cls')
+        return True
+
+    def cmd_webserver(self, args: List[str]) -> bool:
+        """Manage analytics dashboard webserver"""
+        if not args:
+            self.display.print_error("Usage: webserver <start|stop|status|restart> [--port PORT] [--host HOST]")
+            return True
+
+        action = args[0].lower()
+
+        # Parse additional arguments
+        port = "5000"
+        host = "127.0.0.1"
+
+        i = 1
+        while i < len(args):
+            if args[i] == "--port" and i + 1 < len(args):
+                port = args[i + 1]
+                i += 2
+            elif args[i] == "--host" and i + 1 < len(args):
+                host = args[i + 1]
+                i += 2
+            else:
+                i += 1
+
+        # Import and run the webserver manager
+        try:
+            from quantsploit.modules.webserver.webserver_manager import WebserverManager
+
+            manager = WebserverManager()
+            manager.set_option("ACTION", action)
+            manager.set_option("PORT", port)
+            manager.set_option("HOST", host)
+            manager.run()
+
+        except ImportError as e:
+            self.display.print_error("Webserver module not found")
+            self.display.print_info("Make sure the dashboard is properly installed")
+        except Exception as e:
+            self.display.print_error(f"Webserver error: {str(e)}")
+
         return True
 
     def cmd_exit(self, args: List[str]) -> bool:

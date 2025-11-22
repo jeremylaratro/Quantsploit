@@ -230,15 +230,15 @@ REAL-WORLD APPLICATION:
         # ADX (Trend Strength)
         adx_data = adx(df['High'], df['Low'], df['Close'])
         features['adx'] = adx_data['ADX_14']
-        features['plus_di'] = adx_data['Plus_DI']
-        features['minus_di'] = adx_data['Minus_DI']
+        features['plus_di'] = adx_data['DMP_14']
+        features['minus_di'] = adx_data['DMN_14']
 
         # OBV (On Balance Volume)
-        features['obv'] = obv(df)['OBV']
+        features['obv'] = obv(df['Close'], df['Volume'])
         features['obv_trend'] = features['obv'].pct_change(10)
 
         # VWAP
-        features['vwap'] = vwap(df)['VWAP']
+        features['vwap'] = vwap(df['High'], df['Low'], df['Close'], df['Volume'])
         features['price_to_vwap'] = df['Close'] / features['vwap']
 
         # Price patterns

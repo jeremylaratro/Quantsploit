@@ -93,7 +93,16 @@ REAL-WORLD USE:
 
     def run(self) -> Dict[str, Any]:
         """Execute multi-factor scoring"""
+        # Handle both SYMBOLS (plural, for standalone use) and SYMBOL (singular, from meta_analysis)
         symbols_str = self.get_option("SYMBOLS")
+        if symbols_str is None:
+            # Try getting SYMBOL instead (when called from meta_analysis)
+            symbol = self.get_option("SYMBOL")
+            if symbol:
+                symbols_str = symbol
+            else:
+                return {"error": "No symbols provided. Set SYMBOLS or SYMBOL option."}
+
         period = self.get_option("PERIOD")
         interval = self.get_option("INTERVAL")
         max_workers = int(self.get_option("MAX_WORKERS"))

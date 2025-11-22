@@ -23,8 +23,8 @@ class ComprehensiveStrategyBacktest(BaseModule):
 
     def _init_options(self):
         """Initialize module options"""
-        super()._init_options()
-        self.options.update({
+        # Don't call super() - we want completely custom options
+        self.options = {
             'SYMBOLS': {
                 'value': 'AAPL,MSFT,GOOGL,TSLA,SPY',
                 'required': True,
@@ -44,8 +44,33 @@ class ComprehensiveStrategyBacktest(BaseModule):
                 'value': '0.001',
                 'required': False,
                 'description': 'Commission percentage (e.g., 0.001 = 0.1%)'
+            },
+            'TSPAN': {
+                'value': None,
+                'required': False,
+                'description': 'Total time span (e.g., 2y, 18m, 730d). Leave blank for default periods'
+            },
+            'BSPAN': {
+                'value': None,
+                'required': False,
+                'description': 'Backtest span per period (e.g., 6m, 180d). Required if TSPAN is set'
+            },
+            'NUM_PERIODS': {
+                'value': None,
+                'required': False,
+                'description': 'Number of backtest periods. Required if TSPAN is set'
+            },
+            'QUARTERS': {
+                'value': None,
+                'required': False,
+                'description': 'Fiscal quarter(s) to test (e.g., "2" or "1,2,3"). Cannot be used with TSPAN'
+            },
+            'QUICK': {
+                'value': 'false',
+                'required': False,
+                'description': 'Quick mode: test only first symbol (true/false)'
             }
-        })
+        }
 
     @property
     def name(self) -> str:
@@ -71,12 +96,46 @@ class ComprehensiveStrategyBacktest(BaseModule):
         output_dir = self.get_option('OUTPUT_DIR')
         initial_capital = float(self.get_option('INITIAL_CAPITAL'))
         commission = float(self.get_option('COMMISSION'))
+        tspan = self.get_option('TSPAN')
+        bspan = self.get_option('BSPAN')
+        num_periods_str = self.get_option('NUM_PERIODS')
+        quarters = self.get_option('QUARTERS')
+        quick_mode = self.get_option('QUICK').lower() == 'true'
+
+        # Parse num_periods
+        num_periods = int(num_periods_str) if num_periods_str else None
+
+        # Validate argument combinations
+        has_custom_periods = any([tspan, bspan])
+        has_quarters = quarters is not None
+
+        if has_custom_periods and has_quarters:
+            console.print("[bold red]Error:[/bold red] Cannot use QUARTERS with TSPAN/BSPAN. Choose one mode.")
+            return {"success": False, "error": "Cannot use QUARTERS with TSPAN/BSPAN"}
+
+        if has_custom_periods:
+            if not all([tspan, bspan, num_periods]):
+                console.print("[bold red]Error:[/bold red] When using custom periods, all three options (TSPAN, BSPAN, NUM_PERIODS) must be set")
+                return {"success": False, "error": "Incomplete custom period configuration"}
+
+        # Apply quick mode
+        if quick_mode:
+            symbols = symbols[:1]
+            console.print("[yellow]Quick mode: Testing only first symbol[/yellow]\n")
 
         console.print("\n[bold cyan]═══ Comprehensive Strategy Backtest ═══[/bold cyan]\n")
         console.print(f"[yellow]Symbols:[/yellow] {', '.join(symbols)}")
         console.print(f"[yellow]Initial Capital:[/yellow] ${initial_capital:,.2f}")
         console.print(f"[yellow]Commission:[/yellow] {commission*100:.3f}%")
-        console.print(f"[yellow]Output Directory:[/yellow] {output_dir}\n")
+        console.print(f"[yellow]Output Directory:[/yellow] {output_dir}")
+        if tspan:
+            console.print(f"[yellow]Custom Periods:[/yellow] {num_periods} periods of {bspan} each over {tspan}")
+        elif quarters:
+            if num_periods:
+                console.print(f"[yellow]Quarterly Analysis:[/yellow] {num_periods} occurrences of Q{quarters}")
+            else:
+                console.print(f"[yellow]Quarterly Analysis:[/yellow] Most recent Q{quarters}")
+        console.print()
 
         # Create backtester
         backtester = ComprehensiveBacktester(
@@ -87,7 +146,12 @@ class ComprehensiveStrategyBacktest(BaseModule):
         )
 
         # Show test configuration
-        periods = backtester.generate_test_periods()
+        periods = backtester.generate_test_periods(
+            tspan=tspan,
+            bspan=bspan,
+            num_periods=num_periods,
+            quarters=quarters
+        )
         total_tests = len(backtester.strategies) * len(symbols) * len(periods)
 
         console.print(f"[green]Configuration:[/green]")
@@ -104,13 +168,19 @@ class ComprehensiveStrategyBacktest(BaseModule):
         ) as progress:
             task = progress.add_task("[cyan]Running backtests...", total=None)
 
-            results_df = backtester.run_comprehensive_backtest(parallel=False)
+            results_df = backtester.run_comprehensive_backtest(
+                parallel=False,
+                tspan=tspan,
+                bspan=bspan,
+                num_periods=num_periods,
+                quarters=quarters
+            )
 
             progress.update(task, completed=True)
 
         if results_df.empty:
             console.print("[bold red]No results generated. Check logs for errors.[/bold red]")
-            return
+            return {"success": False, "error": "No results generated"}
 
         console.print(f"\n[green]✓ Completed {len(results_df)} backtests successfully[/green]\n")
 
@@ -128,6 +198,8 @@ class ComprehensiveStrategyBacktest(BaseModule):
         console.print(f"  • Detailed CSV: detailed_results_*.csv")
         console.print(f"  • Summary JSON: summary_*.json")
         console.print(f"  • Markdown Report: report_*.md\n")
+
+        return {"success": True, "results": len(results_df), "output_dir": output_dir}
 
     def _display_summary(self, summary: dict):
         """Display overall summary statistics"""

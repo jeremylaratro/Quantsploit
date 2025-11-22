@@ -138,20 +138,45 @@ class CommandHandler:
         return True
 
     def cmd_use(self, args: List[str]) -> bool:
-        """Load a module"""
+        """Load a module with smart search"""
         if not args:
-            self.display.print_error("Usage: use <module_path>")
+            self.display.print_error("Usage: use <module_path_or_keyword>")
             return True
 
-        module_path = args[0]
-        module = self.framework.use_module(module_path)
+        query = args[0]
+
+        # First try exact path
+        module = self.framework.use_module(query)
 
         if module:
             self.display.print_success(f"Loaded module: {module.name}")
             self.display.print_info(module.description)
+            return True
+
+        # If not found, try smart search by keyword
+        self.display.print_info(f"Module '{query}' not found, searching for matches...")
+
+        # Search for modules matching the keyword
+        matches = self.framework.search_modules(query)
+
+        if not matches:
+            self.display.print_error(f"No modules found matching '{query}'")
+            self.display.print_info("Use 'show modules' to see all available modules")
+            return True
+
+        if len(matches) == 1:
+            # Only one match, load it automatically
+            module_path = matches[0]['path']
+            module = self.framework.use_module(module_path)
+            if module:
+                self.display.print_success(f"Auto-loaded: {module.name}")
+                self.display.print_info(module.description)
         else:
-            self.display.print_error(f"Module not found: {module_path}")
-            self.display.print_info("Use 'search' to find modules")
+            # Multiple matches, show options
+            self.display.print_info(f"Found {len(matches)} matching modules:")
+            self.display.print_modules(matches, f"Search: '{query}'")
+            self.display.print_info("\nPlease specify the full module path, e.g.:")
+            self.display.print_info(f"  use {matches[0]['path']}")
 
         return True
 
@@ -328,8 +353,8 @@ class CommandHandler:
         action = args[0].lower()
 
         # Parse additional arguments
-        port = "5000"
-        host = "127.0.0.1"
+        port = None
+        host = None
 
         i = 1
         while i < len(args):
@@ -347,16 +372,26 @@ class CommandHandler:
             from quantsploit.modules.webserver.webserver_manager import WebserverManager
 
             manager = WebserverManager()
-            manager.set_option("ACTION", action)
-            manager.set_option("PORT", port)
-            manager.set_option("HOST", host)
-            manager.run()
+
+            if action == "start":
+                manager.start(port, host)
+            elif action == "stop":
+                manager.stop()
+            elif action == "status":
+                manager.status()
+            elif action == "restart":
+                manager.restart(port, host)
+            else:
+                self.display.print_error(f"Unknown action: {action}")
+                self.display.print_info("Use: start, stop, status, or restart")
 
         except ImportError as e:
             self.display.print_error("Webserver module not found")
             self.display.print_info("Make sure the dashboard is properly installed")
         except Exception as e:
             self.display.print_error(f"Webserver error: {str(e)}")
+            import traceback
+            traceback.print_exc()
 
         return True
 

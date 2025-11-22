@@ -42,6 +42,15 @@ Examples:
 
   # Custom time periods: 6 periods of 3 months each over 18 months
   python run_comprehensive_backtest.py --symbols SPY,QQQ --tspan 18m --bspan 3m --period 6
+
+  # Quarterly analysis: Test over the past 4 Q2s (2nd fiscal quarters)
+  python run_comprehensive_backtest.py --symbols AAPL,MSFT --quarter 2 --period 4
+
+  # Quarterly analysis: Test the most recent Q1 through Q3
+  python run_comprehensive_backtest.py --symbols SPY,QQQ --quarter 1,2,3
+
+  # Quarterly analysis: Test the most recent Q4
+  python run_comprehensive_backtest.py --symbols NVDA --quarter 4
         """
     )
 
@@ -97,13 +106,28 @@ Examples:
         '--period',
         type=int,
         default=None,
-        help='Number of separate backtest periods to run. Required if --tspan is provided'
+        help='Number of separate backtest periods to run. Required if --tspan is provided, optional with --quarter'
+    )
+
+    parser.add_argument(
+        '--quarter',
+        type=str,
+        default=None,
+        help='Fiscal quarter(s) to test. Single quarter (e.g., "2") or range (e.g., "1,2,3"). Use with --period for multiple occurrences'
     )
 
     args = parser.parse_args()
 
+    # Validate argument combinations - they are mutually exclusive
+    has_custom_periods = any([args.tspan, args.bspan])
+    has_quarters = args.quarter is not None
+
+    if has_custom_periods and has_quarters:
+        console.print("[bold red]Error:[/bold red] Cannot use --quarter with --tspan/--bspan. Choose one mode.")
+        return 1
+
     # Validate custom period arguments
-    if any([args.tspan, args.bspan, args.period]):
+    if has_custom_periods:
         if not all([args.tspan, args.bspan, args.period]):
             console.print("[bold red]Error:[/bold red] When using custom periods, all three arguments (--tspan, --bspan, --period) must be provided")
             return 1
@@ -123,6 +147,11 @@ Examples:
     console.print(f"[yellow]Output Directory:[/yellow] {args.output}")
     if args.tspan:
         console.print(f"[yellow]Custom Periods:[/yellow] {args.period} periods of {args.bspan} each over {args.tspan}")
+    elif args.quarter:
+        if args.period:
+            console.print(f"[yellow]Quarterly Analysis:[/yellow] {args.period} occurrences of Q{args.quarter}")
+        else:
+            console.print(f"[yellow]Quarterly Analysis:[/yellow] Most recent Q{args.quarter}")
     console.print()
 
     console.print("[cyan]Starting comprehensive backtest...[/cyan]\n")
@@ -134,7 +163,8 @@ Examples:
             output_dir=args.output,
             tspan=args.tspan,
             bspan=args.bspan,
-            num_periods=args.period
+            num_periods=args.period,
+            quarters=args.quarter
         )
 
         if results_df is None:

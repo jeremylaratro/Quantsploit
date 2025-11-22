@@ -834,20 +834,20 @@ class ComprehensiveBacktester:
             logger.info(f"Running {strategy_key} for {symbol} in {period.name}")
 
             # Fetch data
-            data = self.data_fetcher.get_stock_data(
+            full_data = self.data_fetcher.get_stock_data(
                 symbol=symbol,
                 period='3y',  # Fetch more data to ensure we have enough
                 interval='1d'
             )
 
-            if data is None or len(data) < 50:
+            if full_data is None or len(full_data) < 50:
                 logger.warning(f"Insufficient data for {symbol}")
                 return None
 
-            # Filter data to the specific period
-            data = data.loc[period.start_date:period.end_date]
+            # Filter to get test period data for backtest loop
+            test_period_data = full_data.loc[period.start_date:period.end_date]
 
-            if len(data) < 30:
+            if len(test_period_data) < 30:
                 logger.warning(f"Insufficient data in period {period.name} for {symbol}")
                 return None
 
@@ -863,18 +863,18 @@ class ComprehensiveBacktester:
             # Create strategy function with params
             strategy_info = self.strategies[strategy_key]
 
-            # Create a closure to pass data to strategy
+            # Create a closure to pass full historical data to strategy for indicator calculation
             def strategy_func(bt, date, row):
-                strategy_info['function'](bt, date, row, symbol, data, **strategy_info['params'])
+                strategy_info['function'](bt, date, row, symbol, full_data, **strategy_info['params'])
 
-            # Run backtest
+            # Run backtest on test period only, but strategies have access to full historical data
             backtester = Backtester(config)
-            results = backtester.run_backtest(data, strategy_func, symbol=symbol)
+            results = backtester.run_backtest(test_period_data, strategy_func, symbol=symbol)
 
             # Calculate signal accuracy from completed trades
             completed_trades = [t for t in backtester.trades if t.exit_date is not None]
             correct, total, accuracy = self.calculate_signal_accuracy(
-                completed_trades, data
+                completed_trades, test_period_data
             )
 
             # Create performance object

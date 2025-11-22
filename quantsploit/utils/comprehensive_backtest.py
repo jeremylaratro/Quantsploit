@@ -71,6 +71,220 @@ class StrategyPerformance:
         return asdict(self)
 
 
+def parse_time_span(time_str: str) -> int:
+    """
+    Parse a time span string into number of days
+
+    Args:
+        time_str: Time span string (e.g., '2y', '6m', '180d', '4w')
+
+    Returns:
+        Number of days
+
+    Examples:
+        parse_time_span('2y') -> 730
+        parse_time_span('6m') -> 180
+        parse_time_span('4w') -> 28
+        parse_time_span('90d') -> 90
+    """
+    import re
+
+    time_str = time_str.strip().lower()
+    match = re.match(r'^(\d+)([ymwd])$', time_str)
+
+    if not match:
+        raise ValueError(f"Invalid time span format: {time_str}. Use format like '2y', '6m', '4w', or '180d'")
+
+    value = int(match.group(1))
+    unit = match.group(2)
+
+    # Convert to days
+    if unit == 'y':
+        return value * 365
+    elif unit == 'm':
+        return value * 30  # Approximate month as 30 days
+    elif unit == 'w':
+        return value * 7
+    elif unit == 'd':
+        return value
+    else:
+        raise ValueError(f"Unknown time unit: {unit}")
+
+
+def parse_quarters(quarter_str: str) -> List[int]:
+    """
+    Parse a quarter specification string
+
+    Args:
+        quarter_str: Quarter string (e.g., '2' for Q2, '1,2,3' for Q1-Q3)
+
+    Returns:
+        List of quarter numbers (1-4)
+
+    Examples:
+        parse_quarters('2') -> [2]
+        parse_quarters('1,2,3') -> [1, 2, 3]
+        parse_quarters('4') -> [4]
+    """
+    quarter_str = quarter_str.strip()
+
+    # Handle comma-separated quarters
+    quarter_parts = [q.strip() for q in quarter_str.split(',')]
+    quarters = []
+
+    for part in quarter_parts:
+        try:
+            q = int(part)
+            if q < 1 or q > 4:
+                raise ValueError(f"Quarter must be between 1 and 4, got {q}")
+            quarters.append(q)
+        except ValueError as e:
+            raise ValueError(f"Invalid quarter specification: {quarter_str}. Use format like '2' or '1,2,3'")
+
+    # Remove duplicates and sort
+    quarters = sorted(list(set(quarters)))
+
+    return quarters
+
+
+def get_fiscal_quarter_dates(year: int, quarter: int) -> Tuple[datetime, datetime]:
+    """
+    Get the start and end dates for a fiscal quarter
+
+    Args:
+        year: The year
+        quarter: The quarter number (1-4)
+
+    Returns:
+        Tuple of (start_date, end_date) for the quarter
+
+    Examples:
+        get_fiscal_quarter_dates(2024, 1) -> (Jan 1, Mar 31)
+        get_fiscal_quarter_dates(2024, 2) -> (Apr 1, Jun 30)
+    """
+    # Quarter start months: Q1=Jan, Q2=Apr, Q3=Jul, Q4=Oct
+    quarter_start_months = {1: 1, 2: 4, 3: 7, 4: 10}
+    quarter_end_months = {1: 3, 2: 6, 3: 9, 4: 12}
+    quarter_end_days = {1: 31, 2: 30, 3: 30, 4: 31}
+
+    start_month = quarter_start_months[quarter]
+    end_month = quarter_end_months[quarter]
+    end_day = quarter_end_days[quarter]
+
+    start_date = datetime(year, start_month, 1)
+    end_date = datetime(year, end_month, end_day, 23, 59, 59)
+
+    return start_date, end_date
+
+
+def find_quarter_periods(quarters: List[int], num_periods: Optional[int] = None) -> List[TestPeriod]:
+    """
+    Find test periods based on fiscal quarters
+
+    Args:
+        quarters: List of quarter numbers (1-4)
+        num_periods: Number of occurrences to include (None = most recent only)
+
+    Returns:
+        List of TestPeriod objects
+
+    Examples:
+        find_quarter_periods([2], 4) -> Last 4 Q2s
+        find_quarter_periods([1, 2, 3], None) -> Most recent Q1, Q2, Q3
+    """
+    periods = []
+    current_date = datetime.now()
+    current_year = current_date.year
+    current_month = current_date.month
+
+    # Determine current quarter
+    current_quarter = (current_month - 1) // 3 + 1
+
+    if len(quarters) == 1:
+        # Single quarter mode with multiple periods
+        target_quarter = quarters[0]
+        periods_to_find = num_periods if num_periods else 1
+
+        # Start from current year and work backwards
+        year = current_year
+        count = 0
+
+        # If we haven't finished the current quarter yet, start from last year
+        if target_quarter == current_quarter:
+            # Check if we're past the end of this quarter
+            _, quarter_end = get_fiscal_quarter_dates(year, target_quarter)
+            if current_date <= quarter_end:
+                year -= 1
+        elif target_quarter > current_quarter:
+            year -= 1
+
+        while count < periods_to_find:
+            start_date, end_date = get_fiscal_quarter_dates(year, target_quarter)
+
+            # Don't include future periods
+            if start_date <= current_date:
+                periods.append(TestPeriod(
+                    name=f'Q{target_quarter}_{year}',
+                    start_date=start_date.strftime('%Y-%m-%d'),
+                    end_date=end_date.strftime('%Y-%m-%d'),
+                    description=f'Q{target_quarter} {year}'
+                ))
+                count += 1
+
+            year -= 1
+
+    else:
+        # Range of quarters (e.g., Q1, Q2, Q3)
+        # Find the most recent complete occurrence of this range
+        if num_periods:
+            # Multiple occurrences of the quarter range
+            for occurrence in range(num_periods):
+                for quarter in quarters:
+                    year = current_year
+
+                    # Adjust year based on current quarter and target quarter
+                    if quarter > current_quarter:
+                        year -= 1
+
+                    # Adjust for occurrence
+                    year -= occurrence
+
+                    start_date, end_date = get_fiscal_quarter_dates(year, quarter)
+
+                    # Don't include future periods
+                    if start_date <= current_date:
+                        periods.append(TestPeriod(
+                            name=f'Q{quarter}_{year}',
+                            start_date=start_date.strftime('%Y-%m-%d'),
+                            end_date=end_date.strftime('%Y-%m-%d'),
+                            description=f'Q{quarter} {year}'
+                        ))
+        else:
+            # Most recent occurrence of each quarter in the range
+            for quarter in quarters:
+                year = current_year
+
+                # If the target quarter is in the future or current (incomplete), go back a year
+                if quarter > current_quarter:
+                    year -= 1
+                elif quarter == current_quarter:
+                    # Check if current quarter is complete
+                    _, quarter_end = get_fiscal_quarter_dates(year, quarter)
+                    if current_date <= quarter_end:
+                        year -= 1
+
+                start_date, end_date = get_fiscal_quarter_dates(year, quarter)
+
+                periods.append(TestPeriod(
+                    name=f'Q{quarter}_{year}',
+                    start_date=start_date.strftime('%Y-%m-%d'),
+                    end_date=end_date.strftime('%Y-%m-%d'),
+                    description=f'Q{quarter} {year}'
+                ))
+
+    return periods
+
+
 class StrategyAdapter:
     """Adapts various strategy modules to work with the backtesting framework"""
 
@@ -483,12 +697,20 @@ class ComprehensiveBacktester:
 
         self.results: List[StrategyPerformance] = []
 
-    def generate_test_periods(self, years_back: int = 3) -> List[TestPeriod]:
+    def generate_test_periods(self, years_back: int = 3,
+                             tspan: Optional[str] = None,
+                             bspan: Optional[str] = None,
+                             num_periods: Optional[int] = None,
+                             quarters: Optional[str] = None) -> List[TestPeriod]:
         """
         Generate test periods for backtesting
 
         Args:
-            years_back: Number of years to look back
+            years_back: Number of years to look back (used when custom params not provided)
+            tspan: Total time span (e.g., '2y', '18m'). If provided, uses custom period generation
+            bspan: Backtest span for each period (e.g., '6m', '180d')
+            num_periods: Number of separate backtest periods to run
+            quarters: Quarter specification (e.g., '2' or '1,2,3')
 
         Returns:
             List of TestPeriod objects
@@ -496,6 +718,56 @@ class ComprehensiveBacktester:
         periods = []
         end_date = datetime.now()
 
+        # Quarterly analysis mode
+        if quarters is not None:
+            try:
+                quarter_list = parse_quarters(quarters)
+                return find_quarter_periods(quarter_list, num_periods)
+            except ValueError as e:
+                logger.error(f"Error parsing quarter parameters: {e}")
+                logger.info("Falling back to default period generation")
+
+        # Custom period generation if parameters provided
+        if tspan is not None and bspan is not None and num_periods is not None:
+            try:
+                total_days = parse_time_span(tspan)
+                backtest_days = parse_time_span(bspan)
+
+                # Calculate the starting point for the total span
+                total_start_date = end_date - timedelta(days=total_days)
+
+                # Calculate the step size between periods
+                # If we have 4 periods over 2 years (730 days) with 6-month (180 days) spans:
+                # The periods should be distributed evenly over the total span
+                # Step = (total_days - backtest_days) / (num_periods - 1) if num_periods > 1
+                if num_periods == 1:
+                    step_days = 0
+                else:
+                    step_days = (total_days - backtest_days) / (num_periods - 1)
+
+                for i in range(num_periods):
+                    # Calculate period end date (working backwards from end_date)
+                    period_end = end_date - timedelta(days=i * step_days)
+                    period_start = period_end - timedelta(days=backtest_days)
+
+                    # Make sure we don't go before the total start date
+                    if period_start < total_start_date:
+                        period_start = total_start_date
+
+                    periods.append(TestPeriod(
+                        name=f'custom_period_{i+1}',
+                        start_date=period_start.strftime('%Y-%m-%d'),
+                        end_date=period_end.strftime('%Y-%m-%d'),
+                        description=f'Custom Period {i+1} ({period_start.strftime("%b %Y")} - {period_end.strftime("%b %Y")})'
+                    ))
+
+                return periods
+
+            except ValueError as e:
+                logger.error(f"Error parsing time span parameters: {e}")
+                logger.info("Falling back to default period generation")
+
+        # Default period generation
         # Full period tests
         for years in [1, 2, 3]:
             if years <= years_back:
@@ -635,18 +907,31 @@ class ComprehensiveBacktester:
             return None
 
     def run_comprehensive_backtest(self, parallel: bool = True,
-                                   max_workers: int = 4) -> pd.DataFrame:
+                                   max_workers: int = 4,
+                                   tspan: Optional[str] = None,
+                                   bspan: Optional[str] = None,
+                                   num_periods: Optional[int] = None,
+                                   quarters: Optional[str] = None) -> pd.DataFrame:
         """
         Run comprehensive backtests across all strategies, symbols, and periods
 
         Args:
             parallel: Whether to run backtests in parallel
             max_workers: Maximum number of parallel workers
+            tspan: Total time span (e.g., '2y', '18m')
+            bspan: Backtest span for each period (e.g., '6m', '180d')
+            num_periods: Number of separate backtest periods to run
+            quarters: Quarter specification (e.g., '2' or '1,2,3')
 
         Returns:
             DataFrame with all results
         """
-        periods = self.generate_test_periods()
+        periods = self.generate_test_periods(
+            tspan=tspan,
+            bspan=bspan,
+            num_periods=num_periods,
+            quarters=quarters
+        )
 
         logger.info(f"Running comprehensive backtest:")
         logger.info(f"  - {len(self.strategies)} strategies")
@@ -868,13 +1153,22 @@ class ComprehensiveBacktester:
         logger.info(f"Markdown report saved to {output_file}")
 
 
-def run_comprehensive_analysis(symbols: List[str], output_dir: str = './backtest_results'):
+def run_comprehensive_analysis(symbols: List[str],
+                              output_dir: str = './backtest_results',
+                              tspan: Optional[str] = None,
+                              bspan: Optional[str] = None,
+                              num_periods: Optional[int] = None,
+                              quarters: Optional[str] = None):
     """
     Convenience function to run a complete comprehensive backtest
 
     Args:
         symbols: List of stock symbols to analyze
         output_dir: Directory to save results
+        tspan: Total time span (e.g., '2y', '18m')
+        bspan: Backtest span for each period (e.g., '6m', '180d')
+        num_periods: Number of separate backtest periods to run
+        quarters: Quarter specification (e.g., '2' or '1,2,3')
     """
     # Create backtester
     backtester = ComprehensiveBacktester(
@@ -885,7 +1179,13 @@ def run_comprehensive_analysis(symbols: List[str], output_dir: str = './backtest
     )
 
     # Run comprehensive backtest
-    results_df = backtester.run_comprehensive_backtest(parallel=False)
+    results_df = backtester.run_comprehensive_backtest(
+        parallel=False,
+        tspan=tspan,
+        bspan=bspan,
+        num_periods=num_periods,
+        quarters=quarters
+    )
 
     if results_df.empty:
         logger.error("No results generated")

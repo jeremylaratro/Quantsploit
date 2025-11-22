@@ -36,6 +36,21 @@ Examples:
   # Full test with custom output directory
   python run_comprehensive_backtest.py --symbols AAPL,MSFT,GOOGL,AMZN,TSLA,NVDA \\
       --capital 100000 --commission 0.001 --output ./my_backtest_results
+
+  # Custom time periods: 4 periods of 6 months each over 2 years
+  python run_comprehensive_backtest.py --symbols AAPL,MSFT --tspan 2y --bspan 6m --period 4
+
+  # Custom time periods: 6 periods of 3 months each over 18 months
+  python run_comprehensive_backtest.py --symbols SPY,QQQ --tspan 18m --bspan 3m --period 6
+
+  # Quarterly analysis: Test over the past 4 Q2s (2nd fiscal quarters)
+  python run_comprehensive_backtest.py --symbols AAPL,MSFT --quarter 2 --period 4
+
+  # Quarterly analysis: Test the most recent Q1 through Q3
+  python run_comprehensive_backtest.py --symbols SPY,QQQ --quarter 1,2,3
+
+  # Quarterly analysis: Test the most recent Q4
+  python run_comprehensive_backtest.py --symbols NVDA --quarter 4
         """
     )
 
@@ -73,7 +88,49 @@ Examples:
         help='Quick mode: test only 1 symbol with fewer strategies'
     )
 
+    parser.add_argument(
+        '--tspan',
+        type=str,
+        default=None,
+        help='Total time span (e.g., 2y, 18m, 730d). If not specified, uses default periods'
+    )
+
+    parser.add_argument(
+        '--bspan',
+        type=str,
+        default=None,
+        help='Backtest span for each period (e.g., 6m, 180d, 1y). Required if --tspan is provided'
+    )
+
+    parser.add_argument(
+        '--period',
+        type=int,
+        default=None,
+        help='Number of separate backtest periods to run. Required if --tspan is provided, optional with --quarter'
+    )
+
+    parser.add_argument(
+        '--quarter',
+        type=str,
+        default=None,
+        help='Fiscal quarter(s) to test. Single quarter (e.g., "2") or range (e.g., "1,2,3"). Use with --period for multiple occurrences'
+    )
+
     args = parser.parse_args()
+
+    # Validate argument combinations - they are mutually exclusive
+    has_custom_periods = any([args.tspan, args.bspan])
+    has_quarters = args.quarter is not None
+
+    if has_custom_periods and has_quarters:
+        console.print("[bold red]Error:[/bold red] Cannot use --quarter with --tspan/--bspan. Choose one mode.")
+        return 1
+
+    # Validate custom period arguments
+    if has_custom_periods:
+        if not all([args.tspan, args.bspan, args.period]):
+            console.print("[bold red]Error:[/bold red] When using custom periods, all three arguments (--tspan, --bspan, --period) must be provided")
+            return 1
 
     # Parse symbols
     symbols = [s.strip().upper() for s in args.symbols.split(',')]
@@ -87,7 +144,15 @@ Examples:
     console.print(f"[yellow]Symbols:[/yellow] {', '.join(symbols)}")
     console.print(f"[yellow]Initial Capital:[/yellow] ${args.capital:,.2f}")
     console.print(f"[yellow]Commission:[/yellow] {args.commission*100:.3f}%")
-    console.print(f"[yellow]Output Directory:[/yellow] {args.output}\n")
+    console.print(f"[yellow]Output Directory:[/yellow] {args.output}")
+    if args.tspan:
+        console.print(f"[yellow]Custom Periods:[/yellow] {args.period} periods of {args.bspan} each over {args.tspan}")
+    elif args.quarter:
+        if args.period:
+            console.print(f"[yellow]Quarterly Analysis:[/yellow] {args.period} occurrences of Q{args.quarter}")
+        else:
+            console.print(f"[yellow]Quarterly Analysis:[/yellow] Most recent Q{args.quarter}")
+    console.print()
 
     console.print("[cyan]Starting comprehensive backtest...[/cyan]\n")
 
@@ -95,7 +160,11 @@ Examples:
         # Run comprehensive analysis
         results_df, summary = run_comprehensive_analysis(
             symbols=symbols,
-            output_dir=args.output
+            output_dir=args.output,
+            tspan=args.tspan,
+            bspan=args.bspan,
+            num_periods=args.period,
+            quarters=args.quarter
         )
 
         if results_df is None:

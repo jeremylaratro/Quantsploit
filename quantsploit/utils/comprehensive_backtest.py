@@ -21,6 +21,7 @@ from quantsploit.modules.strategies.sma_crossover import SMACrossover
 from quantsploit.modules.strategies.mean_reversion import MeanReversion
 from quantsploit.modules.strategies.momentum_signals import MomentumSignals
 from quantsploit.modules.strategies.multifactor_scoring import MultiFactorScoring
+from quantsploit.utils.ta_compat import rsi, atr, adx, bbands
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -180,6 +181,223 @@ class StrategyAdapter:
             if current_position is not None:
                 backtester.exit_position(symbol, date, row['Close'])
 
+    def multifactor_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                            row: pd.Series, symbol: str, data: pd.DataFrame,
+                            lookback: int = 20):
+        """Multifactor Scoring Strategy Adapter"""
+        history = data.loc[:date]
+
+        if len(history) < 50:
+            return
+
+        # Calculate simplified multifactor score
+        close = history['Close']
+
+        # Momentum score (0-100)
+        if len(close) >= 20:
+            roc_20 = ((close.iloc[-1] / close.iloc[-20]) - 1) * 100
+            momentum_score = 50 + np.clip(roc_20, -25, 25)
+        else:
+            momentum_score = 50
+
+        # Technical score (0-100)
+        rsi_val = rsi(close, 14)
+        if len(rsi_val) > 0 and not pd.isna(rsi_val.iloc[-1]):
+            current_rsi = rsi_val.iloc[-1]
+            if current_rsi < 30:
+                technical_score = 70
+            elif current_rsi > 70:
+                technical_score = 30
+            else:
+                technical_score = 50
+        else:
+            technical_score = 50
+
+        # Composite score (simple average)
+        composite_score = (momentum_score + technical_score) / 2
+
+        current_position = backtester.positions.get(symbol)
+
+        # Enter on high composite score
+        if composite_score >= 60:
+            if current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+
+        # Exit on low composite score
+        elif composite_score < 40:
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+    def kalman_adaptive_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                                row: pd.Series, symbol: str, data: pd.DataFrame,
+                                threshold: float = 0.5, process_noise: float = 0.01):
+        """Kalman Filter Adaptive Strategy Adapter"""
+        history = data.loc[:date]
+
+        if len(history) < 50:
+            return
+
+        # Simple 1D Kalman filter
+        prices = history['Close'].values
+        n = len(prices)
+        filtered = np.zeros(n)
+        filtered[0] = prices[0]
+        P = 1.0
+        Q = process_noise
+        R = 1.0
+
+        for i in range(1, n):
+            # Prediction
+            x_pred = filtered[i - 1]
+            P_pred = P + Q
+
+            # Update
+            K = P_pred / (P_pred + R)
+            filtered[i] = x_pred + K * (prices[i] - x_pred)
+            P = (1 - K) * P_pred
+
+        # Calculate deviation
+        current_price = row['Close']
+        filtered_price = filtered[-1]
+        deviation = (current_price - filtered_price) / filtered_price * 100
+
+        current_position = backtester.positions.get(symbol)
+
+        # Buy when price below filtered (oversold)
+        if deviation < -threshold:
+            if current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+
+        # Sell when price above filtered (overbought)
+        elif deviation > threshold:
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+    def volume_profile_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                               row: pd.Series, symbol: str, data: pd.DataFrame,
+                               profile_period: int = 20, num_levels: int = 50):
+        """Volume Profile Swing Strategy Adapter"""
+        history = data.loc[:date]
+
+        if len(history) < profile_period + 1:
+            return
+
+        # Get recent window for volume profile
+        window = history.iloc[-profile_period:]
+
+        # Calculate simple volume profile
+        price_min = window['Low'].min()
+        price_max = window['High'].max()
+
+        if price_max <= price_min:
+            return
+
+        price_bins = np.linspace(price_min, price_max, num_levels + 1)
+        price_levels = (price_bins[:-1] + price_bins[1:]) / 2
+        volume_at_levels = np.zeros(num_levels)
+
+        # Distribute volume
+        for idx, bar in window.iterrows():
+            bar_low = bar['Low']
+            bar_high = bar['High']
+            bar_volume = bar['Volume']
+
+            for i, price in enumerate(price_levels):
+                if bar_low <= price <= bar_high:
+                    volume_at_levels[i] += bar_volume / num_levels
+
+        # Find POC and value area
+        poc_idx = np.argmax(volume_at_levels)
+        poc_price = price_levels[poc_idx]
+
+        # Find value area (70% of volume)
+        total_volume = volume_at_levels.sum()
+        target_volume = total_volume * 0.7
+        va_volume = volume_at_levels[poc_idx]
+        lower_idx = upper_idx = poc_idx
+
+        while va_volume < target_volume and (lower_idx > 0 or upper_idx < len(volume_at_levels) - 1):
+            lower_vol = volume_at_levels[lower_idx - 1] if lower_idx > 0 else 0
+            upper_vol = volume_at_levels[upper_idx + 1] if upper_idx < len(volume_at_levels) - 1 else 0
+
+            if lower_vol >= upper_vol and lower_idx > 0:
+                lower_idx -= 1
+                va_volume += volume_at_levels[lower_idx]
+            elif upper_idx < len(volume_at_levels) - 1:
+                upper_idx += 1
+                va_volume += volume_at_levels[upper_idx]
+            else:
+                break
+
+        va_low = price_levels[lower_idx]
+        va_high = price_levels[upper_idx]
+
+        current_price = row['Close']
+        current_position = backtester.positions.get(symbol)
+
+        # Buy at/below value area low
+        if current_price <= va_low:
+            if current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+
+        # Sell at/above value area high
+        elif current_price >= va_high:
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+    def hmm_regime_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                           row: pd.Series, symbol: str, data: pd.DataFrame,
+                           lookback: int = 20):
+        """HMM Regime Detection Strategy Adapter (Simplified)"""
+        history = data.loc[:date]
+
+        if len(history) < lookback + 20:
+            return
+
+        # Simplified regime detection based on trend and volatility
+        recent = history.iloc[-lookback:]
+
+        # Calculate regime features
+        returns = recent['Close'].pct_change()
+        avg_return = returns.mean()
+        volatility = returns.std()
+
+        # Simple regime classification
+        # Bull: positive returns, moderate vol
+        # Bear: negative returns
+        # Sideways: low abs returns
+        if avg_return > 0.001:
+            regime = 'BULL'
+        elif avg_return < -0.001:
+            regime = 'BEAR'
+        else:
+            regime = 'SIDEWAYS'
+
+        rsi_val = rsi(history['Close'], 14)
+        current_rsi = rsi_val.iloc[-1] if len(rsi_val) > 0 and not pd.isna(rsi_val.iloc[-1]) else 50
+
+        current_position = backtester.positions.get(symbol)
+
+        # Regime-based strategy
+        if regime == 'BULL':
+            # Trend follow in bull market - buy dips
+            if current_rsi < 40 and current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+            elif current_rsi > 70 and current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+        elif regime == 'BEAR':
+            # Defensive in bear market - exit to cash
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+        else:  # SIDEWAYS
+            # Mean reversion in sideways market
+            if current_rsi < 30 and current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+            elif current_rsi > 70 and current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
 
 class ComprehensiveBacktester:
     """
@@ -208,35 +426,58 @@ class ComprehensiveBacktester:
 
         # Define available strategies
         self.strategies = {
+            # Basic strategies (kept for comparison)
             'sma_crossover': {
                 'name': 'SMA Crossover (20/50)',
                 'function': self.adapter.sma_crossover_strategy,
                 'params': {'short_window': 20, 'long_window': 50}
-            },
-            'sma_crossover_fast': {
-                'name': 'SMA Crossover (10/30)',
-                'function': self.adapter.sma_crossover_strategy,
-                'params': {'short_window': 10, 'long_window': 30}
             },
             'mean_reversion': {
                 'name': 'Mean Reversion (20 day)',
                 'function': self.adapter.mean_reversion_strategy,
                 'params': {'lookback': 20, 'entry_threshold': -60, 'exit_threshold': 40}
             },
-            'mean_reversion_aggressive': {
-                'name': 'Mean Reversion Aggressive',
-                'function': self.adapter.mean_reversion_strategy,
-                'params': {'lookback': 10, 'entry_threshold': -50, 'exit_threshold': 30}
-            },
             'momentum': {
                 'name': 'Momentum (10/20/50)',
                 'function': self.adapter.momentum_strategy,
                 'params': {'periods': [10, 20, 50], 'entry_threshold': 60, 'exit_threshold': -40}
             },
-            'momentum_aggressive': {
-                'name': 'Momentum Aggressive',
-                'function': self.adapter.momentum_strategy,
-                'params': {'periods': [5, 10, 20], 'entry_threshold': 50, 'exit_threshold': -30}
+
+            # Advanced strategies
+            'multifactor_scoring': {
+                'name': 'Multi-Factor Scoring',
+                'function': self.adapter.multifactor_strategy,
+                'params': {'lookback': 20}
+            },
+            'kalman_adaptive': {
+                'name': 'Kalman Adaptive Filter',
+                'function': self.adapter.kalman_adaptive_strategy,
+                'params': {'threshold': 0.5, 'process_noise': 0.01}
+            },
+            'kalman_adaptive_sensitive': {
+                'name': 'Kalman Adaptive (Sensitive)',
+                'function': self.adapter.kalman_adaptive_strategy,
+                'params': {'threshold': 0.3, 'process_noise': 0.05}
+            },
+            'volume_profile_swing': {
+                'name': 'Volume Profile Swing',
+                'function': self.adapter.volume_profile_strategy,
+                'params': {'profile_period': 20, 'num_levels': 50}
+            },
+            'volume_profile_swing_fast': {
+                'name': 'Volume Profile (Fast)',
+                'function': self.adapter.volume_profile_strategy,
+                'params': {'profile_period': 10, 'num_levels': 30}
+            },
+            'hmm_regime_detection': {
+                'name': 'HMM Regime Detection',
+                'function': self.adapter.hmm_regime_strategy,
+                'params': {'lookback': 20}
+            },
+            'hmm_regime_detection_long': {
+                'name': 'HMM Regime (Long-term)',
+                'function': self.adapter.hmm_regime_strategy,
+                'params': {'lookback': 50}
             }
         }
 

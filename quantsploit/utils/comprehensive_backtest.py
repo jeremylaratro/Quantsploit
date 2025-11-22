@@ -877,6 +877,25 @@ class ComprehensiveBacktester:
                 completed_trades, test_period_data
             )
 
+            # ===== VALIDATION: Discard invalid results =====
+            # Filter out results with zero trades - these are statistically meaningless
+            if results.total_trades == 0:
+                logger.warning(f"Discarding {strategy_key}/{symbol}/{period.name}: Zero trades executed")
+                return None
+
+            # Filter out results with insufficient trades (< 2) for meaningful statistics
+            # A single trade can show 100% accuracy/win rate which is misleading
+            if results.total_trades < 2:
+                logger.warning(f"Discarding {strategy_key}/{symbol}/{period.name}: "
+                              f"Only {results.total_trades} trade(s) - insufficient for meaningful statistics")
+                return None
+
+            # Additional validation: check for NaN or infinite values
+            if (pd.isna(results.total_return_pct) or pd.isna(results.sharpe_ratio) or
+                pd.isna(results.win_rate) or np.isinf(results.sharpe_ratio)):
+                logger.warning(f"Discarding {strategy_key}/{symbol}/{period.name}: Invalid metrics (NaN or Inf)")
+                return None
+
             # Create performance object
             performance = StrategyPerformance(
                 strategy_name=strategy_info['name'],

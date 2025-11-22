@@ -18,16 +18,34 @@ console = Console()
 class ComprehensiveStrategyBacktest(BaseModule):
     """Module for running comprehensive strategy backtests"""
 
-    def __init__(self):
-        super().__init__()
-        self.add_option('SYMBOLS', 'Comma-separated list of symbols', required=True,
-                       default='AAPL,MSFT,GOOGL,TSLA,SPY')
-        self.add_option('OUTPUT_DIR', 'Directory to save results',
-                       required=False, default='./backtest_results')
-        self.add_option('INITIAL_CAPITAL', 'Initial capital for backtests',
-                       required=False, default='100000')
-        self.add_option('COMMISSION', 'Commission percentage (e.g., 0.001 = 0.1%)',
-                       required=False, default='0.001')
+    def __init__(self, framework):
+        super().__init__(framework)
+
+    def _init_options(self):
+        """Initialize module options"""
+        super()._init_options()
+        self.options.update({
+            'SYMBOLS': {
+                'value': 'AAPL,MSFT,GOOGL,TSLA,SPY',
+                'required': True,
+                'description': 'Comma-separated list of symbols'
+            },
+            'OUTPUT_DIR': {
+                'value': './backtest_results',
+                'required': False,
+                'description': 'Directory to save results'
+            },
+            'INITIAL_CAPITAL': {
+                'value': '100000',
+                'required': False,
+                'description': 'Initial capital for backtests'
+            },
+            'COMMISSION': {
+                'value': '0.001',
+                'required': False,
+                'description': 'Commission percentage (e.g., 0.001 = 0.1%)'
+            }
+        })
 
     @property
     def name(self) -> str:
@@ -197,9 +215,3 @@ class ComprehensiveStrategyBacktest(BaseModule):
             )
 
         console.print(table)
-
-
-# Module registration
-def get_module():
-    """Factory function for module loading"""
-    return ComprehensiveStrategyBacktest()

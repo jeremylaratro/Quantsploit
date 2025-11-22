@@ -1,0 +1,584 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 fw-bold text-center mb-4">
+            <i class="fas fa-chart-line"></i> Backtesting Analytics Dashboard
+        </h1>
+    </div>
+</div>
+
+<!-- Run Selector -->
+<div class="run-selector">
+    <div class="row align-items-center">
+        <div class="col-md-6">
+            <label for="runSelector" class="form-label fw-bold">Select Backtest Run:</label>
+            <select id="runSelector" class="form-select">
+                <option value="">-- Select a backtest run --</option>
+                {% for run in runs %}
+                <option value="{{ run.timestamp }}" {% if run.timestamp == latest_timestamp %}selected{% endif %}>
+                    {{ run.datetime }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-md-6 text-end">
+            <button class="btn btn-primary" onclick="refreshData()">
+                <i class="fas fa-sync-alt"></i> Refresh Data
+            </button>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Indicator -->
+<div id="loadingIndicator" class="text-center py-5" style="display: none;">
+    <div class="loading-spinner mx-auto mb-3"></div>
+    <p class="text-muted">Loading backtest data...</p>
+</div>
+
+<!-- Dashboard Content -->
+<div id="dashboardContent" style="display: none;">
+
+    <!-- Key Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card blue position-relative">
+                <i class="fas fa-chart-bar metric-icon"></i>
+                <div class="stat-label">Total Backtests</div>
+                <div class="stat-value" id="totalBacktests">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card green position-relative">
+                <i class="fas fa-percentage metric-icon"></i>
+                <div class="stat-label">Average Return</div>
+                <div class="stat-value" id="avgReturn">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange position-relative">
+                <i class="fas fa-bolt metric-icon"></i>
+                <div class="stat-label">Average Sharpe</div>
+                <div class="stat-value" id="avgSharpe">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card position-relative">
+                <i class="fas fa-bullseye metric-icon"></i>
+                <div class="stat-label">Win Rate</div>
+                <div class="stat-value" id="avgWinRate">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Performers -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-trophy text-warning"></i> Top 10 Strategies by Return
+                </h3>
+                <div id="topStrategiesChart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Performance Comparison -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-chart-pie"></i> Return Distribution
+                </h3>
+                <canvas id="returnDistributionChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-chart-area"></i> Sharpe Ratio Distribution
+                </h3>
+                <canvas id="sharpeDistributionChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Period Comparison -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-calendar-alt"></i> Performance Across Periods
+                </h3>
+                <div id="periodComparisonChart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Heatmap -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-th"></i> Strategy × Period Performance Heatmap
+                </h3>
+                <div id="heatmapChart" style="height: 600px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Comparison Table -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-table"></i> Strategy Performance Summary
+                </h3>
+                <div class="table-responsive">
+                    <table class="table table-hover" id="strategyTable">
+                        <thead>
+                            <tr>
+                                <th>Strategy</th>
+                                <th>Avg Return</th>
+                                <th>Avg Sharpe</th>
+                                <th>Win Rate</th>
+                                <th>Total Trades</th>
+                                <th>Max Return</th>
+                                <th>Consistency</th>
+                            </tr>
+                        </thead>
+                        <tbody id="strategyTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Symbol Performance -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-dollar-sign"></i> Symbol Performance
+                </h3>
+                <canvas id="symbolPerformanceChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-exchange-alt"></i> Risk vs Return
+                </h3>
+                <div id="riskReturnScatter" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let currentTimestamp = "{{ latest_timestamp }}";
+
+// Chart instances
+let returnDistChart, sharpeDistChart, symbolPerfChart;
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', function() {
+    if (currentTimestamp) {
+        loadDashboardData(currentTimestamp);
+    }
+});
+
+// Run selector change event
+document.getElementById('runSelector').addEventListener('change', function() {
+    currentTimestamp = this.value;
+    if (currentTimestamp) {
+        loadDashboardData(currentTimestamp);
+    }
+});
+
+function refreshData() {
+    if (currentTimestamp) {
+        loadDashboardData(currentTimestamp);
+    }
+}
+
+async function loadDashboardData(timestamp) {
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('dashboardContent').style.display = 'none';
+
+    try {
+        // Load all data in parallel
+        const [summary, detailed, quarterly, strategies, symbols, heatmap] = await Promise.all([
+            fetch(`/api/summary/${timestamp}`).then(r => r.json()),
+            fetch(`/api/detailed/${timestamp}`).then(r => r.json()),
+            fetch(`/api/quarterly/${timestamp}`).then(r => r.json()),
+            fetch(`/api/strategies/${timestamp}`).then(r => r.json()),
+            fetch(`/api/symbols/${timestamp}`).then(r => r.json()),
+            fetch(`/api/heatmap/${timestamp}`).then(r => r.json())
+        ]);
+
+        // Update key metrics
+        updateKeyMetrics(summary);
+
+        // Create charts
+        createTopStrategiesChart(summary.best_by_total_return);
+        createReturnDistributionChart(detailed);
+        createSharpeDistributionChart(detailed);
+        createPeriodComparisonChart(quarterly);
+        createHeatmapChart(heatmap);
+        createStrategyTable(strategies.strategies);
+        createSymbolPerformanceChart(symbols.symbols);
+        createRiskReturnScatter(detailed);
+
+        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('dashboardContent').style.display = 'block';
+
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        alert('Error loading dashboard data. Please try again.');
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+function updateKeyMetrics(summary) {
+    const stats = summary.overall_stats;
+    document.getElementById('totalBacktests').textContent = stats.total_backtests;
+    document.getElementById('avgReturn').textContent = stats.avg_return.toFixed(2) + '%';
+    document.getElementById('avgSharpe').textContent = stats.avg_sharpe.toFixed(2);
+    document.getElementById('avgWinRate').textContent = stats.avg_win_rate.toFixed(1) + '%';
+}
+
+function createTopStrategiesChart(topStrategies) {
+    const top10 = topStrategies.slice(0, 10);
+
+    const trace = {
+        x: top10.map(s => s.total_return),
+        y: top10.map(s => `${s.strategy_name} (${s.symbol})`),
+        type: 'bar',
+        orientation: 'h',
+        marker: {
+            color: top10.map(s => s.total_return > 0 ? '#27ae60' : '#e74c3c'),
+            line: {
+                color: 'rgba(0,0,0,0.1)',
+                width: 1
+            }
+        },
+        text: top10.map(s => s.total_return.toFixed(2) + '%'),
+        textposition: 'auto',
+        hovertemplate: '<b>%{y}</b><br>Return: %{x:.2f}%<br>Sharpe: ' +
+                       top10.map(s => s.sharpe_ratio.toFixed(2)) + '<extra></extra>'
+    };
+
+    const layout = {
+        margin: { l: 250, r: 50, t: 20, b: 50 },
+        xaxis: { title: 'Total Return (%)' },
+        yaxis: { automargin: true },
+        height: 400
+    };
+
+    Plotly.newPlot('topStrategiesChart', [trace], layout, {responsive: true});
+}
+
+function createReturnDistributionChart(detailed) {
+    const ctx = document.getElementById('returnDistributionChart');
+
+    // Destroy existing chart if it exists
+    if (returnDistChart) {
+        returnDistChart.destroy();
+    }
+
+    // Create histogram bins
+    const returns = detailed.map(d => d.total_return);
+    const bins = 20;
+    const min = Math.min(...returns);
+    const max = Math.max(...returns);
+    const binWidth = (max - min) / bins;
+
+    const histogram = new Array(bins).fill(0);
+    const labels = [];
+
+    for (let i = 0; i < bins; i++) {
+        const binStart = min + i * binWidth;
+        const binEnd = binStart + binWidth;
+        labels.push(`${binStart.toFixed(1)}%`);
+
+        returns.forEach(r => {
+            if (r >= binStart && r < binEnd) {
+                histogram[i]++;
+            }
+        });
+    }
+
+    returnDistChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Frequency',
+                data: histogram,
+                backgroundColor: 'rgba(52, 152, 219, 0.7)',
+                borderColor: 'rgba(52, 152, 219, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Count'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Return Range (%)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createSharpeDistributionChart(detailed) {
+    const ctx = document.getElementById('sharpeDistributionChart');
+
+    // Destroy existing chart if it exists
+    if (sharpeDistChart) {
+        sharpeDistChart.destroy();
+    }
+
+    // Group by Sharpe ratio ranges
+    const ranges = [
+        { label: '< -1', min: -Infinity, max: -1, count: 0 },
+        { label: '-1 to 0', min: -1, max: 0, count: 0 },
+        { label: '0 to 1', min: 0, max: 1, count: 0 },
+        { label: '1 to 2', min: 1, max: 2, count: 0 },
+        { label: '2 to 3', min: 2, max: 3, count: 0 },
+        { label: '> 3', min: 3, max: Infinity, count: 0 }
+    ];
+
+    detailed.forEach(d => {
+        const sharpe = d.sharpe_ratio;
+        ranges.forEach(range => {
+            if (sharpe >= range.min && sharpe < range.max) {
+                range.count++;
+            }
+        });
+    });
+
+    sharpeDistChart = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: ranges.map(r => r.label),
+            datasets: [{
+                data: ranges.map(r => r.count),
+                backgroundColor: [
+                    '#e74c3c',
+                    '#e67e22',
+                    '#f39c12',
+                    '#27ae60',
+                    '#2ecc71',
+                    '#16a085'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'right'
+                }
+            }
+        }
+    });
+}
+
+function createPeriodComparisonChart(quarterly) {
+    const periods = quarterly.periods || [];
+
+    const trace1 = {
+        x: periods.map(p => p.period),
+        y: periods.map(p => p.avg_return),
+        name: 'Avg Return',
+        type: 'bar',
+        marker: { color: '#3498db' }
+    };
+
+    const trace2 = {
+        x: periods.map(p => p.period),
+        y: periods.map(p => p.best_return),
+        name: 'Best Return',
+        type: 'bar',
+        marker: { color: '#27ae60' }
+    };
+
+    const layout = {
+        title: 'Average vs Best Returns by Period',
+        barmode: 'group',
+        xaxis: { title: 'Period' },
+        yaxis: { title: 'Return (%)' },
+        height: 400,
+        margin: { l: 50, r: 50, t: 80, b: 100 }
+    };
+
+    Plotly.newPlot('periodComparisonChart', [trace1, trace2], layout, {responsive: true});
+}
+
+function createHeatmapChart(heatmapData) {
+    const trace = {
+        z: heatmapData.values,
+        x: heatmapData.periods,
+        y: heatmapData.strategies,
+        type: 'heatmap',
+        colorscale: [
+            [0, '#e74c3c'],
+            [0.5, '#f39c12'],
+            [1, '#27ae60']
+        ],
+        hoverongaps: false,
+        hovertemplate: 'Strategy: %{y}<br>Period: %{x}<br>Return: %{z:.2f}%<extra></extra>'
+    };
+
+    const layout = {
+        title: 'Strategy Performance Heatmap',
+        xaxis: { title: 'Period', side: 'bottom' },
+        yaxis: { title: 'Strategy', automargin: true },
+        height: 600,
+        margin: { l: 200, r: 50, t: 80, b: 100 }
+    };
+
+    Plotly.newPlot('heatmapChart', [trace], layout, {responsive: true});
+}
+
+function createStrategyTable(strategies) {
+    const tbody = document.getElementById('strategyTableBody');
+    tbody.innerHTML = '';
+
+    strategies.forEach(strategy => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${strategy.strategy}</strong></td>
+            <td><span class="badge-return ${strategy.avg_return > 0 ? 'positive' : 'negative'}">
+                ${strategy.avg_return.toFixed(2)}%
+            </span></td>
+            <td>${strategy.avg_sharpe.toFixed(2)}</td>
+            <td>${strategy.avg_win_rate.toFixed(1)}%</td>
+            <td>${strategy.total_trades}</td>
+            <td>${strategy.max_return.toFixed(2)}%</td>
+            <td>${strategy.consistency.toFixed(2)}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function createSymbolPerformanceChart(symbols) {
+    const ctx = document.getElementById('symbolPerformanceChart');
+
+    // Destroy existing chart if it exists
+    if (symbolPerfChart) {
+        symbolPerfChart.destroy();
+    }
+
+    symbolPerfChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: symbols.map(s => s.symbol),
+            datasets: [{
+                label: 'Average Return (%)',
+                data: symbols.map(s => s.avg_return),
+                backgroundColor: symbols.map(s =>
+                    s.avg_return > 0 ? 'rgba(39, 174, 96, 0.7)' : 'rgba(231, 76, 60, 0.7)'
+                ),
+                borderColor: symbols.map(s =>
+                    s.avg_return > 0 ? 'rgba(39, 174, 96, 1)' : 'rgba(231, 76, 60, 1)'
+                ),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: {
+                        display: true,
+                        text: 'Average Return (%)'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createRiskReturnScatter(detailed) {
+    // Group by strategy and calculate avg return vs volatility
+    const strategyGroups = {};
+
+    detailed.forEach(d => {
+        if (!strategyGroups[d.strategy_name]) {
+            strategyGroups[d.strategy_name] = {
+                returns: [],
+                volatilities: []
+            };
+        }
+        strategyGroups[d.strategy_name].returns.push(d.total_return);
+        strategyGroups[d.strategy_name].volatilities.push(d.volatility);
+    });
+
+    const traces = Object.keys(strategyGroups).map(strategy => {
+        const group = strategyGroups[strategy];
+        const avgReturn = group.returns.reduce((a, b) => a + b, 0) / group.returns.length;
+        const avgVol = group.volatilities.reduce((a, b) => a + b, 0) / group.volatilities.length;
+
+        return {
+            x: [avgVol],
+            y: [avgReturn],
+            mode: 'markers',
+            type: 'scatter',
+            name: strategy,
+            marker: {
+                size: 12,
+                line: {
+                    color: 'rgba(0,0,0,0.2)',
+                    width: 1
+                }
+            }
+        };
+    });
+
+    const layout = {
+        xaxis: { title: 'Volatility (%)' },
+        yaxis: { title: 'Return (%)' },
+        hovermode: 'closest',
+        showlegend: false,
+        height: 400
+    };
+
+    Plotly.newPlot('riskReturnScatter', traces, layout, {responsive: true});
+}
+</script>
+{% endblock %}

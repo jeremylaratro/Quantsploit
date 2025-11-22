@@ -1,0 +1,224 @@
+{% extends "base.html" %}
+
+{% block title %}Strategy Detail - Quantsploit Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item active">Strategy Detail</li>
+            </ol>
+        </nav>
+        <h1 class="display-5 fw-bold">
+            <i class="fas fa-chart-line"></i> Strategy Analysis
+        </h1>
+        <h2 id="strategyName" class="text-muted">{{ strategy_name }}</h2>
+    </div>
+</div>
+
+<!-- Loading Indicator -->
+<div id="loadingIndicator" class="text-center py-5">
+    <div class="loading-spinner mx-auto mb-3"></div>
+    <p class="text-muted">Loading strategy data...</p>
+</div>
+
+<!-- Strategy Content -->
+<div id="strategyContent" style="display: none;">
+
+    <!-- Performance Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <div class="stat-label">Average Return</div>
+                <div class="stat-value" id="avgReturn">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <div class="stat-label">Average Sharpe</div>
+                <div class="stat-value" id="avgSharpe">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <div class="stat-label">Win Rate</div>
+                <div class="stat-value" id="winRate">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-label">Total Trades</div>
+                <div class="stat-value" id="totalTrades">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Over Time -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">Performance Across Periods</h3>
+                <div id="performanceChart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metrics by Symbol -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">Performance by Symbol</h3>
+                <div id="symbolChart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Results Table -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">Detailed Results</h3>
+                <div class="table-responsive">
+                    <table class="table table-hover" id="detailedTable">
+                        <thead>
+                            <tr>
+                                <th>Period</th>
+                                <th>Symbol</th>
+                                <th>Return</th>
+                                <th>Annual Return</th>
+                                <th>Sharpe</th>
+                                <th>Max DD</th>
+                                <th>Trades</th>
+                                <th>Win Rate</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailedTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const timestamp = "{{ timestamp }}";
+const strategyName = "{{ strategy_name }}";
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadStrategyData();
+});
+
+async function loadStrategyData() {
+    try {
+        const response = await fetch(`/api/detailed/${timestamp}`);
+        const data = await response.json();
+
+        // Filter data for this strategy
+        const strategyData = data.filter(d => d.strategy_name === strategyName);
+
+        if (strategyData.length === 0) {
+            alert('No data found for this strategy');
+            return;
+        }
+
+        // Calculate metrics
+        updateMetrics(strategyData);
+        createPerformanceChart(strategyData);
+        createSymbolChart(strategyData);
+        createDetailedTable(strategyData);
+
+        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('strategyContent').style.display = 'block';
+
+    } catch (error) {
+        console.error('Error loading strategy data:', error);
+        alert('Error loading data');
+    }
+}
+
+function updateMetrics(data) {
+    const avgReturn = data.reduce((sum, d) => sum + d.total_return, 0) / data.length;
+    const avgSharpe = data.reduce((sum, d) => sum + d.sharpe_ratio, 0) / data.length;
+    const avgWinRate = data.reduce((sum, d) => sum + d.win_rate, 0) / data.length;
+    const totalTrades = data.reduce((sum, d) => sum + d.total_trades, 0);
+
+    document.getElementById('avgReturn').textContent = avgReturn.toFixed(2) + '%';
+    document.getElementById('avgSharpe').textContent = avgSharpe.toFixed(2);
+    document.getElementById('winRate').textContent = avgWinRate.toFixed(1) + '%';
+    document.getElementById('totalTrades').textContent = totalTrades;
+}
+
+function createPerformanceChart(data) {
+    const trace = {
+        x: data.map(d => d.period_name),
+        y: data.map(d => d.total_return),
+        type: 'scatter',
+        mode: 'lines+markers',
+        name: 'Return',
+        line: { color: '#3498db', width: 3 },
+        marker: { size: 8 }
+    };
+
+    const layout = {
+        xaxis: { title: 'Period' },
+        yaxis: { title: 'Return (%)' },
+        height: 400
+    };
+
+    Plotly.newPlot('performanceChart', [trace], layout, {responsive: true});
+}
+
+function createSymbolChart(data) {
+    // Group by symbol
+    const symbolGroups = {};
+    data.forEach(d => {
+        if (!symbolGroups[d.symbol]) {
+            symbolGroups[d.symbol] = [];
+        }
+        symbolGroups[d.symbol].push(d.total_return);
+    });
+
+    const traces = Object.keys(symbolGroups).map(symbol => ({
+        y: symbolGroups[symbol],
+        type: 'box',
+        name: symbol
+    }));
+
+    const layout = {
+        yaxis: { title: 'Return (%)' },
+        height: 400
+    };
+
+    Plotly.newPlot('symbolChart', traces, layout, {responsive: true});
+}
+
+function createDetailedTable(data) {
+    const tbody = document.getElementById('detailedTableBody');
+    tbody.innerHTML = '';
+
+    data.forEach(d => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${d.period_name}</td>
+            <td><strong>${d.symbol}</strong></td>
+            <td><span class="badge-return ${d.total_return > 0 ? 'positive' : 'negative'}">
+                ${d.total_return.toFixed(2)}%
+            </span></td>
+            <td>${d.annual_return.toFixed(2)}%</td>
+            <td>${d.sharpe_ratio.toFixed(2)}</td>
+            <td>${d.max_drawdown.toFixed(2)}%</td>
+            <td>${d.total_trades}</td>
+            <td>${d.win_rate.toFixed(1)}%</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+</script>
+{% endblock %}

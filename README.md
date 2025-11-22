@@ -26,6 +26,7 @@ Quantsploit is a modular quantitative trading framework inspired by penetration 
 - 🔍 **Market Scanners** - Scan multiple stocks for momentum, volume, and patterns
 - 📈 **Options Analysis** - Analyze options chains, Greeks, and opportunities
 - 💼 **Strategy Backtesting** - Test and validate trading strategies
+- 📉 **Analytics Dashboard** - Web-based visualization with interactive charts and comparisons
 - 💾 **Data Caching** - SQLite database for efficient data management
 - 📋 **Watchlist Management** - Track your favorite symbols
 - 🎨 **Rich Output** - Beautiful tables and formatted results
@@ -166,6 +167,36 @@ Quantsploit includes cutting-edge quantitative algorithms for serious traders:
 - **Top Movers** - Real-time rankings by gainers, momentum, breakouts, and quality
 
 See [ADVANCED_STRATEGIES.md](ADVANCED_STRATEGIES.md) for detailed usage guide.
+
+## 📊 Backtesting Analytics Dashboard
+
+Quantsploit includes a comprehensive web-based dashboard for visualizing and analyzing backtest results:
+
+### Features
+- **Interactive Charts** - Visualize performance metrics, returns, and risk across strategies
+- **Period Analysis** - Compare performance across quarters and custom time periods
+- **Strategy Rankings** - Identify top-performing strategies with detailed metrics
+- **Risk vs Return** - Interactive scatter plots and heatmaps
+- **Multi-Run Comparison** - Compare up to 5 different backtest runs
+- **Export Capabilities** - Save charts and generate reports
+
+### Quick Start
+
+1. Run a comprehensive backtest:
+```bash
+python run_comprehensive_backtest.py --symbols AAPL,MSFT,GOOGL
+```
+
+2. Launch the dashboard:
+```bash
+./start_dashboard.sh  # Linux/Mac
+# or
+start_dashboard.bat   # Windows
+```
+
+3. Open your browser to `http://localhost:5000`
+
+See [DASHBOARD.md](DASHBOARD.md) for complete documentation and usage guide.
 
 ## Creating Custom Modules
 

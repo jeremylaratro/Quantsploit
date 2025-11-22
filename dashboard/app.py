@@ -58,35 +58,152 @@ class DashboardDataLoader:
     def get_available_runs(self) -> List[Dict]:
         """Get list of all available backtest runs"""
         runs = []
+        seen_timestamps = set()
 
-        # Find all summary JSON files
-        for json_file in sorted(self.results_dir.glob('summary_*.json'), reverse=True):
-            timestamp = json_file.stem.replace('summary_', '')
+        # Find all CSV files (primary source of truth)
+        for csv_file in sorted(self.results_dir.glob('detailed_results_*.csv'), reverse=True):
+            timestamp = csv_file.stem.replace('detailed_results_', '')
+
+            if timestamp in seen_timestamps:
+                continue
 
             # Parse timestamp
             try:
                 dt = datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
+
+                # Check if JSON summary exists
+                json_file = self.results_dir / f'summary_{timestamp}.json'
+                has_json = json_file.exists()
+
                 runs.append({
                     'timestamp': timestamp,
                     'datetime': dt.strftime('%Y-%m-%d %H:%M:%S'),
-                    'summary_file': str(json_file),
-                    'csv_file': str(self.results_dir / f'detailed_results_{timestamp}.csv'),
+                    'has_json': has_json,
+                    'summary_file': str(json_file) if has_json else None,
+                    'csv_file': str(csv_file),
                     'report_file': str(self.results_dir / f'report_{timestamp}.md')
                 })
+                seen_timestamps.add(timestamp)
             except ValueError:
                 continue
 
         return runs
 
+    def generate_summary_from_csv(self, df: pd.DataFrame) -> Dict:
+        """
+        Generate summary statistics from CSV data
+
+        This recreates the summary dict that would normally be in the JSON file,
+        allowing the dashboard to work with CSV files only.
+        """
+        if df.empty:
+            return {"error": "No results to summarize"}
+
+        # Helper to rank strategies by metric
+        def rank_strategies(metric: str, top_n: int = 10) -> List[Dict]:
+            ranked = df.nlargest(top_n, metric)
+            columns = ['strategy_name', 'symbol', 'period_name', metric, 'total_return',
+                       'win_rate', 'signal_accuracy', 'sharpe_ratio']
+            # Remove duplicates while preserving order
+            unique_columns = []
+            seen = set()
+            for col in columns:
+                if col not in seen and col in ranked.columns:
+                    unique_columns.append(col)
+                    seen.add(col)
+            return ranked[unique_columns].to_dict('records')
+
+        # Helper to analyze by period
+        def analyze_by_period() -> Dict:
+            grouped = df.groupby('period_name').agg({
+                'total_return': ['mean', 'std', 'min', 'max'],
+                'sharpe_ratio': ['mean', 'std'],
+                'win_rate': 'mean',
+                'signal_accuracy': 'mean',
+                'excess_return': 'mean'
+            }).round(4)
+
+            result = {}
+            for period in grouped.index:
+                result[period] = {}
+                for col in grouped.columns:
+                    if isinstance(col, tuple):
+                        col_name = '_'.join(str(c) for c in col)
+                    else:
+                        col_name = str(col)
+                    result[period][col_name] = float(grouped.loc[period, col])
+            return result
+
+        # Helper to analyze by symbol
+        def analyze_by_symbol() -> Dict:
+            grouped = df.groupby('symbol').agg({
+                'total_return': ['mean', 'std'],
+                'sharpe_ratio': 'mean',
+                'win_rate': 'mean',
+                'signal_accuracy': 'mean',
+                'excess_return': 'mean'
+            }).round(4)
+
+            result = {}
+            for symbol in grouped.index:
+                result[symbol] = {}
+                for col in grouped.columns:
+                    if isinstance(col, tuple):
+                        col_name = '_'.join(str(c) for c in col)
+                    else:
+                        col_name = str(col)
+                    result[symbol][col_name] = float(grouped.loc[symbol, col])
+            return result
+
+        # Build summary
+        summary = {
+            'best_by_total_return': rank_strategies('total_return'),
+            'best_by_sharpe_ratio': rank_strategies('sharpe_ratio'),
+            'best_by_win_rate': rank_strategies('win_rate'),
+            'best_by_signal_accuracy': rank_strategies('signal_accuracy'),
+            'best_by_profit_factor': rank_strategies('profit_factor') if 'profit_factor' in df.columns else [],
+            'best_excess_return': rank_strategies('excess_return') if 'excess_return' in df.columns else [],
+
+            'performance_by_period': analyze_by_period(),
+            'performance_by_symbol': analyze_by_symbol(),
+
+            'overall_stats': {
+                'total_backtests': len(df),
+                'avg_return': float(df['total_return'].mean()),
+                'avg_sharpe': float(df['sharpe_ratio'].mean()),
+                'avg_win_rate': float(df['win_rate'].mean()),
+                'avg_signal_accuracy': float(df['signal_accuracy'].mean()),
+                'strategies_beating_buy_hold': int((df['excess_return'] > 0).sum()) if 'excess_return' in df.columns else 0,
+                'percentage_beating_buy_hold': float((df['excess_return'] > 0).sum() / len(df) * 100) if 'excess_return' in df.columns else 0
+            }
+        }
+
+        return convert_numpy_types(summary)
+
     def load_summary(self, timestamp: str) -> Optional[Dict]:
-        """Load summary JSON for a specific run"""
+        """
+        Load summary for a specific run
+
+        First tries to load from JSON file. If JSON doesn't exist,
+        generates summary from CSV data on-the-fly.
+        """
         summary_file = self.results_dir / f'summary_{timestamp}.json'
 
-        if not summary_file.exists():
+        # Try to load from JSON first
+        if summary_file.exists():
+            try:
+                with open(summary_file, 'r') as f:
+                    return json.load(f)
+            except Exception as e:
+                # JSON exists but is corrupted, fall back to CSV
+                print(f"Warning: Could not load JSON summary: {e}. Generating from CSV...")
+
+        # Fall back to generating from CSV
+        df = self.load_detailed_results(timestamp)
+        if df is None:
             return None
 
-        with open(summary_file, 'r') as f:
-            return json.load(f)
+        return self.generate_summary_from_csv(df)
 
     def load_detailed_results(self, timestamp: str) -> Optional[pd.DataFrame]:
         """Load detailed CSV results for a specific run"""

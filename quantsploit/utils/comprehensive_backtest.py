@@ -869,7 +869,7 @@ class ComprehensiveBacktester:
 
             # Run backtest
             backtester = Backtester(config)
-            results = backtester.run_backtest(data, strategy_func)
+            results = backtester.run_backtest(data, strategy_func, symbol=symbol)
 
             # Calculate signal accuracy from completed trades
             completed_trades = [t for t in backtester.trades if t.exit_date is not None]

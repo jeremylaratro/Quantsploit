@@ -36,6 +36,12 @@ Examples:
   # Full test with custom output directory
   python run_comprehensive_backtest.py --symbols AAPL,MSFT,GOOGL,AMZN,TSLA,NVDA \\
       --capital 100000 --commission 0.001 --output ./my_backtest_results
+
+  # Custom time periods: 4 periods of 6 months each over 2 years
+  python run_comprehensive_backtest.py --symbols AAPL,MSFT --tspan 2y --bspan 6m --period 4
+
+  # Custom time periods: 6 periods of 3 months each over 18 months
+  python run_comprehensive_backtest.py --symbols SPY,QQQ --tspan 18m --bspan 3m --period 6
         """
     )
 
@@ -73,7 +79,34 @@ Examples:
         help='Quick mode: test only 1 symbol with fewer strategies'
     )
 
+    parser.add_argument(
+        '--tspan',
+        type=str,
+        default=None,
+        help='Total time span (e.g., 2y, 18m, 730d). If not specified, uses default periods'
+    )
+
+    parser.add_argument(
+        '--bspan',
+        type=str,
+        default=None,
+        help='Backtest span for each period (e.g., 6m, 180d, 1y). Required if --tspan is provided'
+    )
+
+    parser.add_argument(
+        '--period',
+        type=int,
+        default=None,
+        help='Number of separate backtest periods to run. Required if --tspan is provided'
+    )
+
     args = parser.parse_args()
+
+    # Validate custom period arguments
+    if any([args.tspan, args.bspan, args.period]):
+        if not all([args.tspan, args.bspan, args.period]):
+            console.print("[bold red]Error:[/bold red] When using custom periods, all three arguments (--tspan, --bspan, --period) must be provided")
+            return 1
 
     # Parse symbols
     symbols = [s.strip().upper() for s in args.symbols.split(',')]
@@ -87,7 +120,10 @@ Examples:
     console.print(f"[yellow]Symbols:[/yellow] {', '.join(symbols)}")
     console.print(f"[yellow]Initial Capital:[/yellow] ${args.capital:,.2f}")
     console.print(f"[yellow]Commission:[/yellow] {args.commission*100:.3f}%")
-    console.print(f"[yellow]Output Directory:[/yellow] {args.output}\n")
+    console.print(f"[yellow]Output Directory:[/yellow] {args.output}")
+    if args.tspan:
+        console.print(f"[yellow]Custom Periods:[/yellow] {args.period} periods of {args.bspan} each over {args.tspan}")
+    console.print()
 
     console.print("[cyan]Starting comprehensive backtest...[/cyan]\n")
 
@@ -95,7 +131,10 @@ Examples:
         # Run comprehensive analysis
         results_df, summary = run_comprehensive_analysis(
             symbols=symbols,
-            output_dir=args.output
+            output_dir=args.output,
+            tspan=args.tspan,
+            bspan=args.bspan,
+            num_periods=args.period
         )
 
         if results_df is None:

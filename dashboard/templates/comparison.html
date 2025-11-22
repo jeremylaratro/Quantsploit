@@ -1,0 +1,262 @@
+{% extends "base.html" %}
+
+{% block title %}Multi-Run Comparison - Quantsploit Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 fw-bold text-center mb-4">
+            <i class="fas fa-exchange-alt"></i> Backtest Run Comparison
+        </h1>
+        <p class="text-center text-muted">Compare performance across multiple backtest runs</p>
+    </div>
+</div>
+
+<!-- Run Selection -->
+<div class="run-selector">
+    <h5 class="fw-bold mb-3">Select Backtest Runs to Compare (max 5):</h5>
+    <div class="row" id="runCheckboxes">
+        {% for run in runs[:10] %}
+        <div class="col-md-4 mb-2">
+            <div class="form-check">
+                <input class="form-check-input run-checkbox" type="checkbox"
+                       value="{{ run.timestamp }}" id="run{{ loop.index }}">
+                <label class="form-check-label" for="run{{ loop.index }}">
+                    {{ run.datetime }}
+                </label>
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+    <button class="btn btn-primary mt-3" onclick="compareRuns()">
+        <i class="fas fa-chart-bar"></i> Compare Selected Runs
+    </button>
+</div>
+
+<!-- Loading Indicator -->
+<div id="loadingIndicator" class="text-center py-5" style="display: none;">
+    <div class="loading-spinner mx-auto mb-3"></div>
+    <p class="text-muted">Loading comparison data...</p>
+</div>
+
+<!-- Comparison Content -->
+<div id="comparisonContent" style="display: none;">
+
+    <!-- Overall Metrics Comparison -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">Overall Performance Comparison</h3>
+                <div id="overallComparisonChart" style="height: 400px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Metric Trends -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h3 class="chart-title">Return Comparison</h3>
+                <canvas id="returnComparisonChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h3 class="chart-title">Sharpe Ratio Comparison</h3>
+                <canvas id="sharpeComparisonChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Comparison Table -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">Detailed Metrics Comparison</h3>
+                <div class="table-responsive">
+                    <table class="table table-hover" id="comparisonTable">
+                        <thead>
+                            <tr>
+                                <th>Run DateTime</th>
+                                <th>Total Backtests</th>
+                                <th>Avg Return</th>
+                                <th>Avg Sharpe</th>
+                                <th>Avg Win Rate</th>
+                                <th>Strategies Beating B&H</th>
+                            </tr>
+                        </thead>
+                        <tbody id="comparisonTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let returnCompChart, sharpeCompChart;
+
+async function compareRuns() {
+    const selectedRuns = Array.from(document.querySelectorAll('.run-checkbox:checked'))
+        .map(cb => cb.value);
+
+    if (selectedRuns.length === 0) {
+        alert('Please select at least one run to compare');
+        return;
+    }
+
+    if (selectedRuns.length > 5) {
+        alert('Please select maximum 5 runs to compare');
+        return;
+    }
+
+    document.getElementById('loadingIndicator').style.display = 'block';
+    document.getElementById('comparisonContent').style.display = 'none';
+
+    try {
+        // Load data for all selected runs
+        const runData = await Promise.all(
+            selectedRuns.map(timestamp =>
+                fetch(`/api/summary/${timestamp}`).then(r => r.json())
+                    .then(data => ({ timestamp, data }))
+            )
+        );
+
+        createOverallComparison(runData);
+        createReturnComparison(runData);
+        createSharpeComparison(runData);
+        createComparisonTable(runData);
+
+        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('comparisonContent').style.display = 'block';
+
+    } catch (error) {
+        console.error('Error loading comparison data:', error);
+        alert('Error loading comparison data');
+        document.getElementById('loadingIndicator').style.display = 'none';
+    }
+}
+
+function createOverallComparison(runData) {
+    const traces = [
+        {
+            x: runData.map(r => r.timestamp),
+            y: runData.map(r => r.data.overall_stats.avg_return),
+            name: 'Avg Return',
+            type: 'bar'
+        },
+        {
+            x: runData.map(r => r.timestamp),
+            y: runData.map(r => r.data.overall_stats.avg_sharpe),
+            name: 'Avg Sharpe',
+            type: 'bar',
+            yaxis: 'y2'
+        }
+    ];
+
+    const layout = {
+        title: 'Key Metrics Across Runs',
+        xaxis: { title: 'Run Timestamp' },
+        yaxis: { title: 'Avg Return (%)' },
+        yaxis2: {
+            title: 'Avg Sharpe Ratio',
+            overlaying: 'y',
+            side: 'right'
+        },
+        height: 400
+    };
+
+    Plotly.newPlot('overallComparisonChart', traces, layout, {responsive: true});
+}
+
+function createReturnComparison(runData) {
+    const ctx = document.getElementById('returnComparisonChart');
+
+    if (returnCompChart) {
+        returnCompChart.destroy();
+    }
+
+    returnCompChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: runData.map(r => r.timestamp),
+            datasets: [{
+                label: 'Average Return (%)',
+                data: runData.map(r => r.data.overall_stats.avg_return),
+                borderColor: '#3498db',
+                backgroundColor: 'rgba(52, 152, 219, 0.2)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            }
+        }
+    });
+}
+
+function createSharpeComparison(runData) {
+    const ctx = document.getElementById('sharpeComparisonChart');
+
+    if (sharpeCompChart) {
+        sharpeCompChart.destroy();
+    }
+
+    sharpeCompChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: runData.map(r => r.timestamp),
+            datasets: [{
+                label: 'Average Sharpe Ratio',
+                data: runData.map(r => r.data.overall_stats.avg_sharpe),
+                borderColor: '#27ae60',
+                backgroundColor: 'rgba(39, 174, 96, 0.2)',
+                tension: 0.4,
+                fill: true
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    display: true
+                }
+            }
+        }
+    });
+}
+
+function createComparisonTable(runData) {
+    const tbody = document.getElementById('comparisonTableBody');
+    tbody.innerHTML = '';
+
+    runData.forEach(run => {
+        const stats = run.data.overall_stats;
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${run.timestamp}</strong></td>
+            <td>${stats.total_backtests}</td>
+            <td><span class="badge-return ${stats.avg_return > 0 ? 'positive' : 'negative'}">
+                ${stats.avg_return.toFixed(2)}%
+            </span></td>
+            <td>${stats.avg_sharpe.toFixed(2)}</td>
+            <td>${stats.avg_win_rate.toFixed(1)}%</td>
+            <td>${stats.strategies_beating_buy_hold} (${stats.percentage_beating_buy_hold.toFixed(1)}%)</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+</script>
+{% endblock %}

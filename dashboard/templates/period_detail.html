@@ -1,0 +1,313 @@
+{% extends "base.html" %}
+
+{% block title %}Period Detail - Quantsploit Dashboard{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <nav aria-label="breadcrumb">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                <li class="breadcrumb-item active">Period Detail</li>
+            </ol>
+        </nav>
+        <h1 class="display-5 fw-bold">
+            <i class="fas fa-calendar-alt"></i> Period Analysis
+        </h1>
+        <h2 id="periodName" class="text-muted">{{ period_name }}</h2>
+    </div>
+</div>
+
+<!-- Loading Indicator -->
+<div id="loadingIndicator" class="text-center py-5">
+    <div class="loading-spinner mx-auto mb-3"></div>
+    <p class="text-muted">Loading period data...</p>
+</div>
+
+<!-- Period Content -->
+<div id="periodContent" style="display: none;">
+
+    <!-- Performance Metrics -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <div class="stat-label">Avg Return</div>
+                <div class="stat-value" id="avgReturn">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <div class="stat-label">Best Strategy</div>
+                <div class="stat-value" id="bestStrategy" style="font-size: 1.2rem;">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <div class="stat-label">Max Return</div>
+                <div class="stat-value" id="maxReturn">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-label">Total Trades</div>
+                <div class="stat-value" id="totalTrades">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Rankings -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">Strategy Rankings for This Period</h3>
+                <div id="strategyRankingsChart" style="height: 500px;"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Symbol Performance -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h3 class="chart-title">Symbol Performance</h3>
+                <canvas id="symbolChart"></canvas>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="chart-container">
+                <h3 class="chart-title">Win Rate Distribution</h3>
+                <canvas id="winRateChart"></canvas>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Results -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">Detailed Results</h3>
+                <div class="table-responsive">
+                    <table class="table table-hover table-sm" id="detailedTable">
+                        <thead>
+                            <tr>
+                                <th>Strategy</th>
+                                <th>Symbol</th>
+                                <th>Return</th>
+                                <th>Sharpe</th>
+                                <th>Max DD</th>
+                                <th>Win Rate</th>
+                                <th>Trades</th>
+                                <th>Profit Factor</th>
+                            </tr>
+                        </thead>
+                        <tbody id="detailedTableBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const timestamp = "{{ timestamp }}";
+const periodName = "{{ period_name }}";
+
+let symbolChart, winRateChart;
+
+document.addEventListener('DOMContentLoaded', function() {
+    loadPeriodData();
+});
+
+async function loadPeriodData() {
+    try {
+        const response = await fetch(`/api/detailed/${timestamp}`);
+        const data = await response.json();
+
+        // Filter data for this period
+        const periodData = data.filter(d => d.period_name === periodName);
+
+        if (periodData.length === 0) {
+            alert('No data found for this period');
+            return;
+        }
+
+        // Calculate metrics
+        updateMetrics(periodData);
+        createStrategyRankingsChart(periodData);
+        createSymbolChart(periodData);
+        createWinRateChart(periodData);
+        createDetailedTable(periodData);
+
+        document.getElementById('loadingIndicator').style.display = 'none';
+        document.getElementById('periodContent').style.display = 'block';
+
+    } catch (error) {
+        console.error('Error loading period data:', error);
+        alert('Error loading data');
+    }
+}
+
+function updateMetrics(data) {
+    const avgReturn = data.reduce((sum, d) => sum + d.total_return, 0) / data.length;
+    const maxReturn = Math.max(...data.map(d => d.total_return));
+    const totalTrades = data.reduce((sum, d) => sum + d.total_trades, 0);
+
+    // Find best strategy
+    const bestIdx = data.findIndex(d => d.total_return === maxReturn);
+    const bestStrategy = data[bestIdx].strategy_name;
+
+    document.getElementById('avgReturn').textContent = avgReturn.toFixed(2) + '%';
+    document.getElementById('maxReturn').textContent = maxReturn.toFixed(2) + '%';
+    document.getElementById('totalTrades').textContent = totalTrades;
+    document.getElementById('bestStrategy').textContent = bestStrategy.substring(0, 20);
+}
+
+function createStrategyRankingsChart(data) {
+    // Sort by return
+    const sorted = [...data].sort((a, b) => b.total_return - a.total_return);
+
+    const trace = {
+        x: sorted.map(d => d.total_return),
+        y: sorted.map(d => `${d.strategy_name} (${d.symbol})`),
+        type: 'bar',
+        orientation: 'h',
+        marker: {
+            color: sorted.map(d => d.total_return > 0 ? '#27ae60' : '#e74c3c'),
+            line: { color: 'rgba(0,0,0,0.1)', width: 1 }
+        },
+        text: sorted.map(d => d.total_return.toFixed(2) + '%'),
+        textposition: 'auto'
+    };
+
+    const layout = {
+        margin: { l: 250, r: 50, t: 20, b: 50 },
+        xaxis: { title: 'Return (%)' },
+        height: 500
+    };
+
+    Plotly.newPlot('strategyRankingsChart', [trace], layout, {responsive: true});
+}
+
+function createSymbolChart(data) {
+    const ctx = document.getElementById('symbolChart');
+
+    // Group by symbol
+    const symbolGroups = {};
+    data.forEach(d => {
+        if (!symbolGroups[d.symbol]) {
+            symbolGroups[d.symbol] = [];
+        }
+        symbolGroups[d.symbol].push(d.total_return);
+    });
+
+    const symbols = Object.keys(symbolGroups);
+    const avgReturns = symbols.map(s =>
+        symbolGroups[s].reduce((a, b) => a + b, 0) / symbolGroups[s].length
+    );
+
+    if (symbolChart) {
+        symbolChart.destroy();
+    }
+
+    symbolChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: symbols,
+            datasets: [{
+                label: 'Avg Return (%)',
+                data: avgReturns,
+                backgroundColor: avgReturns.map(r =>
+                    r > 0 ? 'rgba(39, 174, 96, 0.7)' : 'rgba(231, 76, 60, 0.7)'
+                ),
+                borderColor: avgReturns.map(r =>
+                    r > 0 ? 'rgba(39, 174, 96, 1)' : 'rgba(231, 76, 60, 1)'
+                ),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function createWinRateChart(data) {
+    const ctx = document.getElementById('winRateChart');
+
+    // Create histogram of win rates
+    const winRates = data.map(d => d.win_rate);
+    const bins = [0, 25, 50, 75, 100];
+    const counts = [0, 0, 0, 0];
+
+    winRates.forEach(wr => {
+        if (wr <= 25) counts[0]++;
+        else if (wr <= 50) counts[1]++;
+        else if (wr <= 75) counts[2]++;
+        else counts[3]++;
+    });
+
+    if (winRateChart) {
+        winRateChart.destroy();
+    }
+
+    winRateChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: ['0-25%', '25-50%', '50-75%', '75-100%'],
+            datasets: [{
+                data: counts,
+                backgroundColor: [
+                    '#e74c3c',
+                    '#f39c12',
+                    '#3498db',
+                    '#27ae60'
+                ],
+                borderWidth: 2,
+                borderColor: '#fff'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: { position: 'right' }
+            }
+        }
+    });
+}
+
+function createDetailedTable(data) {
+    const tbody = document.getElementById('detailedTableBody');
+    tbody.innerHTML = '';
+
+    // Sort by return
+    const sorted = [...data].sort((a, b) => b.total_return - a.total_return);
+
+    sorted.forEach(d => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${d.strategy_name}</strong></td>
+            <td>${d.symbol}</td>
+            <td><span class="badge-return ${d.total_return > 0 ? 'positive' : 'negative'}">
+                ${d.total_return.toFixed(2)}%
+            </span></td>
+            <td>${d.sharpe_ratio.toFixed(2)}</td>
+            <td>${d.max_drawdown.toFixed(2)}%</td>
+            <td>${d.win_rate.toFixed(1)}%</td>
+            <td>${d.total_trades}</td>
+            <td>${d.profit_factor.toFixed(2)}</td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+</script>
+{% endblock %}

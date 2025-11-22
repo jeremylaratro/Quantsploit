@@ -6,6 +6,7 @@ Real-time visualization and analysis of backtesting results
 
 from flask import Flask, render_template, jsonify, request
 import json
+import markdown
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -194,6 +195,12 @@ def index():
 
     return render_template('index.html', runs=runs, latest_timestamp=latest_timestamp)
 
+@app.route('/docs')  # or whatever route you want
+def docs():
+    with open('tickers.md', 'r') as f:
+        md_content = f.read()
+    html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'codehilite'])
+    return render_template('docs.html', content=html_content)
 
 @app.route('/api/runs')
 def api_runs():

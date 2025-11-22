@@ -487,10 +487,21 @@ class ComprehensiveBacktester:
 
     def _rank_strategies(self, df: pd.DataFrame, metric: str, top_n: int = 10) -> List[Dict]:
         """Rank strategies by a specific metric"""
-        ranked = df.nlargest(top_n, metric)[
-            ['strategy_name', 'symbol', 'period_name', metric, 'total_return',
-             'win_rate', 'signal_accuracy', 'sharpe_ratio']
-        ]
+        # Get the top N rows first
+        ranked = df.nlargest(top_n, metric)
+
+        # Select columns, avoiding duplicates by using a set
+        columns = ['strategy_name', 'symbol', 'period_name', metric, 'total_return',
+                   'win_rate', 'signal_accuracy', 'sharpe_ratio']
+        # Remove duplicates while preserving order
+        unique_columns = []
+        seen = set()
+        for col in columns:
+            if col not in seen:
+                unique_columns.append(col)
+                seen.add(col)
+
+        ranked = ranked[unique_columns]
         return ranked.to_dict('records')
 
     def _analyze_by_period(self, df: pd.DataFrame) -> Dict:
@@ -503,7 +514,19 @@ class ComprehensiveBacktester:
             'excess_return': 'mean'
         }).round(4)
 
-        return grouped.to_dict()
+        # Flatten the multi-level columns and convert to a JSON-serializable format
+        result = {}
+        for period in grouped.index:
+            result[period] = {}
+            for col in grouped.columns:
+                # Convert tuple column names to strings (e.g., ('total_return', 'mean') -> 'total_return_mean')
+                if isinstance(col, tuple):
+                    col_name = '_'.join(str(c) for c in col)
+                else:
+                    col_name = str(col)
+                result[period][col_name] = float(grouped.loc[period, col])
+
+        return result
 
     def _analyze_by_symbol(self, df: pd.DataFrame) -> Dict:
         """Analyze performance grouped by symbol"""
@@ -515,7 +538,19 @@ class ComprehensiveBacktester:
             'excess_return': 'mean'
         }).round(4)
 
-        return grouped.to_dict()
+        # Flatten the multi-level columns and convert to a JSON-serializable format
+        result = {}
+        for symbol in grouped.index:
+            result[symbol] = {}
+            for col in grouped.columns:
+                # Convert tuple column names to strings (e.g., ('total_return', 'mean') -> 'total_return_mean')
+                if isinstance(col, tuple):
+                    col_name = '_'.join(str(c) for c in col)
+                else:
+                    col_name = str(col)
+                result[symbol][col_name] = float(grouped.loc[symbol, col])
+
+        return result
 
     def save_results(self, results_df: pd.DataFrame, summary: Dict,
                     output_dir: str = './backtest_results'):

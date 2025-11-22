@@ -3,8 +3,6 @@ Webserver Management Module
 Manage the backtesting analytics dashboard web server
 """
 
-from quantsploit.core.module import BaseModule
-from typing import Dict, Any
 import subprocess
 import os
 import signal
@@ -17,44 +15,13 @@ from rich.table import Table
 console = Console()
 
 
-class WebserverManager(BaseModule):
-    """Module to manage the backtesting analytics dashboard web server"""
+class WebserverManager:
+    """Standalone manager for the backtesting analytics dashboard web server"""
 
-    @property
-    def name(self) -> str:
-        return "Webserver Manager"
-
-    @property
-    def description(self) -> str:
-        return "Start, stop, and manage the backtesting analytics dashboard"
-
-    @property
-    def author(self) -> str:
-        return "Quantsploit Team"
-
-    @property
-    def category(self) -> str:
-        return "webserver"
-
-    def _init_options(self):
-        super()._init_options()
-        self.options.update({
-            "ACTION": {
-                "value": "start",
-                "required": True,
-                "description": "Action to perform (start/stop/status/restart)"
-            },
-            "PORT": {
-                "value": "5000",
-                "required": False,
-                "description": "Port to run the webserver on"
-            },
-            "HOST": {
-                "value": "127.0.0.1",
-                "required": False,
-                "description": "Host to bind to (127.0.0.1 or 0.0.0.0)"
-            }
-        })
+    def __init__(self):
+        self.port = "5000"
+        self.host = "127.0.0.1"
+        self.action = None
 
     @property
     def pid_file(self) -> Path:
@@ -100,16 +67,20 @@ class WebserverManager(BaseModule):
         except (ValueError, FileNotFoundError):
             return None
 
-    def _start_webserver(self, port: str, host: str) -> Dict[str, Any]:
+    def start(self, port: str = None, host: str = None):
         """Start the webserver in background"""
+        if port:
+            self.port = port
+        if host:
+            self.host = host
+
         self._ensure_dirs()
 
         if self._is_running():
-            return {
-                "success": False,
-                "message": "Webserver is already running",
-                "pid": self._get_pid()
-            }
+            console.print("\n[bold red]✗ Webserver is already running[/bold red]")
+            console.print(f"  [cyan]PID:[/cyan] {self._get_pid()}")
+            console.print(f"  [cyan]URL:[/cyan] http://{self.host}:{self.port}\n")
+            return False
 
         # Get paths
         project_root = Path(__file__).parent.parent.parent.parent
@@ -117,10 +88,9 @@ class WebserverManager(BaseModule):
         app_file = dashboard_dir / 'app.py'
 
         if not app_file.exists():
-            return {
-                "success": False,
-                "message": f"Dashboard app not found at {app_file}"
-            }
+            console.print(f"\n[bold red]✗ Dashboard app not found[/bold red]")
+            console.print(f"  [red]Expected at: {app_file}[/red]\n")
+            return False
 
         # Prepare environment
         env = os.environ.copy()
@@ -133,13 +103,13 @@ class WebserverManager(BaseModule):
             log_file = open(self.log_file, 'a')
             log_file.write(f"\n{'='*60}\n")
             log_file.write(f"Webserver started at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            log_file.write(f"Host: {host}, Port: {port}\n")
+            log_file.write(f"Host: {self.host}, Port: {self.port}\n")
             log_file.write(f"{'='*60}\n\n")
             log_file.flush()
 
             # Start the Flask app
             process = subprocess.Popen(
-                [sys.executable, str(app_file), '--host', host, '--port', port, '--production'],
+                [sys.executable, str(app_file), '--host', self.host, '--port', self.port, '--production'],
                 cwd=str(dashboard_dir),
                 env=env,
                 stdout=log_file,
@@ -154,37 +124,32 @@ class WebserverManager(BaseModule):
             if process.poll() is not None:
                 # Process died
                 log_file.close()
-                return {
-                    "success": False,
-                    "message": "Webserver failed to start. Check log file.",
-                    "log_file": str(self.log_file)
-                }
+                console.print("\n[bold red]✗ Webserver failed to start[/bold red]")
+                console.print(f"  [red]Check log file: {self.log_file}[/red]\n")
+                return False
 
             # Save PID
             with open(self.pid_file, 'w') as f:
                 f.write(str(process.pid))
 
-            return {
-                "success": True,
-                "message": "Webserver started successfully",
-                "pid": process.pid,
-                "url": f"http://{host if host != '0.0.0.0' else 'localhost'}:{port}",
-                "log_file": str(self.log_file)
-            }
+            console.print("\n[bold green]✓ Webserver Started Successfully[/bold green]\n")
+            console.print(f"  [cyan]PID:[/cyan] {process.pid}")
+            console.print(f"  [cyan]URL:[/cyan] http://{self.host if self.host != '0.0.0.0' else 'localhost'}:{self.port}")
+            console.print(f"  [cyan]Log:[/cyan] {self.log_file}")
+            console.print("\n[yellow]Tip:[/yellow] Use 'webserver status' to check status")
+            console.print("[yellow]Tip:[/yellow] Use 'webserver stop' to stop the server\n")
+            return True
 
         except Exception as e:
-            return {
-                "success": False,
-                "message": f"Failed to start webserver: {str(e)}"
-            }
+            console.print(f"\n[bold red]✗ Failed to start webserver[/bold red]")
+            console.print(f"  [red]{str(e)}[/red]\n")
+            return False
 
-    def _stop_webserver(self) -> Dict[str, Any]:
+    def stop(self):
         """Stop the webserver"""
         if not self._is_running():
-            return {
-                "success": False,
-                "message": "Webserver is not running"
-            }
+            console.print("\n[bold yellow]Webserver is not running[/bold yellow]\n")
+            return False
 
         pid = self._get_pid()
         try:
@@ -211,127 +176,50 @@ class WebserverManager(BaseModule):
             with open(self.log_file, 'a') as f:
                 f.write(f"\nWebserver stopped at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
 
-            return {
-                "success": True,
-                "message": "Webserver stopped successfully",
-                "pid": pid
-            }
+            console.print(f"\n[bold green]✓ Webserver Stopped[/bold green]")
+            console.print(f"  [cyan]PID:[/cyan] {pid}\n")
+            return True
 
         except ProcessLookupError:
             # Process already dead
             if self.pid_file.exists():
                 self.pid_file.unlink()
-            return {
-                "success": True,
-                "message": "Webserver was not running"
-            }
+            console.print("\n[bold yellow]Webserver was not running[/bold yellow]\n")
+            return True
         except Exception as e:
-            return {
-                "success": False,
-                "message": f"Failed to stop webserver: {str(e)}"
-            }
+            console.print(f"\n[bold red]✗ Failed to stop webserver[/bold red]")
+            console.print(f"  [red]{str(e)}[/red]\n")
+            return False
 
-    def _get_status(self) -> Dict[str, Any]:
+    def status(self):
         """Get webserver status"""
         running = self._is_running()
         pid = self._get_pid() if running else None
 
-        port = self.get_option("PORT")
-        host = self.get_option("HOST")
+        table = Table(title="Webserver Status", show_header=True)
+        table.add_column("Property", style="cyan")
+        table.add_column("Value", style="green" if running else "red")
 
-        status = {
-            "running": running,
-            "pid": pid,
-            "port": port,
-            "host": host,
-            "url": f"http://{host if host != '0.0.0.0' else 'localhost'}:{port}" if running else None,
-            "log_file": str(self.log_file) if self.log_file.exists() else None
-        }
+        table.add_row("Status", "Running" if running else "Stopped")
+        if running:
+            table.add_row("PID", str(pid))
+            table.add_row("Host", self.host)
+            table.add_row("Port", self.port)
+            table.add_row("URL", f"http://{self.host if self.host != '0.0.0.0' else 'localhost'}:{self.port}")
+        if self.log_file.exists():
+            table.add_row("Log File", str(self.log_file))
 
-        return status
+        console.print()
+        console.print(table)
+        console.print()
+        return running
 
-    def _restart_webserver(self, port: str, host: str) -> Dict[str, Any]:
+    def restart(self, port: str = None, host: str = None):
         """Restart the webserver"""
         # Stop if running
         if self._is_running():
-            stop_result = self._stop_webserver()
-            if not stop_result["success"]:
-                return stop_result
+            self.stop()
             time.sleep(1)
 
         # Start
-        return self._start_webserver(port, host)
-
-    def run(self) -> Dict[str, Any]:
-        """Execute the webserver management action"""
-        action = self.get_option("ACTION").lower()
-        port = self.get_option("PORT")
-        host = self.get_option("HOST")
-
-        if action == "start":
-            result = self._start_webserver(port, host)
-
-            if result["success"]:
-                console.print("\n[bold green]✓ Webserver Started Successfully[/bold green]\n")
-                console.print(f"  [cyan]PID:[/cyan] {result['pid']}")
-                console.print(f"  [cyan]URL:[/cyan] {result['url']}")
-                console.print(f"  [cyan]Log:[/cyan] {result['log_file']}")
-                console.print("\n[yellow]Tip:[/yellow] Use 'webserver status' to check status")
-                console.print("[yellow]Tip:[/yellow] Use 'webserver stop' to stop the server\n")
-            else:
-                console.print(f"\n[bold red]✗ Failed to Start Webserver[/bold red]")
-                console.print(f"  [red]{result['message']}[/red]\n")
-                if "log_file" in result:
-                    console.print(f"  Check log: {result['log_file']}\n")
-
-        elif action == "stop":
-            result = self._stop_webserver()
-
-            if result["success"]:
-                console.print(f"\n[bold green]✓ Webserver Stopped[/bold green]")
-                console.print(f"  [cyan]PID:[/cyan] {result['pid']}\n")
-            else:
-                console.print(f"\n[bold red]✗ {result['message']}[/bold red]\n")
-
-        elif action == "status":
-            status = self._get_status()
-
-            table = Table(title="Webserver Status", show_header=True)
-            table.add_column("Property", style="cyan")
-            table.add_column("Value", style="green" if status["running"] else "red")
-
-            table.add_row("Status", "Running" if status["running"] else "Stopped")
-            if status["running"]:
-                table.add_row("PID", str(status["pid"]))
-                table.add_row("Host", status["host"])
-                table.add_row("Port", status["port"])
-                table.add_row("URL", status["url"])
-            if status["log_file"]:
-                table.add_row("Log File", status["log_file"])
-
-            console.print()
-            console.print(table)
-            console.print()
-
-            result = {"success": True, "status": status}
-
-        elif action == "restart":
-            result = self._restart_webserver(port, host)
-
-            if result["success"]:
-                console.print("\n[bold green]✓ Webserver Restarted Successfully[/bold green]\n")
-                console.print(f"  [cyan]PID:[/cyan] {result['pid']}")
-                console.print(f"  [cyan]URL:[/cyan] {result['url']}")
-                console.print(f"  [cyan]Log:[/cyan] {result['log_file']}\n")
-            else:
-                console.print(f"\n[bold red]✗ Failed to Restart Webserver[/bold red]")
-                console.print(f"  [red]{result['message']}[/red]\n")
-
-        else:
-            result = {
-                "success": False,
-                "message": f"Unknown action: {action}. Use start/stop/status/restart"
-            }
-            console.print(f"\n[bold red]✗ {result['message']}[/bold red]\n")
-
-        return result
+        return self.start(port, host)

@@ -23,13 +23,8 @@ class ComprehensiveStrategyBacktest(BaseModule):
 
     def _init_options(self):
         """Initialize module options"""
-        super()._init_options()
-        # Remove inherited options that don't apply
-        self.options.pop('SYMBOL', None)
-        self.options.pop('PERIOD', None)
-        self.options.pop('INTERVAL', None)
-
-        self.options.update({
+        # Don't call super() - we want completely custom options
+        self.options = {
             'SYMBOLS': {
                 'value': 'AAPL,MSFT,GOOGL,TSLA,SPY',
                 'required': True,
@@ -75,7 +70,7 @@ class ComprehensiveStrategyBacktest(BaseModule):
                 'required': False,
                 'description': 'Quick mode: test only first symbol (true/false)'
             }
-        })
+        }
 
     @property
     def name(self) -> str:

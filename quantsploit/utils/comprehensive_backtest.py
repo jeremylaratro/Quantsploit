@@ -1112,20 +1112,43 @@ class ComprehensiveBacktester:
 
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
 
-        # Save detailed results
-        results_file = f'{output_dir}/detailed_results_{timestamp}.csv'
-        results_df.to_csv(results_file, index=False)
-        logger.info(f"Detailed results saved to {results_file}")
+        try:
+            # Save detailed results
+            results_file = f'{output_dir}/detailed_results_{timestamp}.csv'
+            results_df.to_csv(results_file, index=False)
+            logger.info(f"✓ Detailed results saved to {results_file}")
+        except Exception as e:
+            logger.error(f"✗ Failed to save CSV: {str(e)}")
+            raise
 
-        # Save summary
-        summary_file = f'{output_dir}/summary_{timestamp}.json'
-        with open(summary_file, 'w') as f:
-            json.dump(summary, f, indent=2, default=str)
-        logger.info(f"Summary saved to {summary_file}")
+        try:
+            # Save summary
+            summary_file = f'{output_dir}/summary_{timestamp}.json'
+            with open(summary_file, 'w') as f:
+                json.dump(summary, f, indent=2, default=str)
+            logger.info(f"✓ Summary saved to {summary_file}")
+        except Exception as e:
+            logger.error(f"✗ Failed to save JSON summary: {str(e)}")
+            logger.error(f"  Error type: {type(e).__name__}")
+            logger.error(f"  Attempting to save with error details...")
+            # Try to save with str() fallback
+            try:
+                import json
+                with open(summary_file, 'w') as f:
+                    # Convert to string representation
+                    f.write(str(summary))
+                logger.warning(f"⚠ Summary saved as string representation (not valid JSON)")
+            except:
+                logger.error(f"✗ Complete failure to save summary")
+                raise
 
-        # Generate markdown report
-        self._generate_markdown_report(results_df, summary,
-                                       f'{output_dir}/report_{timestamp}.md')
+        try:
+            # Generate markdown report
+            self._generate_markdown_report(results_df, summary,
+                                          f'{output_dir}/report_{timestamp}.md')
+            logger.info(f"✓ Markdown report saved")
+        except Exception as e:
+            logger.warning(f"⚠ Failed to generate markdown report: {str(e)}")
 
     def _generate_markdown_report(self, results_df: pd.DataFrame,
                                   summary: Dict, output_file: str):

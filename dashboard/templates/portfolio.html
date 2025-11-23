@@ -1,0 +1,344 @@
+{% extends "base.html" %}
+
+{% block title %}Portfolio Construction - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4">
+                <i class="fas fa-briefcase"></i> Portfolio Construction
+            </h1>
+            <p class="lead">Multi-strategy portfolio optimization and allocation</p>
+            <small class="text-muted">Run: {{ timestamp }}</small>
+        </div>
+    </div>
+
+    <!-- Portfolio Configuration -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-sliders"></i> Portfolio Settings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Number of Strategies</label>
+                        <input type="range" class="form-range" id="num-strategies" min="3" max="10" value="5">
+                        <div class="text-center"><span id="num-strategies-display">5</span> strategies</div>
+                    </div>
+                    <button class="btn btn-primary w-100" onclick="loadPortfolio()">
+                        <i class="fas fa-refresh"></i> Rebuild Portfolio
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Portfolio Metrics -->
+        <div class="col-md-8">
+            <div class="row">
+                <div class="col-md-4">
+                    <div class="stat-card green">
+                        <div class="stat-label">Expected Return</div>
+                        <div class="stat-value" id="portfolio-return">--</div>
+                        <small>Weighted average return</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card blue">
+                        <div class="stat-label">Sharpe Ratio</div>
+                        <div class="stat-value" id="portfolio-sharpe">--</div>
+                        <small>Risk-adjusted performance</small>
+                    </div>
+                </div>
+                <div class="col-md-4">
+                    <div class="stat-card orange">
+                        <div class="stat-label">Max Drawdown</div>
+                        <div class="stat-value" id="portfolio-dd">--</div>
+                        <small>Expected worst decline</small>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Allocation -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-pie"></i> Strategy Allocation</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="allocation-chart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Return Contribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="contribution-chart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Details Table -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-table"></i> Portfolio Holdings</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped" id="portfolio-table">
+                            <thead>
+                                <tr>
+                                    <th>Strategy</th>
+                                    <th>Weight</th>
+                                    <th>Expected Return</th>
+                                    <th>Sharpe Ratio</th>
+                                    <th>Return Contribution</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="portfolio-tbody">
+                                <tr><td colspan="6" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Diversification Benefits -->
+    <div class="row mt-5">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> Diversification Benefits</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <strong>Return Improvement:</strong>
+                        <span id="return-improvement" class="badge bg-success fs-5">--</span>
+                    </div>
+                    <div class="mb-3">
+                        <strong>Sharpe Improvement:</strong>
+                        <span id="sharpe-improvement" class="badge bg-info fs-5">--</span>
+                    </div>
+                    <p class="text-muted">
+                        <i class="fas fa-info-circle"></i>
+                        These metrics show the improvement from combining multiple strategies versus using them individually.
+                    </p>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-lightbulb"></i> Portfolio Insights</h5>
+                </div>
+                <div class="card-body" id="insights-section">
+                    <p class="text-muted">Loading insights...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+let currentData = null;
+
+// Update num strategies display
+document.getElementById('num-strategies').addEventListener('input', function() {
+    document.getElementById('num-strategies-display').textContent = this.value;
+});
+
+async function loadPortfolio() {
+    const numStrategies = document.getElementById('num-strategies').value;
+
+    try {
+        const response = await fetch(`/api/portfolio/{{ timestamp }}?num_strategies=${numStrategies}`);
+        const data = await response.json();
+        currentData = data;
+
+        // Update portfolio metrics
+        const p = data.portfolio;
+        document.getElementById('portfolio-return').textContent = (p.expected_return * 100).toFixed(2) + '%';
+        document.getElementById('portfolio-sharpe').textContent = p.sharpe_ratio.toFixed(2);
+        document.getElementById('portfolio-dd').textContent = (p.max_drawdown * 100).toFixed(2) + '%';
+
+        // Update diversification metrics
+        const div = data.diversification;
+        document.getElementById('return-improvement').textContent = (div.return_improvement * 100).toFixed(2) + '%';
+        document.getElementById('sharpe-improvement').textContent = div.sharpe_improvement.toFixed(3);
+
+        // Create charts
+        createAllocationChart(data.strategies);
+        createContributionChart(data.strategies);
+        populatePortfolioTable(data.strategies);
+        generateInsights(data);
+
+    } catch (error) {
+        console.error('Error loading portfolio:', error);
+    }
+}
+
+function createAllocationChart(strategies) {
+    const ctx = document.getElementById('allocation-chart').getContext('2d');
+
+    // Destroy existing chart if any
+    if (window.allocationChart) {
+        window.allocationChart.destroy();
+    }
+
+    window.allocationChart = new Chart(ctx, {
+        type: 'pie',
+        data: {
+            labels: strategies.map(s => s.strategy),
+            datasets: [{
+                data: strategies.map(s => s.weight * 100),
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(153, 102, 255, 0.7)',
+                    'rgba(255, 159, 64, 0.7)',
+                    'rgba(199, 199, 199, 0.7)',
+                    'rgba(83, 102, 255, 0.7)',
+                    'rgba(255, 99, 255, 0.7)',
+                    'rgba(99, 255, 132, 0.7)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + context.parsed.toFixed(2) + '%';
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createContributionChart(strategies) {
+    const ctx = document.getElementById('contribution-chart').getContext('2d');
+
+    // Destroy existing chart if any
+    if (window.contributionChart) {
+        window.contributionChart.destroy();
+    }
+
+    window.contributionChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: strategies.map(s => s.strategy),
+            datasets: [{
+                label: 'Return Contribution (%)',
+                data: strategies.map(s => s.contribution * 100),
+                backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 1
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Contribution (%)' }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function populatePortfolioTable(strategies) {
+    const tbody = document.getElementById('portfolio-tbody');
+    tbody.innerHTML = '';
+
+    strategies.forEach((strat, index) => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td><strong>${strat.strategy}</strong></td>
+            <td><span class="badge bg-primary">${(strat.weight * 100).toFixed(1)}%</span></td>
+            <td>${(strat.return * 100).toFixed(2)}%</td>
+            <td>${strat.sharpe.toFixed(2)}</td>
+            <td>${(strat.contribution * 100).toFixed(2)}%</td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewStrategy('${strat.strategy}')">
+                    <i class="fas fa-eye"></i> View
+                </button>
+            </td>
+        `;
+
+        // Highlight top contributor
+        if (index === 0) {
+            row.style.backgroundColor = '#e8f5e9';
+        }
+    });
+}
+
+function generateInsights(data) {
+    const insights = document.getElementById('insights-section');
+    const strategies = data.strategies;
+    const portfolio = data.portfolio;
+
+    let html = '<ul class="list-unstyled">';
+
+    // Top contributor
+    const topContributor = strategies.reduce((max, s) => s.contribution > max.contribution ? s : max);
+    html += `<li class="mb-2"><i class="fas fa-star text-warning"></i> <strong>${topContributor.strategy}</strong> is the top contributor at ${(topContributor.contribution * 100).toFixed(2)}%</li>`;
+
+    // Risk assessment
+    if (portfolio.max_drawdown > 0.15) {
+        html += `<li class="mb-2"><i class="fas fa-exclamation-triangle text-danger"></i> High drawdown risk detected (${(portfolio.max_drawdown * 100).toFixed(2)}%)</li>`;
+    } else {
+        html += `<li class="mb-2"><i class="fas fa-check-circle text-success"></i> Moderate drawdown risk (${(portfolio.max_drawdown * 100).toFixed(2)}%)</li>`;
+    }
+
+    // Sharpe assessment
+    if (portfolio.sharpe_ratio > 1.5) {
+        html += `<li class="mb-2"><i class="fas fa-thumbs-up text-success"></i> Excellent risk-adjusted returns (Sharpe: ${portfolio.sharpe_ratio.toFixed(2)})</li>`;
+    } else if (portfolio.sharpe_ratio > 1.0) {
+        html += `<li class="mb-2"><i class="fas fa-check text-info"></i> Good risk-adjusted returns (Sharpe: ${portfolio.sharpe_ratio.toFixed(2)})</li>`;
+    } else {
+        html += `<li class="mb-2"><i class="fas fa-info-circle text-warning"></i> Moderate risk-adjusted returns (Sharpe: ${portfolio.sharpe_ratio.toFixed(2)})</li>`;
+    }
+
+    // Strategy count
+    html += `<li class="mb-2"><i class="fas fa-layer-group text-primary"></i> Portfolio contains ${strategies.length} strategies for diversification</li>`;
+
+    html += '</ul>';
+    insights.innerHTML = html;
+}
+
+function viewStrategy(strategyName) {
+    window.location.href = `/strategy/{{ timestamp }}/${encodeURIComponent(strategyName)}`;
+}
+
+// Load portfolio on page load
+document.addEventListener('DOMContentLoaded', loadPortfolio);
+</script>
+{% endblock %}

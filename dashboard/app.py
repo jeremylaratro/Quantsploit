@@ -880,11 +880,12 @@ def api_launch_backtest():
             # Prepare keyword arguments
             kwargs = {
                 'symbols': symbols,
-                'output_dir': RESULTS_DIR,
-                'initial_capital': data.get('initial_capital', 100000),
-                'commission': data.get('commission', 0.001),
-                'quick_mode': data.get('quick_mode', False)
+                'output_dir': RESULTS_DIR
             }
+
+            # Add strategy selection if provided
+            if data.get('strategies'):
+                kwargs['strategy_keys'] = data['strategies']
 
             # Add period configuration
             if period_config.get('mode') == 'custom':

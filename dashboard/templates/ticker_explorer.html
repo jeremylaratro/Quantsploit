@@ -192,16 +192,36 @@
                         <table class="table table-hover table-striped table-sm" id="results-table">
                             <thead>
                                 <tr>
-                                    <th>Strategy</th>
-                                    <th>Symbol</th>
-                                    <th>Sector</th>
-                                    <th>Period</th>
-                                    <th>Return</th>
-                                    <th>Sharpe</th>
-                                    <th>Win Rate</th>
-                                    <th>Signal Acc.</th>
-                                    <th>Max DD</th>
-                                    <th>Trades</th>
+                                    <th class="sortable" onclick="sortTable('strategy_name')">
+                                        Strategy <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('symbol')">
+                                        Symbol <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('sector')">
+                                        Sector <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('period_name')">
+                                        Period <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('total_return')">
+                                        Return <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('sharpe_ratio')">
+                                        Sharpe <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('win_rate')">
+                                        Win Rate <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('signal_accuracy')">
+                                        Signal Acc. <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('max_drawdown')">
+                                        Max DD <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th class="sortable" onclick="sortTable('total_trades')">
+                                        Trades <i class="fas fa-sort"></i>
+                                    </th>
                                     <th>Actions</th>
                                 </tr>
                             </thead>
@@ -245,6 +265,63 @@
 let currentResults = [];
 let currentTimestamp = null;
 let allData = [];
+let currentSortColumn = 'total_return';
+let currentSortDirection = 'desc';
+
+// Sort table by column
+function sortTable(column) {
+    // Toggle direction if clicking same column
+    if (currentSortColumn === column) {
+        currentSortDirection = currentSortDirection === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSortColumn = column;
+        currentSortDirection = 'desc'; // Default to descending for new column
+    }
+
+    // Sort current results
+    currentResults.sort((a, b) => {
+        let aVal = a[column];
+        let bVal = b[column];
+
+        // Handle string comparisons
+        if (typeof aVal === 'string') {
+            aVal = aVal.toLowerCase();
+            bVal = bVal.toLowerCase();
+        }
+
+        if (currentSortDirection === 'asc') {
+            return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+        } else {
+            return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+        }
+    });
+
+    // Update sort indicators
+    updateSortIndicators();
+
+    // Re-populate table
+    populateResultsTable(currentResults);
+}
+
+function updateSortIndicators() {
+    // Reset all sort icons
+    document.querySelectorAll('.sortable i').forEach(icon => {
+        icon.className = 'fas fa-sort';
+    });
+
+    // Find the active column header and update its icon
+    document.querySelectorAll('.sortable').forEach(th => {
+        const onclick = th.getAttribute('onclick');
+        if (onclick && onclick.includes(`'${currentSortColumn}'`)) {
+            const icon = th.querySelector('i');
+            if (currentSortDirection === 'asc') {
+                icon.className = 'fas fa-sort-up';
+            } else {
+                icon.className = 'fas fa-sort-down';
+            }
+        }
+    });
+}
 
 // Load available backtest runs
 async function loadAvailableRuns() {
@@ -396,8 +473,25 @@ async function applyFilters() {
         document.getElementById('avg-return').textContent = avgReturn.toFixed(2) + '%';
         document.getElementById('avg-sharpe').textContent = avgSharpe.toFixed(2);
 
-        // Sort by return descending
-        filtered.sort((a, b) => b.total_return - a.total_return);
+        // Sort by current sort column and direction
+        filtered.sort((a, b) => {
+            let aVal = a[currentSortColumn];
+            let bVal = b[currentSortColumn];
+
+            if (typeof aVal === 'string') {
+                aVal = aVal.toLowerCase();
+                bVal = bVal.toLowerCase();
+            }
+
+            if (currentSortDirection === 'asc') {
+                return aVal > bVal ? 1 : aVal < bVal ? -1 : 0;
+            } else {
+                return aVal < bVal ? 1 : aVal > bVal ? -1 : 0;
+            }
+        });
+
+        // Update sort indicators
+        updateSortIndicators();
 
         // Populate table
         populateResultsTable(filtered);
@@ -535,4 +629,27 @@ document.addEventListener('DOMContentLoaded', function() {
     loadAvailableRuns();
 });
 </script>
+
+<style>
+.sortable {
+    cursor: pointer;
+    user-select: none;
+    transition: background-color 0.2s;
+}
+
+.sortable:hover {
+    background-color: rgba(0, 0, 0, 0.05);
+}
+
+.sortable i {
+    margin-left: 5px;
+    font-size: 0.8em;
+    opacity: 0.6;
+}
+
+.sortable:hover i {
+    opacity: 1;
+}
+</style>
+
 {% endblock %}

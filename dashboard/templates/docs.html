@@ -1,0 +1,109 @@
+{% extends "base.html" %}
+
+{% block title %}Documentation - Quantsploit Dashboard{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <div class="row">
+        <div class="col-12">
+            <div class="card shadow-sm">
+                <div class="card-body p-4">
+                    {{ content|safe }}
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<style>
+/* Style the markdown content */
+.card-body h1 {
+    color: #2c3e50;
+    border-bottom: 2px solid #3498db;
+    padding-bottom: 10px;
+    margin-bottom: 20px;
+}
+
+.card-body h2 {
+    color: #34495e;
+    margin-top: 30px;
+    margin-bottom: 15px;
+}
+
+.card-body h3 {
+    color: #7f8c8d;
+    margin-top: 20px;
+    margin-bottom: 10px;
+}
+
+.card-body table {
+    width: 100%;
+    margin: 20px 0;
+    border-collapse: collapse;
+}
+
+.card-body table thead {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    color: white;
+}
+
+.card-body table th,
+.card-body table td {
+    padding: 12px;
+    border: 1px solid #ddd;
+    text-align: left;
+}
+
+.card-body table tbody tr:hover {
+    background-color: #f8f9fa;
+}
+
+.card-body code {
+    background-color: #f4f4f4;
+    padding: 2px 6px;
+    border-radius: 3px;
+    font-family: 'Courier New', monospace;
+    color: #e83e8c;
+}
+
+.card-body pre {
+    background-color: #282c34;
+    color: #abb2bf;
+    padding: 15px;
+    border-radius: 5px;
+    overflow-x: auto;
+}
+
+.card-body pre code {
+    background-color: transparent;
+    color: inherit;
+    padding: 0;
+}
+
+.card-body blockquote {
+    border-left: 4px solid #3498db;
+    padding-left: 15px;
+    margin: 20px 0;
+    color: #7f8c8d;
+    font-style: italic;
+}
+
+.card-body ul, .card-body ol {
+    margin: 15px 0;
+    padding-left: 30px;
+}
+
+.card-body li {
+    margin: 5px 0;
+}
+
+.card-body a {
+    color: #3498db;
+    text-decoration: none;
+}
+
+.card-body a:hover {
+    text-decoration: underline;
+}
+</style>
+{% endblock %}

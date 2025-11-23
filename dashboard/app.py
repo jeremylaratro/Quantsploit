@@ -11,6 +11,7 @@ from pathlib import Path
 from datetime import datetime
 import numpy as np
 from typing import Dict, List, Optional
+import markdown
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -414,6 +415,26 @@ def api_heatmap(timestamp):
         'periods': pivot.columns.tolist(),
         'values': pivot.values.tolist()
     }))
+
+
+@app.route('/docs')
+def docs():
+    """Documentation page - renders tickers.md as HTML"""
+    # Use absolute path to find tickers.md in project root
+    tickers_file = Path(__file__).parent.parent / 'tickers.md'
+
+    if not tickers_file.exists():
+        return render_template('docs.html',
+                             content='<h1>Documentation Not Found</h1><p>tickers.md file not found at project root.</p>')
+
+    try:
+        with open(tickers_file, 'r') as f:
+            md_content = f.read()
+        html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'codehilite'])
+        return render_template('docs.html', content=html_content)
+    except Exception as e:
+        return render_template('docs.html',
+                             content=f'<h1>Error Loading Documentation</h1><p>{str(e)}</p>')
 
 
 if __name__ == '__main__':

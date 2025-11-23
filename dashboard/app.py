@@ -24,7 +24,7 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 # Path to backtest results
-RESULTS_DIR = Path(__file__).parent.parent / 'backtest_results'
+RESULTS_DIR = Path(__file__).resolve().parent.parent / 'backtest_results'
 
 
 def convert_numpy_types(obj):

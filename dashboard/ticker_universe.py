@@ -1,229 +1,246 @@
 """
-Ticker Universe Management for Institutional-Grade Analysis
-Provides sector-classified ticker lists for major indices
+Comprehensive Ticker Universe Management for Institutional-Grade Analysis
+High-level sectors and low-level niches for specialized analysis
 """
 
-# S&P 500 Top Holdings by Sector (Representative sample - can be expanded)
+# ==================== HIGH-LEVEL SECTORS ====================
+
+SPACE_OVERALL = ['RKLB', 'ASTS', 'SATS', 'PL', 'FLY', 'VOYG', 'LUNR', 'RDW', 'SPIR', 'SPCE']
+
+AI_TECH_OVERALL = ['NVDA', 'MSFT', 'GOOG', 'AMZN', 'META', 'TSM', 'AVGO', 'ORCL', 'CRM', 'PLTR']
+
+SEMICONDUCTORS = ['NVDA', 'TSM', 'ASML', 'AMD', 'AVGO', 'QCOM', 'INTC', 'MU', 'LRCX', 'AMAT']
+
+QUANTUM_COMPUTING = ['IONQ', 'RGTI', 'QBTS', 'QUBT', 'ARQQ', 'IBM', 'GOOG', 'MSFT', 'NVDA', 'AMZN']
+
+CYBERSECURITY = ['PANW', 'CRWD', 'FTNT', 'ZS', 'NET', 'S', 'CYBR', 'OKTA', 'RBRK', 'GEN']
+
+CLOUD_COMPUTING = ['AMZN', 'MSFT', 'GOOG', 'ORCL', 'IBM', 'CRM', 'NOW', 'SNOW', 'DDOG', 'NET']
+
+NUCLEAR_URANIUM = ['CEG', 'CCJ', 'NXE', 'LEU', 'UEC', 'DNN', 'UUUU', 'SMR', 'OKLO', 'GEV']
+
+ELECTRIC_VEHICLES = ['TSLA', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'GM', 'F', 'BYDDF', 'CHPT']
+
+SOLAR_RENEWABLE = ['FSLR', 'ENPH', 'NEE', 'BEP', 'SEDG', 'RUN', 'CSIQ', 'JKS', 'AES', 'ARRY']
+
+DEFENSE_AEROSPACE = ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TDG', 'HWM', 'AVAV']
+
+ROBOTICS_AUTOMATION = ['NVDA', 'TSLA', 'ISRG', 'ROK', 'ABB', 'TER', 'SYM', 'CGNX', 'PATH', 'IRBT']
+
+BIOTECH = ['AMGN', 'GILD', 'VRTX', 'REGN', 'BIIB', 'MRNA', 'BNTX', 'CRSP', 'EXEL', 'BMRN']
+
+FINTECH = ['V', 'MA', 'PYPL', 'SQ', 'AFRM', 'SOFI', 'NU', 'HOOD', 'INTU', 'FIS']
+
+DATA_CENTERS = ['EQIX', 'DLR', 'AMT', 'MSFT', 'AMZN', 'GOOG', 'ORCL', 'CCI', 'IRM', 'SBAC']
+
+# ==================== LOW-LEVEL NICHES - SPACE ====================
+
+SPACE_LAUNCH_SERVICES = ['RKLB', 'FLY', 'AJRD', 'SPCE', 'LLAP', 'LUNR', 'MAXR', 'VORB', 'RDW', 'MNTS']
+
+SPACE_SATELLITE_COMMS = ['ASTS', 'SATS', 'TSAT', 'GSAT', 'IRDM', 'VSAT', 'GILT', 'DISH', 'OSAT', 'SPIR']
+
+# ==================== LOW-LEVEL NICHES - AI ====================
+
+AI_INFRASTRUCTURE = ['NVDA', 'TSM', 'ASML', 'AMD', 'AVGO', 'MRVL', 'PLTR', 'SMCI', 'ORCL', 'CRM']
+
+AI_SOFTWARE = ['PLTR', 'AI', 'PATH', 'SNOW', 'DDOG', 'MDB', 'NOW', 'ADBE', 'SOUN', 'BBAI']
+
+# ==================== LOW-LEVEL NICHES - SEMICONDUCTORS ====================
+
+SEMIS_GPU_AI_CHIPS = ['NVDA', 'AMD', 'INTC', 'AVGO', 'QCOM', 'MRVL', 'ARM', 'TSM', 'MU', 'LRCX']
+
+SEMIS_EQUIPMENT = ['ASML', 'AMAT', 'LRCX', 'KLAC', 'ENTG', 'ACMR', 'TER', 'ONTO', 'UCTT', 'ICHR']
+
+SEMIS_MEMORY = ['MU', 'WDC', 'STX', 'RMBS', 'NAND', 'MCHP', 'ON', 'SWKS', 'WOLF', 'CRUS']
+
+# ==================== LOW-LEVEL NICHES - NUCLEAR ====================
+
+URANIUM_MINING = ['CCJ', 'NXE', 'UEC', 'DNN', 'UUUU', 'URG', 'EU', 'FCUUF', 'SRUUF', 'URNM']
+
+SMALL_MODULAR_REACTORS = ['SMR', 'OKLO', 'NNE', 'GEV', 'BWX', 'FLR', 'CEG', 'PCG', 'ETR', 'D']
+
+# ==================== LOW-LEVEL NICHES - ELECTRIC VEHICLES ====================
+
+EV_MANUFACTURERS = ['TSLA', 'RIVN', 'LCID', 'NIO', 'XPEV', 'LI', 'GM', 'F', 'BYDDF', 'FSRE']
+
+EV_CHARGING = ['CHPT', 'EVGO', 'BLNK', 'WBX', 'TSLA', 'ABB', 'SHEL', 'BP', 'PCAR', 'CMI']
+
+EV_BATTERIES = ['QS', 'ENVX', 'SLDP', 'ALB', 'LTHM', 'SQM', 'LAC', 'PLL', 'MVST', 'FREEF']
+
+# ==================== LOW-LEVEL NICHES - CLOUD ====================
+
+CLOUD_IAAS = ['AMZN', 'MSFT', 'GOOG', 'ORCL', 'IBM', 'CRM', 'NOW', 'SNOW', 'DDOG', 'NET']
+
+CLOUD_SAAS = ['CRM', 'NOW', 'WDAY', 'ZM', 'TEAM', 'HUBS', 'DOCU', 'OKTA', 'ZS', 'SHOP']
+
+DATA_CENTER_REITS = ['EQIX', 'DLR', 'AMT', 'CCI', 'SBAC', 'IRM', 'QTS', 'CONE', 'COR', 'UNIT']
+
+# ==================== LOW-LEVEL NICHES - DEFENSE ====================
+
+DEFENSE_LARGE_CAP = ['LMT', 'RTX', 'NOC', 'GD', 'BA', 'LHX', 'HII', 'TDG', 'HWM', 'AVAV']
+
+DEFENSE_DRONES = ['AVAV', 'KTOS', 'RCAT', 'JOBY', 'ACHR', 'UAVS', 'UMAC', 'GILT', 'TXT', 'LMT']
+
+# ==================== LOW-LEVEL NICHES - ROBOTICS ====================
+
+ROBOTICS_INDUSTRIAL = ['ABB', 'FANUY', 'ROK', 'EMR', 'HON', 'ISRG', 'TER', 'CGNX', 'GNRC', 'IRBT']
+
+ROBOTICS_SURGICAL = ['ISRG', 'MDT', 'ABT', 'SYK', 'BSX', 'EW', 'GMED', 'NUVA', 'MASI', 'HOLX']
+
+ROBOTICS_WAREHOUSE = ['SYM', 'AMZN', 'GXO', 'XPO', 'EXPD', 'CHRW', 'FWRD', 'JBHT', 'KNX', 'LSTR']
+
+# ==================== LOW-LEVEL NICHES - RENEWABLE ENERGY ====================
+
+SOLAR_ENERGY = ['FSLR', 'ENPH', 'SEDG', 'RUN', 'NOVA', 'CSIQ', 'JKS', 'ARRY', 'MAXN', 'SPWR']
+
+WIND_ENERGY = ['NEE', 'GEV', 'VWDRY', 'BEP', 'CWEN', 'ORSTED', 'IBDRY', 'TKA', 'EDPR', 'ORA']
+
+RENEWABLE_UTILITIES = ['NEE', 'BEP', 'BEPC', 'AES', 'D', 'DUK', 'SO', 'XEL', 'ED', 'AEP']
+
+# ==================== LOW-LEVEL NICHES - BIOTECH ====================
+
+BIOTECH_LARGE_CAP = ['AMGN', 'GILD', 'VRTX', 'REGN', 'BIIB', 'MRNA', 'BNTX', 'ABBV', 'BMY', 'LLY']
+
+BIOTECH_GENE_THERAPY = ['CRSP', 'NTLA', 'EDIT', 'BEAM', 'VERV', 'SGMO', 'BLUE', 'RARE', 'RGNX', 'BMRN']
+
+BIOTECH_ONCOLOGY = ['MRNA', 'BNTX', 'EXEL', 'SGEN', 'IMMU', 'MRUS', 'MRTX', 'RCUS', 'IOVA', 'KYMR']
+
+# ==================== LOW-LEVEL NICHES - FINTECH ====================
+
+FINTECH_PAYMENTS = ['V', 'MA', 'PYPL', 'SQ', 'AFRM', 'UPST', 'SOFI', 'NU', 'INTU', 'FIS']
+
+FINTECH_DIGITAL_BANKING = ['SOFI', 'NU', 'HOOD', 'LC', 'DAVE', 'CHIME', 'ALLY', 'NYCB', 'WAL', 'ZION']
+
+FINTECH_BNPL = ['AFRM', 'SEZL', 'ZIP', 'PYPL', 'AAPL', 'KLRN', 'UPST', 'SOFI', 'NU', 'SQ']
+
+# ==================== CLASSIC INDEX UNIVERSES ====================
+
+# S&P 500 Top Holdings by Sector (from original file)
 SP500_TECHNOLOGY = [
     'AAPL', 'MSFT', 'NVDA', 'AVGO', 'CRM', 'ORCL', 'ADBE', 'CSCO', 'ACN', 'AMD',
     'INTC', 'TXN', 'QCOM', 'AMAT', 'MU', 'LRCX', 'KLAC', 'SNPS', 'CDNS', 'MCHP'
 ]
 
-SP500_COMMUNICATION = [
-    'META', 'GOOGL', 'GOOG', 'NFLX', 'DIS', 'CMCSA', 'VZ', 'T', 'TMUS', 'CHTR',
-    'EA', 'TTWO', 'NWSA', 'FOX', 'PARA', 'OMC', 'IPG', 'WBD'
-]
-
-SP500_CONSUMER_DISCRETIONARY = [
-    'AMZN', 'TSLA', 'HD', 'MCD', 'NKE', 'LOW', 'SBUX', 'TJX', 'BKNG', 'CMG',
-    'MAR', 'ABNB', 'GM', 'F', 'HLT', 'ORLY', 'AZO', 'YUM', 'RCL', 'CCL'
-]
-
-SP500_CONSUMER_STAPLES = [
-    'WMT', 'PG', 'COST', 'KO', 'PEP', 'PM', 'MO', 'MDLZ', 'CL', 'KMB',
-    'GIS', 'KHC', 'STZ', 'SYY', 'HSY', 'K', 'CAG', 'CPB', 'TSN', 'HRL'
-]
-
-SP500_HEALTHCARE = [
-    'UNH', 'LLY', 'JNJ', 'ABBV', 'MRK', 'TMO', 'ABT', 'AMGN', 'DHR', 'PFE',
-    'BMY', 'CVS', 'GILD', 'CI', 'VRTX', 'REGN', 'ELV', 'MCK', 'HUM', 'ZTS'
-]
-
-SP500_FINANCIALS = [
-    'BRK.B', 'JPM', 'V', 'MA', 'BAC', 'WFC', 'MS', 'GS', 'SPGI', 'BLK',
-    'C', 'AXP', 'PGR', 'CB', 'MMC', 'ICE', 'CME', 'AON', 'PNC', 'USB'
-]
-
-SP500_INDUSTRIALS = [
-    'GE', 'CAT', 'RTX', 'HON', 'UNP', 'BA', 'LMT', 'DE', 'UPS', 'ADP',
-    'GD', 'NOC', 'EMR', 'ETN', 'ITW', 'MMM', 'CSX', 'NSC', 'WM', 'FDX'
-]
-
-SP500_ENERGY = [
-    'XOM', 'CVX', 'COP', 'EOG', 'SLB', 'MPC', 'PSX', 'VLO', 'OXY', 'WMB',
-    'KMI', 'HES', 'DVN', 'HAL', 'BKR', 'FANG', 'MRO', 'APA', 'CTRA', 'OKE'
-]
-
-SP500_MATERIALS = [
-    'LIN', 'APD', 'SHW', 'ECL', 'FCX', 'NEM', 'CTVA', 'DOW', 'DD', 'NUE',
-    'VMC', 'MLM', 'PPG', 'ALB', 'BALL', 'AVY', 'CF', 'MOS', 'FMC', 'CE'
-]
-
-SP500_REAL_ESTATE = [
-    'AMT', 'PLD', 'CCI', 'EQIX', 'PSA', 'WELL', 'DLR', 'O', 'SPG', 'VICI',
-    'AVB', 'EQR', 'WY', 'SBAC', 'VTR', 'ARE', 'INVH', 'ESS', 'MAA', 'KIM'
-]
-
-SP500_UTILITIES = [
-    'NEE', 'DUK', 'SO', 'D', 'AEP', 'EXC', 'SRE', 'XEL', 'PCG', 'ED',
-    'WEC', 'PEG', 'ES', 'AWK', 'DTE', 'ETR', 'FE', 'PPL', 'AEE', 'CMS'
-]
-
-# NASDAQ 100 (Tech-heavy)
-NASDAQ_100 = [
-    # Mega Cap Tech
-    'AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'AVGO', 'ORCL',
-    # Large Cap Tech
-    'COST', 'NFLX', 'AMD', 'ADBE', 'PEP', 'CSCO', 'TMUS', 'QCOM', 'INTC', 'TXN',
-    'CMCSA', 'AMAT', 'HON', 'INTU', 'AMGN', 'BKNG', 'ISRG', 'ADP', 'SBUX', 'GILD',
-    # Mid Cap Tech & Growth
-    'ADI', 'VRTX', 'REGN', 'LRCX', 'MU', 'PANW', 'KLAC', 'SNPS', 'CDNS', 'MELI',
-    'PYPL', 'ABNB', 'ASML', 'MAR', 'NXPI', 'CRWD', 'MRVL', 'WDAY', 'FTNT', 'DASH',
-    # Additional Growth Names
-    'DXCM', 'TEAM', 'ADSK', 'MNST', 'CHTR', 'PCAR', 'AEP', 'MCHP', 'ROST', 'PAYX',
-    'ODFL', 'CPRT', 'CTAS', 'LULU', 'MRNA', 'CSX', 'EA', 'ORLY', 'IDXX', 'FAST',
-    'TTWO', 'VRSK', 'DDOG', 'ANSS', 'KDP', 'ZS', 'BIIB', 'EXC', 'GEHC', 'ON',
-    'FANG', 'CSGP', 'XEL', 'BKR', 'CDW', 'ILMN', 'GFS', 'WBD', 'CTSH', 'MDB',
-    'ZM', 'ALGN', 'DLTR', 'ENPH', 'SIRI', 'JD', 'WBA', 'LCID', 'RIVN', 'SGEN'
-]
-
-# Russell 2000 Representatives (Small Cap)
-RUSSELL_2000_SAMPLE = [
-    'SAIA', 'ABCB', 'APAM', 'ASPN', 'AWR', 'BANR', 'BCPC', 'BL', 'CADE', 'CBU',
-    'CEIX', 'CENTA', 'CHCT', 'CTRE', 'CWT', 'DNLI', 'EXPO', 'FFBC', 'FHB', 'FIBK',
-    'FORM', 'GATX', 'GMS', 'HASI', 'HBI', 'HQY', 'ICFI', 'IPAR', 'ITGR', 'KRG'
-]
-
-# Major ETFs for Benchmarking
-BENCHMARK_ETFS = [
-    'SPY',   # S&P 500
-    'QQQ',   # NASDAQ 100
-    'IWM',   # Russell 2000
-    'DIA',   # Dow Jones
-    'VTI',   # Total Stock Market
-    'VOO',   # Vanguard S&P 500
-    'VUG',   # Growth
-    'VTV',   # Value
-    'VB',    # Small Cap
-    'VO',    # Mid Cap
-    'VEA',   # International Developed
-    'VWO',   # Emerging Markets
-    'AGG',   # Bond Aggregate
-    'TLT',   # Long-Term Treasury
-    'GLD',   # Gold
-]
-
-# Sector ETFs
-SECTOR_ETFS = {
-    'Technology': 'XLK',
-    'Healthcare': 'XLV',
-    'Financials': 'XLF',
-    'Consumer Discretionary': 'XLY',
-    'Communication': 'XLC',
-    'Industrials': 'XLI',
-    'Consumer Staples': 'XLP',
-    'Energy': 'XLE',
-    'Utilities': 'XLU',
-    'Real Estate': 'XLRE',
-    'Materials': 'XLB'
-}
-
-# Complete S&P 500 by Sector
-SP500_BY_SECTOR = {
-    'Technology': SP500_TECHNOLOGY,
-    'Communication Services': SP500_COMMUNICATION,
-    'Consumer Discretionary': SP500_CONSUMER_DISCRETIONARY,
-    'Consumer Staples': SP500_CONSUMER_STAPLES,
-    'Healthcare': SP500_HEALTHCARE,
-    'Financials': SP500_FINANCIALS,
-    'Industrials': SP500_INDUSTRIALS,
-    'Energy': SP500_ENERGY,
-    'Materials': SP500_MATERIALS,
-    'Real Estate': SP500_REAL_ESTATE,
-    'Utilities': SP500_UTILITIES
-}
-
-# Complete ticker lists
-SP500_ALL = []
-for sector_tickers in SP500_BY_SECTOR.values():
-    SP500_ALL.extend(sector_tickers)
-
-# Market Cap Classifications
 MEGA_CAP = ['AAPL', 'MSFT', 'GOOGL', 'GOOG', 'AMZN', 'NVDA', 'META', 'TSLA', 'BRK.B', 'LLY']
-LARGE_CAP = SP500_ALL
-SMALL_CAP = RUSSELL_2000_SAMPLE
 
-# Volatility Classifications
-HIGH_VOLATILITY = ['TSLA', 'NVDA', 'AMD', 'MARA', 'RIOT', 'COIN', 'ARKK', 'SQQQ', 'TQQQ']
-LOW_VOLATILITY = ['JNJ', 'PG', 'KO', 'WMT', 'VZ', 'T', 'DUK', 'SO', 'NEE', 'AEP']
+# ==================== UNIVERSE MAPPINGS ====================
 
-# Universe Definitions
-UNIVERSES = {
-    'sp500': SP500_ALL,
-    'nasdaq100': NASDAQ_100,
-    'russell2000': RUSSELL_2000_SAMPLE,
-    'mega_cap': MEGA_CAP,
-    'benchmarks': BENCHMARK_ETFS,
-    'tech': SP500_TECHNOLOGY,
-    'healthcare': SP500_HEALTHCARE,
-    'financials': SP500_FINANCIALS,
-    'energy': SP500_ENERGY,
-    'consumer': SP500_CONSUMER_DISCRETIONARY + SP500_CONSUMER_STAPLES,
-    'high_vol': HIGH_VOLATILITY,
-    'low_vol': LOW_VOLATILITY,
+HIGH_LEVEL_SECTORS = {
+    'Space (Overall)': SPACE_OVERALL,
+    'AI/Tech (Overall)': AI_TECH_OVERALL,
+    'Semiconductors': SEMICONDUCTORS,
+    'Quantum Computing': QUANTUM_COMPUTING,
+    'Cybersecurity': CYBERSECURITY,
+    'Cloud Computing': CLOUD_COMPUTING,
+    'Nuclear/Uranium': NUCLEAR_URANIUM,
+    'Electric Vehicles': ELECTRIC_VEHICLES,
+    'Solar/Renewable': SOLAR_RENEWABLE,
+    'Defense/Aerospace': DEFENSE_AEROSPACE,
+    'Robotics/Automation': ROBOTICS_AUTOMATION,
+    'Biotech': BIOTECH,
+    'Fintech': FINTECH,
+    'Data Centers': DATA_CENTERS,
 }
 
+NICHE_SECTORS = {
+    # Space Niches
+    'Space - Launch Services': SPACE_LAUNCH_SERVICES,
+    'Space - Satellite Communications': SPACE_SATELLITE_COMMS,
+
+    # AI Niches
+    'AI - Infrastructure': AI_INFRASTRUCTURE,
+    'AI - Software/Applications': AI_SOFTWARE,
+
+    # Semiconductor Niches
+    'Semiconductors - GPUs/AI Chips': SEMIS_GPU_AI_CHIPS,
+    'Semiconductors - Equipment': SEMIS_EQUIPMENT,
+    'Semiconductors - Memory': SEMIS_MEMORY,
+
+    # Nuclear Niches
+    'Nuclear - Uranium Mining': URANIUM_MINING,
+    'Nuclear - Small Modular Reactors': SMALL_MODULAR_REACTORS,
+
+    # EV Niches
+    'EV - Manufacturers': EV_MANUFACTURERS,
+    'EV - Charging Infrastructure': EV_CHARGING,
+    'EV - Batteries': EV_BATTERIES,
+
+    # Cloud Niches
+    'Cloud - IaaS Infrastructure': CLOUD_IAAS,
+    'Cloud - SaaS': CLOUD_SAAS,
+    'Cloud - Data Center REITs': DATA_CENTER_REITS,
+
+    # Defense Niches
+    'Defense - Large Cap': DEFENSE_LARGE_CAP,
+    'Defense - Drones/UAVs': DEFENSE_DRONES,
+
+    # Robotics Niches
+    'Robotics - Industrial': ROBOTICS_INDUSTRIAL,
+    'Robotics - Surgical/Medical': ROBOTICS_SURGICAL,
+    'Robotics - Warehouse/Logistics': ROBOTICS_WAREHOUSE,
+
+    # Renewable Niches
+    'Solar Energy': SOLAR_ENERGY,
+    'Wind Energy': WIND_ENERGY,
+    'Renewable Utilities': RENEWABLE_UTILITIES,
+
+    # Biotech Niches
+    'Biotech - Large Cap': BIOTECH_LARGE_CAP,
+    'Biotech - Gene Therapy': BIOTECH_GENE_THERAPY,
+    'Biotech - Oncology': BIOTECH_ONCOLOGY,
+
+    # Fintech Niches
+    'Fintech - Payments': FINTECH_PAYMENTS,
+    'Fintech - Digital Banking': FINTECH_DIGITAL_BANKING,
+    'Fintech - BNPL': FINTECH_BNPL,
+}
+
+# Classic Index Universes
+CLASSIC_UNIVERSES = {
+    'Mega Cap': MEGA_CAP,
+    'S&P 500 Technology': SP500_TECHNOLOGY,
+}
+
+# Combine all sectors
+ALL_SECTORS = {**HIGH_LEVEL_SECTORS, **NICHE_SECTORS}
+
+# ==================== HELPER FUNCTIONS ====================
 
 def get_universe(name):
     """Get ticker list by universe name"""
-    return UNIVERSES.get(name.lower(), [])
+    return ALL_SECTORS.get(name, CLASSIC_UNIVERSES.get(name, []))
 
-
-def get_sector(ticker):
-    """Get sector classification for a ticker"""
-    for sector, tickers in SP500_BY_SECTOR.items():
-        if ticker in tickers:
-            return sector
-    if ticker in NASDAQ_100:
-        return 'Technology'  # Default for NASDAQ
-    return 'Unknown'
-
+def get_all_universes():
+    """Get dictionary of all available universes organized by category"""
+    return {
+        '=== HIGH-LEVEL SECTORS ===': None,
+        **{name: name.lower().replace(' ', '_').replace('/', '_').replace('(', '').replace(')', '')
+           for name in HIGH_LEVEL_SECTORS.keys()},
+        '=== NICHE SECTORS ===': None,
+        **{name: name.lower().replace(' ', '_').replace('/', '_').replace('-', '_').replace('(', '').replace(')', '')
+           for name in NICHE_SECTORS.keys()},
+        '=== CLASSIC INDICES ===': None,
+        **{name: name.lower().replace(' ', '_')
+           for name in CLASSIC_UNIVERSES.keys()},
+    }
 
 def get_all_sectors():
-    """Get list of all sectors"""
-    return list(SP500_BY_SECTOR.keys())
-
+    """Get list of all sector names"""
+    return list(HIGH_LEVEL_SECTORS.keys()) + list(NICHE_SECTORS.keys())
 
 def get_sector_tickers(sector):
     """Get all tickers in a sector"""
-    return SP500_BY_SECTOR.get(sector, [])
+    return ALL_SECTORS.get(sector, [])
 
+def get_sector(ticker):
+    """Get sector classification for a ticker"""
+    for sector, tickers in ALL_SECTORS.items():
+        if ticker in tickers:
+            return sector
+    return 'Unknown'
 
 def get_market_cap_class(ticker):
     """Classify ticker by market cap"""
     if ticker in MEGA_CAP:
         return 'Mega Cap'
-    elif ticker in SP500_ALL:
-        return 'Large Cap'
-    elif ticker in RUSSELL_2000_SAMPLE:
-        return 'Small Cap'
-    else:
-        return 'Unknown'
-
-
-def get_volatility_class(ticker):
-    """Classify ticker by volatility"""
-    if ticker in HIGH_VOLATILITY:
-        return 'High'
-    elif ticker in LOW_VOLATILITY:
-        return 'Low'
-    else:
-        return 'Medium'
-
-
-def get_all_universes():
-    """Get dictionary of all available universes"""
-    return {
-        'S&P 500': 'sp500',
-        'NASDAQ 100': 'nasdaq100',
-        'Russell 2000': 'russell2000',
-        'Mega Cap': 'mega_cap',
-        'Benchmarks/ETFs': 'benchmarks',
-        'Technology': 'tech',
-        'Healthcare': 'healthcare',
-        'Financials': 'financials',
-        'Energy': 'energy',
-        'Consumer': 'consumer',
-        'High Volatility': 'high_vol',
-        'Low Volatility': 'low_vol',
-    }
+    return 'Unknown'

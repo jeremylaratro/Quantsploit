@@ -955,13 +955,10 @@ def api_launch_backtest():
             symbols = data['tickers']
             period_config = data.get('period_config', {})
 
-            # Prepare keyword arguments
+            # Prepare keyword arguments (only parameters that run_comprehensive_analysis accepts)
             kwargs = {
                 'symbols': symbols,
-                'output_dir': RESULTS_DIR,
-                'initial_capital': data.get('initial_capital', 100000),
-                'commission': data.get('commission', 0.001),
-                'quick_mode': data.get('quick_mode', False)
+                'output_dir': str(RESULTS_DIR)
             }
 
             # Add period configuration
@@ -972,6 +969,9 @@ def api_launch_backtest():
             elif period_config.get('mode') == 'quarterly':
                 quarters_str = ','.join(period_config.get('quarters', ['2']))
                 kwargs['quarters'] = quarters_str
+
+            # Note: initial_capital is hardcoded to $100k in run_comprehensive_analysis
+            # commission and quick_mode are not supported by the function
 
             backtest_jobs[job_id]['log'] += f'Testing {len(symbols)} symbols...\n'
             backtest_jobs[job_id]['progress'] = 10

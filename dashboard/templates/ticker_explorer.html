@@ -10,7 +10,6 @@
                 <i class="fas fa-search"></i> Ticker Explorer
             </h1>
             <p class="lead">Advanced filtering and universe management - S&P 500, NASDAQ 100, sector breakdowns</p>
-            <small class="text-muted">Run: {{ timestamp }}</small>
         </div>
     </div>
 
@@ -22,9 +21,47 @@
                     <h5><i class="fas fa-filter"></i> Advanced Filters</h5>
                 </div>
                 <div class="card-body">
-                    <div class="row g-3">
+                    <!-- Row 1: Run Selection & Key Filters -->
+                    <div class="row g-3 mb-3">
+                        <!-- Backtest Run Selector -->
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Backtest Run</strong></label>
+                            <select class="form-select" id="run-selector" onchange="loadRunData()">
+                                <!-- Will be populated dynamically -->
+                            </select>
+                            <small class="text-muted">Select which backtest results to view</small>
+                        </div>
+
+                        <!-- Specific Ticker Filter -->
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Specific Tickers</strong></label>
+                            <input type="text" class="form-control" id="ticker-filter" placeholder="e.g. SPY, AAPL, MSFT">
+                            <small class="text-muted">Comma-separated tickers (leave empty for all)</small>
+                        </div>
+
+                        <!-- Strategy Filter -->
+                        <div class="col-md-4">
+                            <label class="form-label"><strong>Strategy</strong></label>
+                            <select class="form-select" id="strategy-filter">
+                                <option value="">All Strategies</option>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Row 2: Time Period & Universe -->
+                    <div class="row g-3 mb-3">
+                        <!-- Time Period Filter -->
+                        <div class="col-md-4">
+                            <label class="form-label">Time Period</label>
+                            <select class="form-select" id="period-filter">
+                                <option value="">All Periods</option>
+                                <!-- Will be populated dynamically -->
+                            </select>
+                        </div>
+
                         <!-- Universe Selection -->
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="form-label">Ticker Universe</label>
                             <select class="form-select" id="universe-filter">
                                 <option value="">All Tickers</option>
@@ -35,7 +72,7 @@
                         </div>
 
                         <!-- Sector Filter -->
-                        <div class="col-md-3">
+                        <div class="col-md-4">
                             <label class="form-label">Sector</label>
                             <select class="form-select" id="sector-filter">
                                 <option value="">All Sectors</option>
@@ -44,30 +81,20 @@
                                 {% endfor %}
                             </select>
                         </div>
+                    </div>
 
-                        <!-- Market Cap Filter -->
+                    <!-- Row 3: Performance Filters -->
+                    <div class="row g-3">
+                        <!-- Min Return Filter -->
                         <div class="col-md-3">
-                            <label class="form-label">Market Cap</label>
-                            <select class="form-select" id="market-cap-filter">
-                                <option value="">All</option>
-                                <option value="Mega Cap">Mega Cap</option>
-                                <option value="Large Cap">Large Cap</option>
-                                <option value="Small Cap">Small Cap</option>
-                            </select>
+                            <label class="form-label">Min Return (%)</label>
+                            <input type="number" class="form-control" id="min-return" placeholder="e.g. 10" step="1">
                         </div>
 
                         <!-- Min Sharpe Filter -->
                         <div class="col-md-3">
                             <label class="form-label">Min Sharpe Ratio</label>
                             <input type="number" class="form-control" id="min-sharpe" placeholder="e.g. 1.0" step="0.1">
-                        </div>
-                    </div>
-
-                    <div class="row g-3 mt-2">
-                        <!-- Min Return Filter -->
-                        <div class="col-md-3">
-                            <label class="form-label">Min Return (%)</label>
-                            <input type="number" class="form-control" id="min-return" placeholder="e.g. 10" step="1">
                         </div>
 
                         <!-- Min Win Rate Filter -->
@@ -77,11 +104,11 @@
                         </div>
 
                         <!-- Action Buttons -->
-                        <div class="col-md-6 d-flex align-items-end">
-                            <button class="btn btn-primary me-2" onclick="applyFilters()">
-                                <i class="fas fa-filter"></i> Apply Filters
+                        <div class="col-md-3 d-flex align-items-end">
+                            <button class="btn btn-primary me-2 w-100" onclick="applyFilters()">
+                                <i class="fas fa-filter"></i> Apply
                             </button>
-                            <button class="btn btn-secondary" onclick="resetFilters()">
+                            <button class="btn btn-secondary w-100" onclick="resetFilters()">
                                 <i class="fas fa-redo"></i> Reset
                             </button>
                         </div>
@@ -216,6 +243,72 @@
 
 <script>
 let currentResults = [];
+let currentTimestamp = null;
+let allData = [];
+
+// Load available backtest runs
+async function loadAvailableRuns() {
+    try {
+        const response = await fetch('/api/runs');
+        const runs = await response.json();
+
+        const selector = document.getElementById('run-selector');
+        selector.innerHTML = '';
+
+        runs.forEach((run, index) => {
+            const option = document.createElement('option');
+            option.value = run.timestamp;
+            option.textContent = `${run.datetime} ${run.has_json ? '✓' : ''}`;
+            if (index === 0) option.selected = true; // Select latest by default
+            selector.appendChild(option);
+        });
+
+        if (runs.length > 0) {
+            currentTimestamp = runs[0].timestamp;
+            await loadRunData();
+        }
+    } catch (error) {
+        console.error('Error loading runs:', error);
+    }
+}
+
+// Load data for selected run
+async function loadRunData() {
+    const timestamp = document.getElementById('run-selector').value;
+    currentTimestamp = timestamp;
+
+    try {
+        const response = await fetch(`/api/detailed/${timestamp}`);
+        allData = await response.json();
+
+        // Populate strategy dropdown
+        const strategies = [...new Set(allData.map(d => d.strategy_name))].sort();
+        const strategyFilter = document.getElementById('strategy-filter');
+        strategyFilter.innerHTML = '<option value="">All Strategies</option>';
+        strategies.forEach(strategy => {
+            const option = document.createElement('option');
+            option.value = strategy;
+            option.textContent = strategy;
+            strategyFilter.appendChild(option);
+        });
+
+        // Populate period dropdown
+        const periods = [...new Set(allData.map(d => d.period_name))].sort();
+        const periodFilter = document.getElementById('period-filter');
+        periodFilter.innerHTML = '<option value="">All Periods</option>';
+        periods.forEach(period => {
+            const option = document.createElement('option');
+            option.value = period;
+            option.textContent = period;
+            periodFilter.appendChild(option);
+        });
+
+        // Auto-apply filters to show data immediately
+        applyFilters();
+    } catch (error) {
+        console.error('Error loading run data:', error);
+    }
+}
 
 function selectUniverse(universeName) {
     document.getElementById('universe-filter').value = universeName;
@@ -223,73 +316,106 @@ function selectUniverse(universeName) {
 }
 
 function resetFilters() {
+    document.getElementById('ticker-filter').value = '';
+    document.getElementById('strategy-filter').value = '';
+    document.getElementById('period-filter').value = '';
     document.getElementById('universe-filter').value = '';
     document.getElementById('sector-filter').value = '';
-    document.getElementById('market-cap-filter').value = '';
     document.getElementById('min-sharpe').value = '';
     document.getElementById('min-return').value = '';
     document.getElementById('min-winrate').value = '';
 
-    document.getElementById('results-tbody').innerHTML = '<tr><td colspan="11" class="text-center text-muted">Select filters and click Apply to view results</td></tr>';
-    document.getElementById('results-count').textContent = '--';
-    document.getElementById('avg-return').textContent = '--';
-    document.getElementById('avg-sharpe').textContent = '--';
+    applyFilters();
 }
 
 async function applyFilters() {
-    const filters = {
-        sector: document.getElementById('sector-filter').value,
-        market_cap: document.getElementById('market-cap-filter').value,
-        min_sharpe: parseFloat(document.getElementById('min-sharpe').value) || undefined,
-        min_return: parseFloat(document.getElementById('min-return').value) / 100 || undefined,
-        min_win_rate: parseFloat(document.getElementById('min-winrate').value) || undefined
-    };
+    if (!allData || allData.length === 0) {
+        console.log('No data loaded yet');
+        return;
+    }
 
-    // Build query string
-    const params = new URLSearchParams();
-    Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== '') {
-            params.append(key, value);
+    // Get filter values
+    const tickerInput = document.getElementById('ticker-filter').value.trim().toUpperCase();
+    const specificTickers = tickerInput ? tickerInput.split(',').map(t => t.trim()) : [];
+    const strategy = document.getElementById('strategy-filter').value;
+    const period = document.getElementById('period-filter').value;
+    const sector = document.getElementById('sector-filter').value;
+    const minSharpe = parseFloat(document.getElementById('min-sharpe').value);
+    const minReturn = parseFloat(document.getElementById('min-return').value);
+    const minWinRate = parseFloat(document.getElementById('min-winrate').value);
+
+    // Filter data
+    let filtered = allData.filter(result => {
+        // Specific ticker filter (highest priority)
+        if (specificTickers.length > 0 && !specificTickers.includes(result.symbol)) {
+            return false;
         }
+
+        // Strategy filter
+        if (strategy && result.strategy_name !== strategy) {
+            return false;
+        }
+
+        // Period filter
+        if (period && result.period_name !== period) {
+            return false;
+        }
+
+        // Sector filter
+        if (sector && result.sector !== sector) {
+            return false;
+        }
+
+        // Min sharpe filter
+        if (!isNaN(minSharpe) && result.sharpe_ratio < minSharpe) {
+            return false;
+        }
+
+        // Min return filter (convert to decimal)
+        if (!isNaN(minReturn) && result.total_return < minReturn) {
+            return false;
+        }
+
+        // Min win rate filter
+        if (!isNaN(minWinRate) && result.win_rate < minWinRate) {
+            return false;
+        }
+
+        return true;
     });
 
-    try {
-        const response = await fetch(`/api/filter/{{ timestamp }}?${params.toString()}`);
-        const data = await response.json();
+    currentResults = filtered;
 
-        currentResults = data.results;
+    // Update summary
+    document.getElementById('results-count').textContent = filtered.length.toLocaleString();
 
-        // Update summary
-        document.getElementById('results-count').textContent = data.total_results.toLocaleString();
+    if (filtered.length > 0) {
+        const avgReturn = filtered.reduce((sum, r) => sum + r.total_return, 0) / filtered.length;
+        const avgSharpe = filtered.reduce((sum, r) => sum + r.sharpe_ratio, 0) / filtered.length;
 
-        if (data.total_results > 0) {
-            const avgReturn = data.results.reduce((sum, r) => sum + r.total_return, 0) / data.results.length;
-            const avgSharpe = data.results.reduce((sum, r) => sum + r.sharpe_ratio, 0) / data.results.length;
+        document.getElementById('avg-return').textContent = avgReturn.toFixed(2) + '%';
+        document.getElementById('avg-sharpe').textContent = avgSharpe.toFixed(2);
 
-            document.getElementById('avg-return').textContent = (avgReturn * 100).toFixed(2) + '%';
-            document.getElementById('avg-sharpe').textContent = avgSharpe.toFixed(2);
+        // Sort by return descending
+        filtered.sort((a, b) => b.total_return - a.total_return);
 
-            // Populate table
-            populateResultsTable(data.results);
+        // Populate table
+        populateResultsTable(filtered);
 
-            // Create charts
-            createReturnDistribution(data.results);
-            createRiskReturnScatter(data.results);
-        } else {
-            document.getElementById('avg-return').textContent = 'N/A';
-            document.getElementById('avg-sharpe').textContent = 'N/A';
-            document.getElementById('results-tbody').innerHTML = '<tr><td colspan="11" class="text-center text-warning">No results match your filters</td></tr>';
-        }
-
-    } catch (error) {
-        console.error('Error applying filters:', error);
+        // Create charts
+        createReturnDistribution(filtered);
+        createRiskReturnScatter(filtered);
+    } else {
+        document.getElementById('avg-return').textContent = 'N/A';
+        document.getElementById('avg-sharpe').textContent = 'N/A';
+        document.getElementById('results-tbody').innerHTML = '<tr><td colspan="11" class="text-center text-warning">No results match your filters</td></tr>';
     }
 }
 
 function populateResultsTable(results) {
     const tbody = document.getElementById('results-tbody');
     tbody.innerHTML = '';
-    const timestamp = "{{ timestamp }}";
+    const timestamp = currentTimestamp;
 
     results.slice(0, 100).forEach(result => {
         const row = tbody.insertRow();
@@ -404,9 +530,9 @@ function createRiskReturnScatter(results) {
     Plotly.newPlot('risk-return-scatter', [trace], layout, {responsive: true});
 }
 
-// Load all results on page load (no filters)
+// Load available runs and data on page load
 document.addEventListener('DOMContentLoaded', function() {
-    applyFilters();
+    loadAvailableRuns();
 });
 </script>
 {% endblock %}

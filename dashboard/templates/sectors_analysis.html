@@ -1,0 +1,273 @@
+{% extends "base.html" %}
+
+{% block title %}Sector Analysis - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mb-4">
+        <i class="fas fa-layer-group"></i> Sector Analysis
+        <span id="timestamp-display" class="badge bg-secondary ms-2"></span>
+    </h1>
+
+    <!-- Summary Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <i class="fas fa-layer-group metric-icon"></i>
+                <div class="stat-label">Total Sectors</div>
+                <div class="stat-value" id="total-sectors">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <i class="fas fa-trophy metric-icon"></i>
+                <div class="stat-label">Best Sector</div>
+                <div class="stat-value" id="best-sector" style="font-size: 1.5rem;">-</div>
+                <div class="stat-label" id="best-sector-return">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <i class="fas fa-chart-bar metric-icon"></i>
+                <div class="stat-label">Avg Median Return</div>
+                <div class="stat-value" id="avg-median-return">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <i class="fas fa-balance-scale metric-icon"></i>
+                <div class="stat-label">Median Sharpe</div>
+                <div class="stat-value" id="median-sharpe">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sectors Table -->
+    <div class="chart-container">
+        <h3 class="chart-title">All Sectors Performance</h3>
+
+        <!-- Search/Filter -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <input type="text" id="searchInput" class="form-control" placeholder="Search by sector name...">
+            </div>
+            <div class="col-md-3">
+                <select id="filterReliability" class="form-select">
+                    <option value="">All Reliability</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select id="sortBy" class="form-select">
+                    <option value="median_return">Sort by Median Return</option>
+                    <option value="mean_return">Sort by Mean Return</option>
+                    <option value="avg_sharpe">Sort by Sharpe Ratio</option>
+                    <option value="num_stocks">Sort by # Stocks</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="sectorsTable">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Sector</th>
+                        <th>Median Return</th>
+                        <th>Mean Return</th>
+                        <th>95% CI</th>
+                        <th>Best Stock</th>
+                        <th>Best Stock Return</th>
+                        <th>Best Strategy</th>
+                        <th># Stocks</th>
+                        <th>Sharpe</th>
+                        <th>Win Rate</th>
+                        <th>Tests</th>
+                        <th>Reliability</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="sectorsTableBody">
+                    <tr>
+                        <td colspan="14" class="text-center">
+                            <div class="loading-spinner"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Sector Performance Chart -->
+    <div class="chart-container mt-4">
+        <h3 class="chart-title">Top Sectors by Return</h3>
+        <canvas id="sectorChart" height="100"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const timestamp = '{{ timestamp }}';
+    let allSectors = [];
+    let filteredSectors = [];
+
+    document.getElementById('timestamp-display').textContent = timestamp;
+
+    // Load sectors data
+    fetch(`/api/sectors/${timestamp}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading data: ' + data.error);
+                return;
+            }
+
+            allSectors = data.sectors;
+            filteredSectors = [...allSectors];
+
+            // Update summary stats
+            document.getElementById('total-sectors').textContent = data.count;
+            document.getElementById('best-sector').textContent = data.best_sector || 'N/A';
+            document.getElementById('best-sector-return').textContent = data.best_sector_return ?
+                `${data.best_sector_return.toFixed(2)}%` : 'N/A';
+
+            if (data.sectors.length > 0) {
+                const avgMedianReturn = data.sectors.reduce((sum, s) => sum + s.median_return, 0) / data.count;
+                document.getElementById('avg-median-return').textContent = `${avgMedianReturn.toFixed(2)}%`;
+
+                const medianSharpe = calculateMedian(data.sectors.map(s => s.avg_sharpe));
+                document.getElementById('median-sharpe').textContent = medianSharpe.toFixed(2);
+            }
+
+            renderTable();
+            createSectorChart(data.sectors.slice(0, 10));
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading sectors data');
+        });
+
+    function calculateMedian(arr) {
+        const sorted = arr.slice().sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('sectorsTableBody');
+        tbody.innerHTML = '';
+
+        if (filteredSectors.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="14" class="text-center">No sectors match the filter criteria</td></tr>';
+            return;
+        }
+
+        filteredSectors.forEach((sector, index) => {
+            const row = document.createElement('tr');
+            row.style.cursor = 'pointer';
+            row.onclick = () => window.location.href = `/sector/${timestamp}/${encodeURIComponent(sector.sector_name)}`;
+
+            const returnBadgeClass = sector.median_return >= 0 ? 'positive' : 'negative';
+            const reliabilityClass = sector.reliability_rating === 'High' ? 'success' : sector.reliability_rating === 'Medium' ? 'warning' : 'secondary';
+
+            row.innerHTML = `
+                <td><strong>#${index + 1}</strong></td>
+                <td><strong>${sector.sector_name}</strong></td>
+                <td><span class="badge-return ${returnBadgeClass}">${sector.median_return.toFixed(2)}%</span></td>
+                <td>${sector.mean_return.toFixed(2)}%</td>
+                <td><small>[${sector.ci_lower.toFixed(2)}%, ${sector.ci_upper.toFixed(2)}%]</small></td>
+                <td><strong>${sector.best_stock}</strong></td>
+                <td class="text-success"><strong>${sector.best_stock_return.toFixed(2)}%</strong></td>
+                <td><small>${sector.best_strategy}</small></td>
+                <td><span class="badge bg-info">${sector.num_stocks}</span></td>
+                <td>${sector.avg_sharpe.toFixed(2)}</td>
+                <td>${sector.avg_win_rate.toFixed(1)}%</td>
+                <td><small>${sector.total_tests}</small></td>
+                <td><span class="badge bg-${reliabilityClass}">${sector.reliability_rating}</span></td>
+                <td><a href="/sector/${timestamp}/${encodeURIComponent(sector.sector_name)}" class="btn btn-sm btn-primary">Details</a></td>
+            `;
+
+            tbody.appendChild(row);
+        });
+    }
+
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        const search = e.target.value.toLowerCase();
+        applyFilters(search);
+    });
+
+    // Reliability filter
+    document.getElementById('filterReliability').addEventListener('change', function(e) {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        applyFilters(search);
+    });
+
+    // Sort functionality
+    document.getElementById('sortBy').addEventListener('change', function(e) {
+        const sortKey = e.target.value;
+        filteredSectors.sort((a, b) => b[sortKey] - a[sortKey]);
+        renderTable();
+    });
+
+    function applyFilters(search) {
+        const reliabilityFilter = document.getElementById('filterReliability').value;
+
+        filteredSectors = allSectors.filter(sector => {
+            const matchesSearch = !search || sector.sector_name.toLowerCase().includes(search);
+            const matchesReliability = !reliabilityFilter || sector.reliability_rating === reliabilityFilter;
+            return matchesSearch && matchesReliability;
+        });
+
+        renderTable();
+    }
+
+    function createSectorChart(sectors) {
+        const ctx = document.getElementById('sectorChart').getContext('2d');
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: sectors.map(s => s.sector_name),
+                datasets: [{
+                    label: 'Median Return (%)',
+                    data: sectors.map(s => s.median_return),
+                    backgroundColor: sectors.map(s => s.median_return >= 0 ? 'rgba(39, 174, 96, 0.7)' : 'rgba(231, 76, 60, 0.7)'),
+                    borderColor: sectors.map(s => s.median_return >= 0 ? 'rgba(39, 174, 96, 1)' : 'rgba(231, 76, 60, 1)'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Return (%)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: false
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

@@ -1128,52 +1128,6 @@ def api_candlestick(timestamp, strategy_name, symbol):
 backtest_jobs = {}
 
 
-@app.route('/api/universes')
-def api_universes():
-    """API: Get all available ticker universes"""
-    return jsonify(get_all_universes())
-
-
-@app.route('/api/universe/<universe_name>')
-def api_universe(universe_name):
-    """API: Get tickers in a specific universe"""
-    tickers = get_universe(universe_name)
-    return jsonify({'universe': universe_name, 'tickers': tickers, 'count': len(tickers)})
-
-
-@app.route('/api/sectors')
-def api_sectors():
-    """API: Get all sectors"""
-    return jsonify({'sectors': get_all_sectors()})
-
-
-@app.route('/api/sector-tickers/<sector>')
-def api_sector_tickers(sector):
-    """API: Get tickers in a specific sector"""
-    tickers = get_sector_tickers(sector)
-    return jsonify({'sector': sector, 'tickers': tickers, 'count': len(tickers)})
-
-
-@app.route('/api/strategies/available')
-def api_strategies_available():
-    """API: Get list of available trading strategies"""
-    strategies = [
-        {'id': 'sma_crossover', 'name': 'SMA Crossover', 'description': 'Moving average crossover (20/50)'},
-        {'id': 'mean_reversion', 'name': 'Mean Reversion', 'description': '20-day mean reversion with z-score'},
-        {'id': 'momentum_signals', 'name': 'Momentum', 'description': 'Multi-period momentum (10/20/50)'},
-        {'id': 'multifactor_scoring', 'name': 'Multi-Factor Scoring', 'description': 'Composite factor scoring'},
-        {'id': 'kalman_adaptive', 'name': 'Kalman Adaptive', 'description': 'Kalman filter-based adaptive strategy'},
-        {'id': 'kalman_adaptive_sensitive', 'name': 'Kalman Adaptive (Sensitive)', 'description': 'More responsive Kalman variant'},
-        {'id': 'volume_profile_swing', 'name': 'Volume Profile Swing', 'description': 'Volume profile analysis'},
-        {'id': 'volume_profile_fast', 'name': 'Volume Profile (Fast)', 'description': 'Faster volume profile variant'},
-        {'id': 'hmm_regime_detection', 'name': 'HMM Regime Detection', 'description': 'Hidden Markov Model regime detection'},
-        {'id': 'hmm_regime_longterm', 'name': 'HMM Regime (Long-term)', 'description': 'Long-term HMM variant'},
-        {'id': 'ml_swing_trading', 'name': 'ML Swing Trading', 'description': 'Machine learning swing strategy'},
-        {'id': 'pairs_trading', 'name': 'Pairs Trading', 'description': 'Statistical arbitrage pairs trading'}
-    ]
-    return jsonify({'strategies': strategies})
-
-
 @app.route('/backtest-launcher')
 def backtest_launcher():
     """Backtest Launcher Page"""

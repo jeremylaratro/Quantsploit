@@ -1,0 +1,264 @@
+{% extends "base.html" %}
+
+{% block title %}Correlation Analysis - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4">
+                <i class="fas fa-project-diagram"></i> Correlation Analysis
+            </h1>
+            <p class="lead">Strategy and symbol correlation matrices for diversification analysis</p>
+            <small class="text-muted">Run: {{ timestamp }}</small>
+        </div>
+    </div>
+
+    <!-- Strategy Correlation Heatmap -->
+    <div class="row">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-th"></i> Strategy Correlation Matrix</h5>
+                    <small class="text-muted">Shows how strategies are correlated - lower correlation = better diversification</small>
+                </div>
+                <div class="card-body">
+                    <div id="strategy-correlation-heatmap" style="height: 600px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- High Correlation Alerts -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-exclamation-triangle"></i> High Correlation Pairs</h5>
+                    <small class="text-muted">Strategy pairs with correlation > 0.7 (may reduce diversification)</small>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="high-corr-table">
+                            <thead>
+                                <tr>
+                                    <th>Strategy 1</th>
+                                    <th>Strategy 2</th>
+                                    <th>Correlation</th>
+                                    <th>Interpretation</th>
+                                </tr>
+                            </thead>
+                            <tbody id="high-corr-tbody">
+                                <tr><td colspan="4" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Symbol Correlation -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-coins"></i> Symbol Correlation Matrix</h5>
+                    <small class="text-muted">Inter-symbol correlations across all strategies</small>
+                </div>
+                <div class="card-body">
+                    <div id="symbol-correlation-heatmap" style="height: 600px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Correlation Statistics -->
+    <div class="row mt-4">
+        <div class="col-md-4">
+            <div class="stat-card blue">
+                <div class="stat-label">Avg Strategy Correlation</div>
+                <div class="stat-value" id="avg-strat-corr">--</div>
+                <small>Lower is better for diversification</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card green">
+                <div class="stat-label">Min Correlation</div>
+                <div class="stat-value" id="min-corr">--</div>
+                <small>Most diversified pair</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card orange">
+                <div class="stat-label">Max Correlation</div>
+                <div class="stat-value" id="max-corr">--</div>
+                <small>Most similar pair</small>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+async function loadCorrelationAnalysis() {
+    try {
+        const response = await fetch(`/api/correlation/{{ timestamp }}`);
+        const data = await response.json();
+
+        // Create strategy correlation heatmap
+        createCorrelationHeatmap(
+            data.strategy_correlation.matrix,
+            data.strategy_correlation.strategies,
+            'strategy-correlation-heatmap',
+            'Strategy Correlation'
+        );
+
+        // Create symbol correlation heatmap
+        createCorrelationHeatmap(
+            data.symbol_correlation.matrix,
+            data.symbol_correlation.symbols,
+            'symbol-correlation-heatmap',
+            'Symbol Correlation'
+        );
+
+        // Populate high correlation table
+        populateHighCorrTable(data.high_correlations);
+
+        // Calculate and display stats
+        displayCorrelationStats(data.strategy_correlation.matrix);
+
+    } catch (error) {
+        console.error('Error loading correlation analysis:', error);
+    }
+}
+
+function createCorrelationHeatmap(matrix, labels, elementId, title) {
+    // Convert matrix object to 2D array
+    const zValues = [];
+    labels.forEach(row => {
+        const rowData = [];
+        labels.forEach(col => {
+            rowData.push(matrix[row] ? matrix[row][col] || 0 : 0);
+        });
+        zValues.push(rowData);
+    });
+
+    const data = [{
+        z: zValues,
+        x: labels,
+        y: labels,
+        type: 'heatmap',
+        colorscale: 'RdBu',
+        reversescale: true,
+        zmid: 0,
+        zmin: -1,
+        zmax: 1,
+        colorbar: {
+            title: 'Correlation',
+            titleside: 'right'
+        },
+        hovertemplate: '%{y} vs %{x}<br>Correlation: %{z:.3f}<extra></extra>'
+    }];
+
+    const layout = {
+        title: title,
+        xaxis: {
+            tickangle: -45,
+            side: 'bottom'
+        },
+        yaxis: {
+            tickangle: 0
+        },
+        width: null,
+        height: 600,
+        margin: {
+            l: 150,
+            r: 50,
+            t: 50,
+            b: 150
+        }
+    };
+
+    Plotly.newPlot(elementId, data, layout, {responsive: true});
+}
+
+function populateHighCorrTable(highCorrs) {
+    const tbody = document.getElementById('high-corr-tbody');
+
+    if (!highCorrs || highCorrs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="text-center text-success"><i class="fas fa-check-circle"></i> No highly correlated pairs found - excellent diversification!</td></tr>';
+        return;
+    }
+
+    tbody.innerHTML = '';
+
+    // Sort by absolute correlation
+    highCorrs.sort((a, b) => Math.abs(b.correlation) - Math.abs(a.correlation));
+
+    highCorrs.forEach(pair => {
+        const row = tbody.insertRow();
+        const absCorr = Math.abs(pair.correlation);
+
+        let interpretation = '';
+        let badgeClass = '';
+
+        if (absCorr > 0.9) {
+            interpretation = 'Extremely high - consider removing one';
+            badgeClass = 'bg-danger';
+        } else if (absCorr > 0.8) {
+            interpretation = 'Very high - limited diversification benefit';
+            badgeClass = 'bg-warning';
+        } else {
+            interpretation = 'Moderately high correlation';
+            badgeClass = 'bg-info';
+        }
+
+        row.innerHTML = `
+            <td><strong>${pair.strategy1}</strong></td>
+            <td><strong>${pair.strategy2}</strong></td>
+            <td><span class="badge ${badgeClass}">${pair.correlation.toFixed(3)}</span></td>
+            <td>${interpretation}</td>
+        `;
+    });
+}
+
+function displayCorrelationStats(matrix) {
+    const correlations = [];
+
+    // Extract all correlation values (excluding diagonal)
+    const strategies = Object.keys(matrix);
+    for (let i = 0; i < strategies.length; i++) {
+        for (let j = i + 1; j < strategies.length; j++) {
+            const corr = matrix[strategies[i]][strategies[j]];
+            if (corr !== undefined && !isNaN(corr)) {
+                correlations.push(corr);
+            }
+        }
+    }
+
+    if (correlations.length > 0) {
+        const avgCorr = correlations.reduce((a, b) => a + b, 0) / correlations.length;
+        const minCorr = Math.min(...correlations);
+        const maxCorr = Math.max(...correlations);
+
+        document.getElementById('avg-strat-corr').textContent = avgCorr.toFixed(3);
+        document.getElementById('min-corr').textContent = minCorr.toFixed(3);
+        document.getElementById('max-corr').textContent = maxCorr.toFixed(3);
+
+        // Color code based on average correlation
+        const avgCard = document.getElementById('avg-strat-corr').closest('.stat-card');
+        if (avgCorr < 0.3) {
+            avgCard.classList.remove('blue');
+            avgCard.classList.add('green');
+        } else if (avgCorr > 0.6) {
+            avgCard.classList.remove('blue');
+            avgCard.classList.add('orange');
+        }
+    }
+}
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', loadCorrelationAnalysis);
+</script>
+{% endblock %}

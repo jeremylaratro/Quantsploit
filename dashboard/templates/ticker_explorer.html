@@ -1,0 +1,403 @@
+{% extends "base.html" %}
+
+{% block title %}Ticker Explorer - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4">
+                <i class="fas fa-search"></i> Ticker Explorer
+            </h1>
+            <p class="lead">Advanced filtering and universe management - S&P 500, NASDAQ 100, sector breakdowns</p>
+            <small class="text-muted">Run: {{ timestamp }}</small>
+        </div>
+    </div>
+
+    <!-- Filter Controls -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-filter"></i> Advanced Filters</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <!-- Universe Selection -->
+                        <div class="col-md-3">
+                            <label class="form-label">Ticker Universe</label>
+                            <select class="form-select" id="universe-filter">
+                                <option value="">All Tickers</option>
+                                {% for display, key in universes.items() %}
+                                <option value="{{ key }}">{{ display }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Sector Filter -->
+                        <div class="col-md-3">
+                            <label class="form-label">Sector</label>
+                            <select class="form-select" id="sector-filter">
+                                <option value="">All Sectors</option>
+                                {% for sector in sectors %}
+                                <option value="{{ sector }}">{{ sector }}</option>
+                                {% endfor %}
+                            </select>
+                        </div>
+
+                        <!-- Market Cap Filter -->
+                        <div class="col-md-3">
+                            <label class="form-label">Market Cap</label>
+                            <select class="form-select" id="market-cap-filter">
+                                <option value="">All</option>
+                                <option value="Mega Cap">Mega Cap</option>
+                                <option value="Large Cap">Large Cap</option>
+                                <option value="Small Cap">Small Cap</option>
+                            </select>
+                        </div>
+
+                        <!-- Min Sharpe Filter -->
+                        <div class="col-md-3">
+                            <label class="form-label">Min Sharpe Ratio</label>
+                            <input type="number" class="form-control" id="min-sharpe" placeholder="e.g. 1.0" step="0.1">
+                        </div>
+                    </div>
+
+                    <div class="row g-3 mt-2">
+                        <!-- Min Return Filter -->
+                        <div class="col-md-3">
+                            <label class="form-label">Min Return (%)</label>
+                            <input type="number" class="form-control" id="min-return" placeholder="e.g. 10" step="1">
+                        </div>
+
+                        <!-- Min Win Rate Filter -->
+                        <div class="col-md-3">
+                            <label class="form-label">Min Win Rate (%)</label>
+                            <input type="number" class="form-control" id="min-winrate" placeholder="e.g. 50" step="1">
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="col-md-6 d-flex align-items-end">
+                            <button class="btn btn-primary me-2" onclick="applyFilters()">
+                                <i class="fas fa-filter"></i> Apply Filters
+                            </button>
+                            <button class="btn btn-secondary" onclick="resetFilters()">
+                                <i class="fas fa-redo"></i> Reset
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Summary -->
+    <div class="row mb-4">
+        <div class="col-md-4">
+            <div class="stat-card blue">
+                <div class="stat-label">Results Found</div>
+                <div class="stat-value" id="results-count">--</div>
+                <small>Matching your criteria</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card green">
+                <div class="stat-label">Avg Return</div>
+                <div class="stat-value" id="avg-return">--</div>
+                <small>Of filtered results</small>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="stat-card orange">
+                <div class="stat-label">Avg Sharpe</div>
+                <div class="stat-value" id="avg-sharpe">--</div>
+                <small>Risk-adjusted performance</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Quick Universe Buttons -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-bolt"></i> Quick Select Universe</h5>
+                </div>
+                <div class="card-body">
+                    <div class="btn-group flex-wrap" role="group">
+                        <button class="btn btn-outline-primary" onclick="selectUniverse('sp500')">
+                            <i class="fas fa-chart-line"></i> S&P 500
+                        </button>
+                        <button class="btn btn-outline-info" onclick="selectUniverse('nasdaq100')">
+                            <i class="fas fa-microchip"></i> NASDAQ 100
+                        </button>
+                        <button class="btn btn-outline-success" onclick="selectUniverse('russell2000')">
+                            <i class="fas fa-building"></i> Russell 2000
+                        </button>
+                        <button class="btn btn-outline-warning" onclick="selectUniverse('mega_cap')">
+                            <i class="fas fa-star"></i> Mega Cap
+                        </button>
+                        <button class="btn btn-outline-danger" onclick="selectUniverse('tech')">
+                            <i class="fas fa-laptop"></i> Technology
+                        </button>
+                        <button class="btn btn-outline-secondary" onclick="selectUniverse('healthcare')">
+                            <i class="fas fa-heartbeat"></i> Healthcare
+                        </button>
+                        <button class="btn btn-outline-dark" onclick="selectUniverse('financials')">
+                            <i class="fas fa-dollar-sign"></i> Financials
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Table -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-table"></i> Filtered Results</h5>
+                    <small class="text-muted">Top 100 results sorted by return</small>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped table-sm" id="results-table">
+                            <thead>
+                                <tr>
+                                    <th>Strategy</th>
+                                    <th>Symbol</th>
+                                    <th>Sector</th>
+                                    <th>Period</th>
+                                    <th>Return</th>
+                                    <th>Sharpe</th>
+                                    <th>Win Rate</th>
+                                    <th>Signal Acc.</th>
+                                    <th>Max DD</th>
+                                    <th>Trades</th>
+                                </tr>
+                            </thead>
+                            <tbody id="results-tbody">
+                                <tr><td colspan="10" class="text-center text-muted">Select filters and click Apply to view results</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Performance Distribution -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Return Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="return-distribution" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-scatter"></i> Risk-Return Scatter</h5>
+                </div>
+                <div class="card-body">
+                    <div id="risk-return-scatter" style="height: 300px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+let currentResults = [];
+
+function selectUniverse(universeName) {
+    document.getElementById('universe-filter').value = universeName;
+    applyFilters();
+}
+
+function resetFilters() {
+    document.getElementById('universe-filter').value = '';
+    document.getElementById('sector-filter').value = '';
+    document.getElementById('market-cap-filter').value = '';
+    document.getElementById('min-sharpe').value = '';
+    document.getElementById('min-return').value = '';
+    document.getElementById('min-winrate').value = '';
+
+    document.getElementById('results-tbody').innerHTML = '<tr><td colspan="10" class="text-center text-muted">Select filters and click Apply to view results</td></tr>';
+    document.getElementById('results-count').textContent = '--';
+    document.getElementById('avg-return').textContent = '--';
+    document.getElementById('avg-sharpe').textContent = '--';
+}
+
+async function applyFilters() {
+    const filters = {
+        sector: document.getElementById('sector-filter').value,
+        market_cap: document.getElementById('market-cap-filter').value,
+        min_sharpe: parseFloat(document.getElementById('min-sharpe').value) || undefined,
+        min_return: parseFloat(document.getElementById('min-return').value) / 100 || undefined,
+        min_win_rate: parseFloat(document.getElementById('min-winrate').value) || undefined
+    };
+
+    // Build query string
+    const params = new URLSearchParams();
+    Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== '') {
+            params.append(key, value);
+        }
+    });
+
+    try {
+        const response = await fetch(`/api/filter/{{ timestamp }}?${params.toString()}`);
+        const data = await response.json();
+
+        currentResults = data.results;
+
+        // Update summary
+        document.getElementById('results-count').textContent = data.total_results.toLocaleString();
+
+        if (data.total_results > 0) {
+            const avgReturn = data.results.reduce((sum, r) => sum + r.total_return, 0) / data.results.length;
+            const avgSharpe = data.results.reduce((sum, r) => sum + r.sharpe_ratio, 0) / data.results.length;
+
+            document.getElementById('avg-return').textContent = (avgReturn * 100).toFixed(2) + '%';
+            document.getElementById('avg-sharpe').textContent = avgSharpe.toFixed(2);
+
+            // Populate table
+            populateResultsTable(data.results);
+
+            // Create charts
+            createReturnDistribution(data.results);
+            createRiskReturnScatter(data.results);
+        } else {
+            document.getElementById('avg-return').textContent = 'N/A';
+            document.getElementById('avg-sharpe').textContent = 'N/A';
+            document.getElementById('results-tbody').innerHTML = '<tr><td colspan="10" class="text-center text-warning">No results match your filters</td></tr>';
+        }
+
+    } catch (error) {
+        console.error('Error applying filters:', error);
+    }
+}
+
+function populateResultsTable(results) {
+    const tbody = document.getElementById('results-tbody');
+    tbody.innerHTML = '';
+
+    results.slice(0, 100).forEach(result => {
+        const row = tbody.insertRow();
+
+        row.innerHTML = `
+            <td><strong>${result.strategy_name}</strong></td>
+            <td><span class="badge bg-primary">${result.symbol}</span></td>
+            <td>${result.sector || 'Unknown'}</td>
+            <td>${result.period_name}</td>
+            <td class="${result.total_return > 0 ? 'text-success' : 'text-danger'}">${(result.total_return * 100).toFixed(2)}%</td>
+            <td>${result.sharpe_ratio.toFixed(2)}</td>
+            <td>${result.win_rate.toFixed(1)}%</td>
+            <td>${result.signal_accuracy.toFixed(1)}%</td>
+            <td>${(result.max_drawdown * 100).toFixed(2)}%</td>
+            <td>${result.total_trades}</td>
+        `;
+
+        // Highlight excellent results
+        if (result.sharpe_ratio > 2.0) {
+            row.style.backgroundColor = '#e8f5e9';
+        }
+    });
+}
+
+function createReturnDistribution(results) {
+    const returns = results.map(r => r.total_return * 100);
+
+    // Create histogram bins
+    const bins = 20;
+    const min = Math.min(...returns);
+    const max = Math.max(...returns);
+    const binSize = (max - min) / bins;
+
+    const histogram = new Array(bins).fill(0);
+    const labels = [];
+
+    for (let i = 0; i < bins; i++) {
+        labels.push(`${(min + i * binSize).toFixed(1)}%`);
+    }
+
+    returns.forEach(ret => {
+        const binIndex = Math.min(Math.floor((ret - min) / binSize), bins - 1);
+        histogram[binIndex]++;
+    });
+
+    const ctx = document.getElementById('return-distribution').getContext('2d');
+
+    if (window.returnDistChart) {
+        window.returnDistChart.destroy();
+    }
+
+    window.returnDistChart = new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'Frequency',
+                data: histogram,
+                backgroundColor: 'rgba(75, 192, 192, 0.7)'
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Count' }
+                },
+                x: {
+                    title: { display: true, text: 'Return (%)' }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function createRiskReturnScatter(results) {
+    const trace = {
+        x: results.map(r => r.sharpe_ratio),
+        y: results.map(r => r.total_return * 100),
+        mode: 'markers',
+        type: 'scatter',
+        text: results.map(r => `${r.strategy_name} - ${r.symbol}`),
+        marker: {
+            size: 8,
+            color: results.map(r => r.win_rate),
+            colorscale: 'Viridis',
+            showscale: true,
+            colorbar: { title: 'Win Rate (%)' }
+        }
+    };
+
+    const layout = {
+        title: 'Risk-Return Profile',
+        xaxis: { title: 'Sharpe Ratio' },
+        yaxis: { title: 'Return (%)' },
+        hovermode: 'closest',
+        height: 300
+    };
+
+    Plotly.newPlot('risk-return-scatter', [trace], layout, {responsive: true});
+}
+
+// Load all results on page load (no filters)
+document.addEventListener('DOMContentLoaded', function() {
+    applyFilters();
+});
+</script>
+{% endblock %}

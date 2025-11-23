@@ -31,6 +31,71 @@
     </div>
 </div>
 
+<!-- Advanced Analytics Navigation -->
+<div class="row mb-4" id="advanced-nav" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-gradient-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-rocket"></i> Institutional-Grade Analytics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('risk-analytics')" class="btn btn-outline-danger w-100">
+                            <i class="fas fa-exclamation-triangle"></i><br>Risk Analytics
+                            <small class="d-block text-muted">VaR, CVaR, Drawdowns</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('portfolio')" class="btn btn-outline-success w-100">
+                            <i class="fas fa-briefcase"></i><br>Portfolio Builder
+                            <small class="d-block text-muted">Multi-Strategy Allocation</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('correlation')" class="btn btn-outline-info w-100">
+                            <i class="fas fa-project-diagram"></i><br>Correlation
+                            <small class="d-block text-muted">Strategy & Symbol Correlation</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('time-analysis')" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-calendar-alt"></i><br>Time Analysis
+                            <small class="d-block text-muted">Period Breakdown</small>
+                        </a>
+                    </div>
+                </div>
+                <div class="row g-3 mt-2">
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('sector-analysis')" class="btn btn-outline-warning w-100">
+                            <i class="fas fa-industry"></i><br>Sector Analysis
+                            <small class="d-block text-muted">Performance by Sector</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('ticker-explorer')" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-search"></i><br>Ticker Explorer
+                            <small class="d-block text-muted">Advanced Filtering</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="/comparison" class="btn btn-outline-dark w-100">
+                            <i class="fas fa-code-compare"></i><br>Compare Runs
+                            <small class="d-block text-muted">Multi-Run Comparison</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('rolling-metrics')" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-chart-line"></i><br>Rolling Metrics
+                            <small class="d-block text-muted">Time-Series Analysis</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Loading Indicator -->
 <div id="loadingIndicator" class="text-center py-5" style="display: none;">
     <div class="loading-spinner mx-auto mb-3"></div>
@@ -208,6 +273,13 @@ function refreshData() {
     }
 }
 
+function navigateTo(page) {
+    if (currentTimestamp) {
+        window.location.href = `/${page}/${currentTimestamp}`;
+    }
+    return false;
+}
+
 async function loadDashboardData(timestamp) {
     document.getElementById('loadingIndicator').style.display = 'block';
     document.getElementById('dashboardContent').style.display = 'none';
@@ -238,6 +310,7 @@ async function loadDashboardData(timestamp) {
 
         document.getElementById('loadingIndicator').style.display = 'none';
         document.getElementById('dashboardContent').style.display = 'block';
+        document.getElementById('advanced-nav').style.display = 'block';
 
     } catch (error) {
         console.error('Error loading dashboard data:', error);

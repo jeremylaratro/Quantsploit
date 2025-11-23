@@ -756,24 +756,376 @@ def api_heatmap(timestamp):
     }))
 
 
-@app.route('/docs')
-def docs():
-    """Documentation page - renders tickers.md as HTML"""
-    # Use absolute path to find tickers.md in project root
-    tickers_file = Path(__file__).parent.parent / 'tickers.md'
+# ===== NEW INSTITUTIONAL-GRADE ANALYTICS ENDPOINTS =====
 
-    if not tickers_file.exists():
-        return render_template('docs.html',
-                             content='<h1>Documentation Not Found</h1><p>tickers.md file not found at project root.</p>')
+@app.route('/risk-analytics/<timestamp>')
+def risk_analytics(timestamp):
+    """Risk Analytics Dashboard"""
+    return render_template('risk_analytics.html', timestamp=timestamp)
+
+
+@app.route('/api/risk-analytics/<timestamp>')
+def api_risk_analytics(timestamp):
+    """API: Advanced risk analytics"""
+    data = data_loader.get_risk_analytics(timestamp)
+    return jsonify(data)
+
+
+@app.route('/correlation/<timestamp>')
+def correlation(timestamp):
+    """Correlation Analysis Dashboard"""
+    return render_template('correlation.html', timestamp=timestamp)
+
+
+@app.route('/api/correlation/<timestamp>')
+def api_correlation(timestamp):
+    """API: Correlation matrix and analysis"""
+    data = data_loader.get_correlation_analysis(timestamp)
+    return jsonify(data)
+
+
+@app.route('/time-analysis/<timestamp>')
+def time_analysis(timestamp):
+    """Time Period Analysis Dashboard"""
+    return render_template('time_analysis.html', timestamp=timestamp)
+
+
+@app.route('/api/time-analysis/<timestamp>')
+def api_time_analysis(timestamp):
+    """API: Detailed time period breakdown"""
+    data = data_loader.get_time_period_breakdown(timestamp)
+    return jsonify(data)
+
+
+@app.route('/sector-analysis/<timestamp>')
+def sector_analysis(timestamp):
+    """Sector Analysis Dashboard"""
+    return render_template('sector_analysis.html', timestamp=timestamp)
+
+
+@app.route('/api/sector-analysis/<timestamp>')
+def api_sector_analysis(timestamp):
+    """API: Sector-based performance analysis"""
+    data = data_loader.get_sector_analysis(timestamp)
+    return jsonify(data)
+
+
+@app.route('/portfolio/<timestamp>')
+def portfolio(timestamp):
+    """Portfolio Construction Dashboard"""
+    return render_template('portfolio.html', timestamp=timestamp)
+
+
+@app.route('/api/portfolio/<timestamp>')
+def api_portfolio(timestamp):
+    """API: Portfolio construction analysis"""
+    num_strategies = request.args.get('num_strategies', 5, type=int)
+    data = data_loader.get_portfolio_construction(timestamp, num_strategies)
+    return jsonify(data)
+
+
+@app.route('/ticker-explorer')
+@app.route('/ticker-explorer/<timestamp>')
+def ticker_explorer(timestamp=None):
+    """Ticker Explorer with Advanced Filtering"""
+    universes = get_all_universes()
+    sectors = get_all_sectors()
+    return render_template('ticker_explorer.html',
+                         universes=universes,
+                         sectors=sectors)
+
+
+@app.route('/api/filter/<timestamp>')
+def api_filter(timestamp):
+    """API: Advanced ticker filtering"""
+    filters = {
+        'sector': request.args.get('sector'),
+        'market_cap': request.args.get('market_cap'),
+        'min_sharpe': request.args.get('min_sharpe', type=float),
+        'min_return': request.args.get('min_return', type=float),
+        'min_win_rate': request.args.get('min_win_rate', type=float)
+    }
+    # Remove None values
+    filters = {k: v for k, v in filters.items() if v is not None}
+
+    data = data_loader.get_ticker_filtering(timestamp, filters)
+    return jsonify(data)
+
+
+@app.route('/rolling-metrics/<timestamp>')
+def rolling_metrics(timestamp):
+    """Rolling Metrics Dashboard"""
+    return render_template('rolling_metrics.html', timestamp=timestamp)
+
+
+@app.route('/api/rolling-metrics/<timestamp>')
+def api_rolling_metrics(timestamp):
+    """API: Rolling performance metrics"""
+    window = request.args.get('window', 3, type=int)
+    data = data_loader.get_rolling_metrics(timestamp, window)
+    return jsonify(data)
+
+
+@app.route('/api/universes')
+def api_universes():
+    """API: Get all available ticker universes"""
+    return jsonify(get_all_universes())
+
+
+@app.route('/api/universe/<universe_name>')
+def api_universe(universe_name):
+    """API: Get tickers in a specific universe"""
+    tickers = get_universe(universe_name)
+    return jsonify({'universe': universe_name, 'tickers': tickers, 'count': len(tickers)})
+
+
+@app.route('/api/sectors')
+def api_sectors():
+    """API: Get all sectors"""
+    return jsonify({'sectors': get_all_sectors()})
+
+
+@app.route('/api/sector-tickers/<sector>')
+def api_sector_tickers(sector):
+    """API: Get tickers in a specific sector"""
+    tickers = get_sector_tickers(sector)
+    return jsonify({'sector': sector, 'tickers': tickers, 'count': len(tickers)})
+
+
+@app.route('/api/strategies/available')
+def api_strategies_available():
+    """API: Get list of available trading strategies"""
+    strategies = [
+        {'id': 'sma_crossover', 'name': 'SMA Crossover', 'description': 'Moving average crossover (20/50)'},
+        {'id': 'mean_reversion', 'name': 'Mean Reversion', 'description': '20-day mean reversion with z-score'},
+        {'id': 'momentum_signals', 'name': 'Momentum', 'description': 'Multi-period momentum (10/20/50)'},
+        {'id': 'multifactor_scoring', 'name': 'Multi-Factor Scoring', 'description': 'Composite factor scoring'},
+        {'id': 'kalman_adaptive', 'name': 'Kalman Adaptive', 'description': 'Kalman filter-based adaptive strategy'},
+        {'id': 'kalman_adaptive_sensitive', 'name': 'Kalman Adaptive (Sensitive)', 'description': 'More responsive Kalman variant'},
+        {'id': 'volume_profile_swing', 'name': 'Volume Profile Swing', 'description': 'Volume profile analysis'},
+        {'id': 'volume_profile_fast', 'name': 'Volume Profile (Fast)', 'description': 'Faster volume profile variant'},
+        {'id': 'hmm_regime_detection', 'name': 'HMM Regime Detection', 'description': 'Hidden Markov Model regime detection'},
+        {'id': 'hmm_regime_longterm', 'name': 'HMM Regime (Long-term)', 'description': 'Long-term HMM variant'},
+        {'id': 'ml_swing_trading', 'name': 'ML Swing Trading', 'description': 'Machine learning swing strategy'},
+        {'id': 'pairs_trading', 'name': 'Pairs Trading', 'description': 'Statistical arbitrage pairs trading'}
+    ]
+    return jsonify({'strategies': strategies})
+
+
+@app.route('/backtest-launcher')
+def backtest_launcher():
+    """Backtest Launcher Page"""
+    universes = get_all_universes()
+    sectors = get_all_sectors()
+    return render_template('backtest_launcher.html',
+                         universes=universes,
+                         sectors=sectors)
+
+
+@app.route('/api/launch-backtest', methods=['POST'])
+def api_launch_backtest():
+    """API: Launch a new backtest"""
+    import subprocess
+    import threading
+    from datetime import datetime
+    import uuid
+
+    data = request.json
+
+    # Generate job ID
+    job_id = str(uuid.uuid4())[:8]
+
+    # Build command
+    cmd = ['python', '-m', 'quantsploit.main', 'use', 'analysis/comprehensive_strategy_backtest']
+
+    # Add set commands for options
+    tickers = ','.join(data['tickers'][:50])  # Limit to 50 tickers for safety
+
+    def run_backtest():
+        """Run backtest in background thread"""
+        try:
+            # Store job status
+            backtest_jobs[job_id] = {
+                'status': 'running',
+                'progress': 0,
+                'log': 'Starting backtest...\n',
+                'start_time': datetime.now().isoformat()
+            }
+
+            # Build comprehensive command
+            from pathlib import Path
+            import sys
+
+            # Add quantsploit to path
+            quantsploit_path = Path(__file__).parent.parent
+            sys.path.insert(0, str(quantsploit_path))
+
+            # Import and run backtest directly
+            from quantsploit.utils.comprehensive_backtest import run_comprehensive_analysis
+
+            # Build backtest config
+            symbols = data['tickers']
+            strategies = data.get('strategies', [])  # Get selected strategies
+            period_config = data.get('period_config', {})
+
+            # Prepare keyword arguments (only parameters that run_comprehensive_analysis accepts)
+            kwargs = {
+                'symbols': symbols,
+                'output_dir': str(RESULTS_DIR)
+            }
+
+            # Add strategies filter if specified
+            if strategies:
+                kwargs['strategy_keys'] = strategies
+                backtest_jobs[job_id]['log'] += f'Using {len(strategies)} selected strategies\n'
+            else:
+                backtest_jobs[job_id]['log'] += 'Using all available strategies\n'
+
+            # Add period configuration
+            if period_config.get('mode') == 'custom':
+                kwargs['tspan'] = period_config.get('tspan')
+                kwargs['bspan'] = period_config.get('bspan')
+                kwargs['num_periods'] = period_config.get('num_periods', 4)
+            elif period_config.get('mode') == 'quarterly':
+                quarters_str = ','.join(period_config.get('quarters', ['2']))
+                kwargs['quarters'] = quarters_str
+                # Pass years_back as num_periods for quarterly mode
+                if 'years_back' in period_config:
+                    kwargs['num_periods'] = period_config.get('years_back', 2)
+
+            # Note: initial_capital is hardcoded to $100k in run_comprehensive_analysis
+            # commission and quick_mode are not supported by the function
+
+            backtest_jobs[job_id]['log'] += f'Testing {len(symbols)} symbols...\n'
+            backtest_jobs[job_id]['progress'] = 10
+
+            # Run the analysis
+            run_comprehensive_analysis(**kwargs)
+
+            backtest_jobs[job_id]['status'] = 'completed'
+            backtest_jobs[job_id]['progress'] = 100
+            backtest_jobs[job_id]['log'] += '\nBacktest completed successfully!'
+
+        except Exception as e:
+            backtest_jobs[job_id]['status'] = 'failed'
+            backtest_jobs[job_id]['error'] = str(e)
+            backtest_jobs[job_id]['log'] += f'\nError: {str(e)}'
+
+    # Start background thread
+    thread = threading.Thread(target=run_backtest, daemon=True)
+    thread.start()
+
+    return jsonify({'success': True, 'job_id': job_id})
+
+
+@app.route('/api/backtest-status/<job_id>')
+def api_backtest_status(job_id):
+    """API: Get status of a running backtest"""
+    if job_id in backtest_jobs:
+        return jsonify(backtest_jobs[job_id])
+    else:
+        return jsonify({'status': 'not_found'}), 404
+
+
+@app.route('/candlestick/<timestamp>/<strategy_name>/<symbol>')
+def candlestick_view(timestamp, strategy_name, symbol):
+    """Candlestick chart view for a specific strategy and symbol"""
+    return render_template('candlestick.html',
+                         timestamp=timestamp,
+                         strategy_name=strategy_name,
+                         symbol=symbol)
+
+
+@app.route('/api/candlestick/<timestamp>/<strategy_name>/<symbol>')
+def api_candlestick(timestamp, strategy_name, symbol):
+    """API: Get candlestick data with trade signals overlaid"""
+    from quantsploit.utils.data_fetcher import DataFetcher
 
     try:
-        with open(tickers_file, 'r') as f:
-            md_content = f.read()
-        html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'codehilite'])
-        return render_template('docs.html', content=html_content)
+        # Load trade details
+        trades_file = RESULTS_DIR / f'trades_{timestamp}.csv'
+        if not trades_file.exists():
+            return jsonify({'error': 'Trade data not found. Please run a new backtest to generate trade details.'}), 404
+
+        trades_df = pd.read_csv(trades_file)
+
+        # Filter trades for this strategy and symbol
+        strategy_trades = trades_df[
+            (trades_df['strategy_name'] == strategy_name) &
+            (trades_df['symbol'] == symbol)
+        ]
+
+        if len(strategy_trades) == 0:
+            return jsonify({'error': 'No trades found for this strategy/symbol combination'}), 404
+
+        # Get the date range from trades
+        strategy_trades['entry_date'] = pd.to_datetime(strategy_trades['entry_date'])
+        strategy_trades['exit_date'] = pd.to_datetime(strategy_trades['exit_date'])
+
+        start_date = strategy_trades['entry_date'].min()
+        end_date = strategy_trades['exit_date'].max()
+
+        # Add buffer around dates
+        from datetime import timedelta
+        start_date = start_date - timedelta(days=30)
+        end_date = end_date + timedelta(days=30)
+
+        # Fetch OHLC data
+        data_fetcher = DataFetcher()
+        ohlc_data = data_fetcher.get_stock_data(
+            symbol=symbol,
+            period='3y',  # Get enough data
+            interval='1d'
+        )
+
+        if ohlc_data is None or len(ohlc_data) == 0:
+            return jsonify({'error': 'Failed to fetch stock data'}), 500
+
+        # Filter to date range
+        ohlc_data = ohlc_data.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+
+        # Prepare OHLC data for Plotly
+        ohlc_data_dict = {
+            'dates': ohlc_data.index.strftime('%Y-%m-%d').tolist(),
+            'open': ohlc_data['Open'].tolist(),
+            'high': ohlc_data['High'].tolist(),
+            'low': ohlc_data['Low'].tolist(),
+            'close': ohlc_data['Close'].tolist(),
+            'volume': ohlc_data['Volume'].tolist() if 'Volume' in ohlc_data.columns else []
+        }
+
+        # Prepare trade data
+        trades_list = []
+        for _, trade in strategy_trades.iterrows():
+            trades_list.append({
+                'entry_date': trade['entry_date'].strftime('%Y-%m-%d'),
+                'exit_date': trade['exit_date'].strftime('%Y-%m-%d'),
+                'entry_price': float(trade['entry_price']),
+                'exit_price': float(trade['exit_price']),
+                'shares': int(trade['shares']),
+                'side': trade['side'],
+                'pnl': float(trade['pnl']),
+                'pnl_pct': float(trade['pnl_pct']),
+                'mae': float(trade['mae']),
+                'mfe': float(trade['mfe'])
+            })
+
+        return jsonify(convert_numpy_types({
+            'ohlc': ohlc_data_dict,
+            'trades': trades_list,
+            'symbol': symbol,
+            'strategy': strategy_name
+        }))
+
     except Exception as e:
-        return render_template('docs.html',
-                             content=f'<h1>Error Loading Documentation</h1><p>{str(e)}</p>')
+        import traceback
+        print(f"Error in candlestick API: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+
+# Global dict to store backtest job status
+backtest_jobs = {}
 
 
 @app.route('/api/universes')

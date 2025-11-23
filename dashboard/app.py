@@ -659,12 +659,14 @@ def debug_runs():
     runs = data_loader.get_available_runs()
     return f"<h1>Found {len(runs)} runs:</h1><pre>{json.dumps(runs, indent=2)}</pre>"
 
-#@app.route('/docs')  # or whatever route you want
-#def docs():
-#    with open('tickers.md', 'r') as f:
-#        md_content = f.read()
-#    html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'codehilite'])
-#    return render_template('docs.html', content=html_content)
+@app.route('/docs')
+def docs():
+    """Display the ticker reference documentation"""
+    tickers_file = Path(__file__).parent / 'tickers.md'
+    with open(tickers_file, 'r') as f:
+        md_content = f.read()
+    html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code'])
+    return render_template('docs.html', content=html_content)
 
 @app.route('/api/runs')
 def api_runs():
@@ -885,11 +887,14 @@ def api_sectors():
     return jsonify({'sectors': get_all_sectors()})
 
 
-@app.route('/api/sector-tickers/<sector>')
+@app.route('/api/sector-tickers/<path:sector>')
 def api_sector_tickers(sector):
     """API: Get tickers in a specific sector"""
-    tickers = get_sector_tickers(sector)
-    return jsonify({'sector': sector, 'tickers': tickers, 'count': len(tickers)})
+    from urllib.parse import unquote
+    # Explicitly URL-decode the sector name to handle special characters
+    sector_decoded = unquote(sector)
+    tickers = get_sector_tickers(sector_decoded)
+    return jsonify({'sector': sector_decoded, 'tickers': tickers, 'count': len(tickers)})
 
 
 @app.route('/api/strategies/available')
@@ -916,7 +921,9 @@ def api_strategies_available():
 def backtest_launcher():
     """Backtest Launcher Page"""
     universes = get_all_universes()
-    sectors = get_all_sectors()
+    # Return sectors as a dict with display name as key and sector name as value
+    sectors_list = get_all_sectors()
+    sectors = {sector: sector for sector in sectors_list}
     return render_template('backtest_launcher.html',
                          universes=universes,
                          sectors=sectors)

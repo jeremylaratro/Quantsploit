@@ -241,14 +241,21 @@ def get_universe(name):
 
 def get_all_universes():
     """Get dictionary of all available universes organized by category"""
-    return {
-        '=== HIGH-LEVEL SECTORS ===': None,
-        **{name: _normalize_name(name) for name in HIGH_LEVEL_SECTORS.keys()},
-        '=== NICHE SECTORS ===': None,
-        **{name: _normalize_name(name) for name in NICHE_SECTORS.keys()},
-        '=== CLASSIC INDICES ===': None,
-        **{name: _normalize_name(name) for name in CLASSIC_UNIVERSES.keys()},
-    }
+    result = {}
+
+    # Add high-level sectors
+    for name in HIGH_LEVEL_SECTORS.keys():
+        result[name] = _normalize_name(name)
+
+    # Add niche sectors
+    for name in NICHE_SECTORS.keys():
+        result[name] = _normalize_name(name)
+
+    # Add classic universes
+    for name in CLASSIC_UNIVERSES.keys():
+        result[name] = _normalize_name(name)
+
+    return result
 
 def get_all_sectors():
     """Get list of all sector names"""

@@ -696,6 +696,7 @@ class ComprehensiveBacktester:
         }
 
         self.results: List[StrategyPerformance] = []
+        self.all_trades: List[Dict] = []
 
     def generate_test_periods(self, years_back: int = 3,
                              tspan: Optional[str] = None,
@@ -919,6 +920,25 @@ class ComprehensiveBacktester:
                 signal_accuracy=accuracy
             )
 
+            # Store trade details for candlestick visualization
+            for trade in completed_trades:
+                trade_record = {
+                    'strategy_name': strategy_info['name'],
+                    'period_name': period.description,
+                    'symbol': symbol,
+                    'entry_date': trade.entry_date,
+                    'exit_date': trade.exit_date,
+                    'entry_price': trade.entry_price,
+                    'exit_price': trade.exit_price,
+                    'shares': trade.shares,
+                    'side': trade.side.value,
+                    'pnl': trade.pnl,
+                    'pnl_pct': trade.pnl_pct,
+                    'mae': trade.mae,
+                    'mfe': trade.mfe
+                }
+                self.all_trades.append(trade_record)
+
             return performance
 
         except Exception as e:
@@ -959,6 +979,7 @@ class ComprehensiveBacktester:
         logger.info(f"  - Total: {len(self.strategies) * len(self.symbols) * len(periods)} backtests")
 
         self.results = []
+        self.all_trades = []  # Store all trades for candlestick visualization
 
         # Generate all combinations
         tasks = []
@@ -1120,6 +1141,17 @@ class ComprehensiveBacktester:
         except Exception as e:
             logger.error(f"✗ Failed to save CSV: {str(e)}")
             raise
+
+        try:
+            # Save trade details for candlestick visualization
+            if self.all_trades:
+                trades_file = f'{output_dir}/trades_{timestamp}.csv'
+                trades_df = pd.DataFrame(self.all_trades)
+                trades_df.to_csv(trades_file, index=False)
+                logger.info(f"✓ Trade details saved to {trades_file}")
+        except Exception as e:
+            logger.error(f"✗ Failed to save trades CSV: {str(e)}")
+            # Don't raise, this is not critical
 
         try:
             # Save summary

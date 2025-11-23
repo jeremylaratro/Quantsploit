@@ -12,7 +12,11 @@ from pathlib import Path
 from datetime import datetime
 import numpy as np
 from typing import Dict, List, Optional
-import markdown
+from scipy import stats
+from ticker_universe import (
+    get_universe, get_sector, get_all_sectors, get_sector_tickers,
+    get_market_cap_class, get_all_universes, SP500_BY_SECTOR
+)
 
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
@@ -774,54 +778,110 @@ def docs():
 
 @app.route('/backtest-launcher')
 def backtest_launcher():
-    """Backtest launcher page"""
-    return render_template('backtest_launcher.html')
+    """Backtest Launcher Page"""
+    universes = get_all_universes()
+    sectors = get_all_sectors()
+    return render_template('backtest_launcher.html',
+                         universes=universes,
+                         sectors=sectors)
 
 
 @app.route('/api/launch-backtest', methods=['POST'])
 def api_launch_backtest():
-    """API: Launch a new backtest in the background"""
+    """API: Launch a new backtest"""
     import subprocess
+    import threading
+    from datetime import datetime
+    import uuid
 
-    try:
-        data = request.get_json()
+    data = request.json
 
-        # Build command
-        script_path = Path(__file__).parent.parent / 'run_comprehensive_backtest.py'
-        cmd = ['python3', str(script_path)]
+    # Generate job ID
+    job_id = str(uuid.uuid4())[:8]
 
-        # Add symbols
-        cmd.extend(['--symbols', data['symbols']])
+    # Build command
+    cmd = ['python', '-m', 'quantsploit.main', 'use', 'analysis/comprehensive_strategy_backtest']
 
-        # Add capital and commission
-        cmd.extend(['--capital', str(data['capital'])])
-        cmd.extend(['--commission', str(data['commission'])])
+    # Add set commands for options
+    tickers = ','.join(data['tickers'][:50])  # Limit to 50 tickers for safety
 
-        # Add period-specific parameters
-        period_mode = data.get('period_mode', 'default')
+    def run_backtest():
+        """Run backtest in background thread"""
+        try:
+            # Store job status
+            backtest_jobs[job_id] = {
+                'status': 'running',
+                'progress': 0,
+                'log': 'Starting backtest...\n',
+                'start_time': datetime.now().isoformat()
+            }
 
-        if period_mode == 'custom':
-            cmd.extend(['--tspan', data['tspan']])
-            cmd.extend(['--bspan', data['bspan']])
-            cmd.extend(['--period', str(data['num_periods'])])
-        elif period_mode == 'quarterly':
-            cmd.extend(['--quarter', data['quarters']])
-            if 'quarter_periods' in data:
-                cmd.extend(['--period', str(data['quarter_periods'])])
+            # Build comprehensive command
+            from pathlib import Path
+            import sys
 
-        # Launch in background
-        print(f"Launching backtest: {' '.join(cmd)}")
-        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            # Add quantsploit to path
+            quantsploit_path = Path(__file__).parent.parent
+            sys.path.insert(0, str(quantsploit_path))
 
-        return jsonify({
-            'success': True,
-            'message': 'Backtest launched successfully',
-            'command': ' '.join(cmd)
-        })
+            # Import and run backtest directly
+            from quantsploit.utils.comprehensive_backtest import run_comprehensive_analysis
 
-    except Exception as e:
-        print(f"Error launching backtest: {e}")
-        return jsonify({'error': str(e)}), 500
+            # Build backtest config
+            symbols = data['tickers']
+            period_config = data.get('period_config', {})
+
+            # Prepare keyword arguments
+            kwargs = {
+                'symbols': symbols,
+                'output_dir': RESULTS_DIR,
+                'initial_capital': data.get('initial_capital', 100000),
+                'commission': data.get('commission', 0.001),
+                'quick_mode': data.get('quick_mode', False)
+            }
+
+            # Add period configuration
+            if period_config.get('mode') == 'custom':
+                kwargs['tspan'] = period_config.get('tspan')
+                kwargs['bspan'] = period_config.get('bspan')
+                kwargs['num_periods'] = period_config.get('num_periods', 4)
+            elif period_config.get('mode') == 'quarterly':
+                quarters_str = ','.join(period_config.get('quarters', ['2']))
+                kwargs['quarters'] = quarters_str
+
+            backtest_jobs[job_id]['log'] += f'Testing {len(symbols)} symbols...\n'
+            backtest_jobs[job_id]['progress'] = 10
+
+            # Run the analysis
+            run_comprehensive_analysis(**kwargs)
+
+            backtest_jobs[job_id]['status'] = 'completed'
+            backtest_jobs[job_id]['progress'] = 100
+            backtest_jobs[job_id]['log'] += '\nBacktest completed successfully!'
+
+        except Exception as e:
+            backtest_jobs[job_id]['status'] = 'failed'
+            backtest_jobs[job_id]['error'] = str(e)
+            backtest_jobs[job_id]['log'] += f'\nError: {str(e)}'
+
+    # Start background thread
+    thread = threading.Thread(target=run_backtest, daemon=True)
+    thread.start()
+
+    return jsonify({'success': True, 'job_id': job_id})
+
+
+@app.route('/api/backtest-status/<job_id>')
+def api_backtest_status(job_id):
+    """API: Get status of a running backtest"""
+    if job_id in backtest_jobs:
+        return jsonify(backtest_jobs[job_id])
+    else:
+        return jsonify({'status': 'not_found'}), 404
+
+
+# Global dict to store backtest job status
+backtest_jobs = {}
 
 
 if __name__ == '__main__':

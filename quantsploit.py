@@ -19,6 +19,7 @@ def check_dependencies():
         ('numpy', 'numpy'),
         ('scipy', 'scipy'),
         ('sklearn', 'scikit-learn'),
+        ('tabulate', 'tabulate'),
         ('prompt_toolkit', 'prompt_toolkit'),
         ('rich', 'rich'),
         ('yaml', 'pyyaml'),

@@ -1,0 +1,553 @@
+{% extends "base.html" %}
+
+{% block title %}Backtest Launcher - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4">
+                <i class="fas fa-rocket"></i> Backtest Launcher
+            </h1>
+            <p class="lead">Configure and launch comprehensive backtests across universes, sectors, and strategies</p>
+        </div>
+    </div>
+
+    <!-- Quick Launch Buttons -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-bolt"></i> Quick Launch Presets</h5>
+                </div>
+                <div class="card-body">
+                    <div class="row g-3">
+                        <div class="col-md-3">
+                            <button class="btn btn-lg btn-outline-primary w-100" onclick="loadPreset('sp500_tech')">
+                                <i class="fas fa-microchip"></i><br>
+                                <strong>S&P 500 Tech</strong><br>
+                                <small>Top 20 tech stocks, all strategies</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-lg btn-outline-success w-100" onclick="loadPreset('mega_cap')">
+                                <i class="fas fa-star"></i><br>
+                                <strong>Mega Cap</strong><br>
+                                <small>Top 10 mega cap, quarterly</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-lg btn-outline-info w-100" onclick="loadPreset('sector_rotation')">
+                                <i class="fas fa-industry"></i><br>
+                                <strong>Sector Rotation</strong><br>
+                                <small>All sectors, best strategies</small>
+                            </button>
+                        </div>
+                        <div class="col-md-3">
+                            <button class="btn btn-lg btn-outline-warning w-100" onclick="loadPreset('nasdaq100')">
+                                <i class="fas fa-chart-line"></i><br>
+                                <strong>NASDAQ 100</strong><br>
+                                <small>Full NASDAQ 100, 2yr</small>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backtest Configuration Form -->
+    <div class="row">
+        <div class="col-md-6">
+            <!-- Ticker Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-list"></i> Ticker Selection</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Selection Mode</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="tickerMode" id="modeUniverse" checked>
+                            <label class="btn btn-outline-primary" for="modeUniverse" onclick="toggleTickerMode('universe')">Universe</label>
+
+                            <input type="radio" class="btn-check" name="tickerMode" id="modeSector">
+                            <label class="btn btn-outline-primary" for="modeSector" onclick="toggleTickerMode('sector')">Sector</label>
+
+                            <input type="radio" class="btn-check" name="tickerMode" id="modeCustom">
+                            <label class="btn btn-outline-primary" for="modeCustom" onclick="toggleTickerMode('custom')">Custom</label>
+                        </div>
+                    </div>
+
+                    <!-- Universe Selection -->
+                    <div id="universe-section">
+                        <label class="form-label">Select Universe</label>
+                        <select class="form-select mb-2" id="universe-select" onchange="updateTickerPreview()">
+                            {% for display, key in universes.items() %}
+                            <option value="{{ key }}">{{ display }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-check mb-3">
+                            <input class="form-check-input" type="checkbox" id="limit-tickers">
+                            <label class="form-check-label" for="limit-tickers">
+                                Limit to first <input type="number" id="ticker-limit" value="20" min="1" max="100" style="width: 70px;" class="form-control form-control-sm d-inline"> tickers
+                            </label>
+                        </div>
+                    </div>
+
+                    <!-- Sector Selection -->
+                    <div id="sector-section" style="display: none;">
+                        <label class="form-label">Select Sectors (multi-select)</label>
+                        <select class="form-select" id="sector-select" multiple size="6" onchange="updateTickerPreview()">
+                            {% for sector in sectors %}
+                            <option value="{{ sector }}">{{ sector }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
+                    </div>
+
+                    <!-- Custom Ticker Input -->
+                    <div id="custom-section" style="display: none;">
+                        <label class="form-label">Enter Tickers (comma-separated)</label>
+                        <textarea class="form-control" id="custom-tickers" rows="4" placeholder="AAPL,MSFT,GOOGL,TSLA,NVDA"></textarea>
+                    </div>
+
+                    <div class="mt-3 p-3 bg-light rounded">
+                        <strong>Selected Tickers:</strong> <span id="ticker-count">0</span>
+                        <div id="ticker-preview" class="mt-2" style="max-height: 150px; overflow-y: auto;">
+                            <small class="text-muted">Select tickers to see preview</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Time Period Configuration -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-calendar"></i> Time Period Configuration</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Period Mode</label>
+                        <div class="btn-group w-100" role="group">
+                            <input type="radio" class="btn-check" name="periodMode" id="modeDefault" checked>
+                            <label class="btn btn-outline-primary" for="modeDefault" onclick="togglePeriodMode('default')">Default</label>
+
+                            <input type="radio" class="btn-check" name="periodMode" id="modeCustomPeriod">
+                            <label class="btn btn-outline-primary" for="modeCustomPeriod" onclick="togglePeriodMode('custom')">Custom Span</label>
+
+                            <input type="radio" class="btn-check" name="periodMode" id="modeQuarterly">
+                            <label class="btn btn-outline-primary" for="modeQuarterly" onclick="togglePeriodMode('quarterly')">Quarterly</label>
+                        </div>
+                    </div>
+
+                    <!-- Default Periods -->
+                    <div id="default-period-section">
+                        <div class="alert alert-info">
+                            <i class="fas fa-info-circle"></i>
+                            Default mode tests: 1yr, 2yr, 3yr, and rolling 6-month periods
+                        </div>
+                    </div>
+
+                    <!-- Custom Period Configuration -->
+                    <div id="custom-period-section" style="display: none;">
+                        <div class="row">
+                            <div class="col-md-4">
+                                <label class="form-label">Total Timespan</label>
+                                <input type="text" class="form-control" id="tspan" placeholder="2y">
+                                <small class="text-muted">e.g., 2y, 18m, 730d</small>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Period Length</label>
+                                <input type="text" class="form-control" id="bspan" placeholder="6m">
+                                <small class="text-muted">e.g., 6m, 180d</small>
+                            </div>
+                            <div class="col-md-4">
+                                <label class="form-label">Num Periods</label>
+                                <input type="number" class="form-control" id="num-periods" value="4" min="1">
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quarterly Configuration -->
+                    <div id="quarterly-section" style="display: none;">
+                        <label class="form-label">Select Quarters</label>
+                        <div class="btn-group w-100 mb-2" role="group">
+                            <input type="checkbox" class="btn-check" id="q1">
+                            <label class="btn btn-outline-primary" for="q1">Q1</label>
+
+                            <input type="checkbox" class="btn-check" id="q2">
+                            <label class="btn btn-outline-primary" for="q2">Q2</label>
+
+                            <input type="checkbox" class="btn-check" id="q3">
+                            <label class="btn btn-outline-primary" for="q3">Q3</label>
+
+                            <input type="checkbox" class="btn-check" id="q4">
+                            <label class="btn btn-outline-primary" for="q4">Q4</label>
+                        </div>
+                        <div>
+                            <label class="form-label">Number of Years Back</label>
+                            <input type="number" class="form-control" id="years-back" value="3" min="1" max="10">
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <!-- Strategy Selection -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-brain"></i> Strategy Selection</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <button class="btn btn-sm btn-outline-primary me-2" onclick="selectAllStrategies()">
+                            <i class="fas fa-check-double"></i> Select All
+                        </button>
+                        <button class="btn btn-sm btn-outline-secondary" onclick="deselectAllStrategies()">
+                            <i class="fas fa-times"></i> Deselect All
+                        </button>
+                    </div>
+
+                    <div id="strategy-list">
+                        <!-- Will be populated dynamically -->
+                        <div class="text-center text-muted">
+                            <div class="spinner-border spinner-border-sm" role="status"></div>
+                            Loading strategies...
+                        </div>
+                    </div>
+
+                    <div class="mt-3 alert alert-info">
+                        <strong>Selected:</strong> <span id="strategy-count">0</span> strategies
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backtest Parameters -->
+            <div class="card mb-4">
+                <div class="card-header">
+                    <h5><i class="fas fa-cog"></i> Backtest Parameters</h5>
+                </div>
+                <div class="card-body">
+                    <div class="mb-3">
+                        <label class="form-label">Initial Capital</label>
+                        <div class="input-group">
+                            <span class="input-group-text">$</span>
+                            <input type="number" class="form-control" id="initial-capital" value="100000" step="1000">
+                        </div>
+                    </div>
+                    <div class="mb-3">
+                        <label class="form-label">Commission (%)</label>
+                        <input type="number" class="form-control" id="commission" value="0.1" step="0.01">
+                        <small class="text-muted">0.1% = $1 per $1000 traded</small>
+                    </div>
+                    <div class="form-check">
+                        <input class="form-check-input" type="checkbox" id="quick-mode">
+                        <label class="form-check-label" for="quick-mode">
+                            Quick Mode (test first ticker only for speed)
+                        </label>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Launch Button -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card bg-gradient text-white" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+                <div class="card-body text-center">
+                    <h4>Ready to Launch Backtest</h4>
+                    <p class="mb-3">
+                        Testing <strong><span id="summary-tickers">0</span> tickers</strong> with
+                        <strong><span id="summary-strategies">0</span> strategies</strong> across
+                        <strong><span id="summary-periods">default</span> periods</strong>
+                    </p>
+                    <button class="btn btn-light btn-lg px-5" onclick="launchBacktest()">
+                        <i class="fas fa-rocket"></i> Launch Backtest
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Running Backtests -->
+    <div class="row" id="backtest-progress" style="display: none;">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-success text-white">
+                    <h5 class="mb-0"><i class="fas fa-spinner fa-spin"></i> Backtest Running</h5>
+                </div>
+                <div class="card-body">
+                    <div class="progress mb-3" style="height: 30px;">
+                        <div class="progress-bar progress-bar-striped progress-bar-animated"
+                             role="progressbar"
+                             id="progress-bar"
+                             style="width: 0%">0%</div>
+                    </div>
+                    <div id="progress-log" style="max-height: 300px; overflow-y: auto; font-family: monospace; font-size: 0.9em;">
+                    </div>
+                    <button class="btn btn-primary mt-3" onclick="viewResults()" id="view-results-btn" style="display: none;">
+                        <i class="fas fa-chart-line"></i> View Results
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+let selectedStrategies = new Set();
+let availableStrategies = [];
+let currentTickerMode = 'universe';
+let currentPeriodMode = 'default';
+
+// Load available strategies
+async function loadStrategies() {
+    try {
+        const response = await fetch('/api/strategies/available');
+        const data = await response.json();
+        availableStrategies = data.strategies;
+
+        const listHtml = availableStrategies.map((strat, idx) => `
+            <div class="form-check mb-2">
+                <input class="form-check-input strategy-checkbox"
+                       type="checkbox"
+                       value="${strat.id}"
+                       id="strat-${idx}"
+                       onchange="updateStrategyCount()">
+                <label class="form-check-label" for="strat-${idx}">
+                    <strong>${strat.name}</strong>
+                    <small class="text-muted d-block">${strat.description}</small>
+                </label>
+            </div>
+        `).join('');
+
+        document.getElementById('strategy-list').innerHTML = listHtml;
+
+        // Select all by default
+        selectAllStrategies();
+
+    } catch (error) {
+        console.error('Error loading strategies:', error);
+        document.getElementById('strategy-list').innerHTML =
+            '<div class="alert alert-danger">Error loading strategies</div>';
+    }
+}
+
+function toggleTickerMode(mode) {
+    currentTickerMode = mode;
+    document.getElementById('universe-section').style.display = mode === 'universe' ? 'block' : 'none';
+    document.getElementById('sector-section').style.display = mode === 'sector' ? 'block' : 'none';
+    document.getElementById('custom-section').style.display = mode === 'custom' ? 'block' : 'none';
+    updateTickerPreview();
+}
+
+function togglePeriodMode(mode) {
+    currentPeriodMode = mode;
+    document.getElementById('default-period-section').style.display = mode === 'default' ? 'block' : 'none';
+    document.getElementById('custom-period-section').style.display = mode === 'custom' ? 'block' : 'none';
+    document.getElementById('quarterly-section').style.display = mode === 'quarterly' ? 'block' : 'none';
+    updateSummary();
+}
+
+async function updateTickerPreview() {
+    let tickers = [];
+
+    if (currentTickerMode === 'universe') {
+        const universe = document.getElementById('universe-select').value;
+        const response = await fetch(`/api/universe/${universe}`);
+        const data = await response.json();
+        tickers = data.tickers;
+
+        if (document.getElementById('limit-tickers').checked) {
+            const limit = parseInt(document.getElementById('ticker-limit').value);
+            tickers = tickers.slice(0, limit);
+        }
+    } else if (currentTickerMode === 'sector') {
+        const sectors = Array.from(document.getElementById('sector-select').selectedOptions).map(o => o.value);
+        for (const sector of sectors) {
+            const response = await fetch(`/api/sector-tickers/${sector}`);
+            const data = await response.json();
+            tickers = tickers.concat(data.tickers);
+        }
+    } else {
+        const customText = document.getElementById('custom-tickers').value;
+        tickers = customText.split(',').map(t => t.trim().toUpperCase()).filter(t => t);
+    }
+
+    document.getElementById('ticker-count').textContent = tickers.length;
+    document.getElementById('ticker-preview').innerHTML =
+        tickers.length > 0
+            ? '<small>' + tickers.join(', ') + '</small>'
+            : '<small class="text-muted">No tickers selected</small>';
+
+    updateSummary();
+}
+
+function selectAllStrategies() {
+    document.querySelectorAll('.strategy-checkbox').forEach(cb => cb.checked = true);
+    updateStrategyCount();
+}
+
+function deselectAllStrategies() {
+    document.querySelectorAll('.strategy-checkbox').forEach(cb => cb.checked = false);
+    updateStrategyCount();
+}
+
+function updateStrategyCount() {
+    const count = document.querySelectorAll('.strategy-checkbox:checked').length;
+    document.getElementById('strategy-count').textContent = count;
+    updateSummary();
+}
+
+function updateSummary() {
+    const tickerCount = parseInt(document.getElementById('ticker-count').textContent);
+    const strategyCount = document.querySelectorAll('.strategy-checkbox:checked').length;
+
+    let periodText = 'default';
+    if (currentPeriodMode === 'custom') {
+        const tspan = document.getElementById('tspan').value || '?';
+        const numPeriods = document.getElementById('num-periods').value;
+        periodText = `${numPeriods} × ${tspan}`;
+    } else if (currentPeriodMode === 'quarterly') {
+        const quarters = ['q1', 'q2', 'q3', 'q4'].filter(q => document.getElementById(q).checked);
+        periodText = `${quarters.length} quarters`;
+    }
+
+    document.getElementById('summary-tickers').textContent = tickerCount;
+    document.getElementById('summary-strategies').textContent = strategyCount;
+    document.getElementById('summary-periods').textContent = periodText;
+}
+
+async function launchBacktest() {
+    // Gather configuration
+    const config = gatherConfig();
+
+    if (!validateConfig(config)) {
+        return;
+    }
+
+    // Show progress section
+    document.getElementById('backtest-progress').style.display = 'block';
+    document.getElementById('progress-log').innerHTML = '<div class="text-muted">Initializing backtest...</div>';
+
+    try {
+        const response = await fetch('/api/launch-backtest', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(config)
+        });
+
+        const result = await response.json();
+
+        if (result.success) {
+            monitorBacktest(result.job_id);
+        } else {
+            alert('Error launching backtest: ' + result.error);
+        }
+
+    } catch (error) {
+        console.error('Error launching backtest:', error);
+        alert('Error launching backtest. Check console for details.');
+    }
+}
+
+function gatherConfig() {
+    // Gather tickers
+    let tickers = document.getElementById('ticker-preview').textContent.split(',').map(t => t.trim());
+
+    // Gather strategies
+    const strategies = Array.from(document.querySelectorAll('.strategy-checkbox:checked')).map(cb => cb.value);
+
+    // Gather period config
+    let periodConfig = { mode: currentPeriodMode };
+    if (currentPeriodMode === 'custom') {
+        periodConfig.tspan = document.getElementById('tspan').value;
+        periodConfig.bspan = document.getElementById('bspan').value;
+        periodConfig.num_periods = parseInt(document.getElementById('num-periods').value);
+    } else if (currentPeriodMode === 'quarterly') {
+        periodConfig.quarters = ['q1', 'q2', 'q3', 'q4']
+            .filter(q => document.getElementById(q).checked)
+            .map(q => q.substring(1));
+        periodConfig.years_back = parseInt(document.getElementById('years-back').value);
+    }
+
+    return {
+        tickers: tickers,
+        strategies: strategies,
+        period_config: periodConfig,
+        initial_capital: parseFloat(document.getElementById('initial-capital').value),
+        commission: parseFloat(document.getElementById('commission').value) / 100,
+        quick_mode: document.getElementById('quick-mode').checked
+    };
+}
+
+function validateConfig(config) {
+    if (config.tickers.length === 0) {
+        alert('Please select at least one ticker');
+        return false;
+    }
+    if (config.strategies.length === 0) {
+        alert('Please select at least one strategy');
+        return false;
+    }
+    return true;
+}
+
+function monitorBacktest(jobId) {
+    const interval = setInterval(async () => {
+        try {
+            const response = await fetch(`/api/backtest-status/${jobId}`);
+            const status = await response.json();
+
+            // Update progress
+            const progress = status.progress || 0;
+            document.getElementById('progress-bar').style.width = progress + '%';
+            document.getElementById('progress-bar').textContent = Math.round(progress) + '%';
+
+            // Update log
+            if (status.log) {
+                document.getElementById('progress-log').innerHTML +=
+                    '<div>' + status.log + '</div>';
+                document.getElementById('progress-log').scrollTop =
+                    document.getElementById('progress-log').scrollHeight;
+            }
+
+            // Check if complete
+            if (status.status === 'completed') {
+                clearInterval(interval);
+                document.getElementById('view-results-btn').style.display = 'block';
+                document.getElementById('progress-log').innerHTML +=
+                    '<div class="text-success mt-3"><strong>✓ Backtest completed successfully!</strong></div>';
+            } else if (status.status === 'failed') {
+                clearInterval(interval);
+                document.getElementById('progress-log').innerHTML +=
+                    '<div class="text-danger mt-3"><strong>✗ Backtest failed: ' + status.error + '</strong></div>';
+            }
+
+        } catch (error) {
+            console.error('Error monitoring backtest:', error);
+            clearInterval(interval);
+        }
+    }, 2000);
+}
+
+function viewResults() {
+    window.location.href = '/';
+}
+
+function loadPreset(preset) {
+    // Implement preset loading
+    alert('Loading preset: ' + preset);
+}
+
+// Initialize on page load
+document.addEventListener('DOMContentLoaded', () => {
+    loadStrategies();
+    updateTickerPreview();
+});
+</script>
+{% endblock %}

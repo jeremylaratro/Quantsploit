@@ -1,0 +1,315 @@
+{% extends "base.html" %}
+
+{% block title %}Sector Analysis - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4">
+                <i class="fas fa-industry"></i> Sector Analysis
+            </h1>
+            <p class="lead">Performance breakdown by market sectors - Technology, Healthcare, Financials, etc.</p>
+            <small class="text-muted">Run: {{ timestamp }}</small>
+        </div>
+    </div>
+
+    <!-- Best/Worst Sectors -->
+    <div class="row mb-4">
+        <div class="col-md-6">
+            <div class="stat-card green">
+                <div class="stat-label">Best Performing Sector</div>
+                <div class="stat-value" id="best-sector" style="font-size: 1.5rem;">--</div>
+                <small id="best-sector-return">--</small>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="stat-card red">
+                <div class="stat-label">Worst Performing Sector</div>
+                <div class="stat-value" id="worst-sector" style="font-size: 1.5rem;">--</div>
+                <small id="worst-sector-return">--</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sector Performance Chart -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Sector Performance Ranking</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="sector-performance-chart" height="400"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sector Metrics -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-pie"></i> Sharpe Ratio by Sector</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="sector-sharpe-chart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-percentage"></i> Win Rate by Sector</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="sector-winrate-chart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Sector Table -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-table"></i> Sector Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped" id="sector-table">
+                            <thead>
+                                <tr>
+                                    <th>Sector</th>
+                                    <th>Avg Return</th>
+                                    <th>Median Return</th>
+                                    <th>Sharpe Ratio</th>
+                                    <th>Win Rate</th>
+                                    <th>Symbols</th>
+                                    <th>Strategies</th>
+                                    <th>Total Tests</th>
+                                    <th>Best Symbol</th>
+                                    <th>Best Return</th>
+                                </tr>
+                            </thead>
+                            <tbody id="sector-tbody">
+                                <tr><td colspan="10" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sector Heatmap -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-th"></i> Sector Performance Heatmap</h5>
+                </div>
+                <div class="card-body">
+                    <div id="sector-heatmap" style="height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+async function loadSectorAnalysis() {
+    try {
+        const response = await fetch(`/api/sector-analysis/{{ timestamp }}`);
+        const data = await response.json();
+
+        // Update best/worst sectors
+        if (data.best_sector) {
+            document.getElementById('best-sector').textContent = data.best_sector;
+            const bestData = data.sector_performance.find(s => s.sector === data.best_sector);
+            if (bestData) {
+                document.getElementById('best-sector-return').textContent = `${(bestData.avg_return * 100).toFixed(2)}% avg return`;
+            }
+        }
+
+        if (data.worst_sector) {
+            document.getElementById('worst-sector').textContent = data.worst_sector;
+            const worstData = data.sector_performance.find(s => s.sector === data.worst_sector);
+            if (worstData) {
+                document.getElementById('worst-sector-return').textContent = `${(worstData.avg_return * 100).toFixed(2)}% avg return`;
+            }
+        }
+
+        // Create charts
+        createSectorPerformanceChart(data.sector_performance);
+        createSectorSharpeChart(data.sector_performance);
+        createSectorWinRateChart(data.sector_performance);
+        createSectorHeatmap(data.sector_performance);
+
+        // Populate table
+        populateSectorTable(data.sector_performance);
+
+    } catch (error) {
+        console.error('Error loading sector analysis:', error);
+    }
+}
+
+function createSectorPerformanceChart(sectors) {
+    const ctx = document.getElementById('sector-performance-chart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: sectors.map(s => s.sector),
+            datasets: [{
+                label: 'Avg Return (%)',
+                data: sectors.map(s => s.avg_return * 100),
+                backgroundColor: sectors.map(s => s.avg_return > 0 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)'),
+                borderWidth: 1
+            }]
+        },
+        options: {
+            indexAxis: 'y',
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                x: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Average Return (%)' }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function createSectorSharpeChart(sectors) {
+    const ctx = document.getElementById('sector-sharpe-chart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+            labels: sectors.map(s => s.sector),
+            datasets: [{
+                data: sectors.map(s => s.sharpe),
+                backgroundColor: [
+                    'rgba(255, 99, 132, 0.7)',
+                    'rgba(54, 162, 235, 0.7)',
+                    'rgba(255, 206, 86, 0.7)',
+                    'rgba(75, 192, 192, 0.7)',
+                    'rgba(153, 102, 255, 0.7)',
+                    'rgba(255, 159, 64, 0.7)',
+                    'rgba(199, 199, 199, 0.7)',
+                    'rgba(83, 102, 255, 0.7)',
+                    'rgba(255, 99, 255, 0.7)',
+                    'rgba(99, 255, 132, 0.7)',
+                    'rgba(219, 112, 147, 0.7)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: {
+                    position: 'right'
+                },
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            return context.label + ': ' + context.parsed.toFixed(2);
+                        }
+                    }
+                }
+            }
+        }
+    });
+}
+
+function createSectorWinRateChart(sectors) {
+    const ctx = document.getElementById('sector-winrate-chart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'radar',
+        data: {
+            labels: sectors.map(s => s.sector),
+            datasets: [{
+                label: 'Win Rate (%)',
+                data: sectors.map(s => s.win_rate),
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                borderColor: 'rgba(75, 192, 192, 1)',
+                borderWidth: 2
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                r: {
+                    beginAtZero: true,
+                    max: 100
+                }
+            }
+        }
+    });
+}
+
+function createSectorHeatmap(sectors) {
+    const trace = {
+        x: ['Avg Return', 'Sharpe Ratio', 'Win Rate'],
+        y: sectors.map(s => s.sector),
+        z: sectors.map(s => [
+            s.avg_return * 100,
+            s.sharpe,
+            s.win_rate
+        ]),
+        type: 'heatmap',
+        colorscale: 'RdYlGn',
+        hovertemplate: '%{y}<br>%{x}: %{z:.2f}<extra></extra>'
+    };
+
+    const layout = {
+        title: 'Sector Metrics Heatmap',
+        xaxis: { title: 'Metric' },
+        yaxis: { title: 'Sector' }
+    };
+
+    Plotly.newPlot('sector-heatmap', [trace], layout, {responsive: true});
+}
+
+function populateSectorTable(sectors) {
+    const tbody = document.getElementById('sector-tbody');
+    tbody.innerHTML = '';
+
+    sectors.forEach(sector => {
+        const row = tbody.insertRow();
+
+        row.innerHTML = `
+            <td><strong>${sector.sector}</strong></td>
+            <td>${(sector.avg_return * 100).toFixed(2)}%</td>
+            <td>${(sector.median_return * 100).toFixed(2)}%</td>
+            <td>${sector.sharpe.toFixed(2)}</td>
+            <td>${sector.win_rate.toFixed(1)}%</td>
+            <td><span class="badge bg-info">${sector.num_symbols}</span></td>
+            <td><span class="badge bg-secondary">${sector.num_strategies}</span></td>
+            <td>${sector.total_tests.toLocaleString()}</td>
+            <td>${sector.best_symbol}</td>
+            <td>${(sector.best_return * 100).toFixed(2)}%</td>
+        `;
+
+        // Highlight best sector
+        if (sector.avg_return === Math.max(...sectors.map(s => s.avg_return))) {
+            row.style.backgroundColor = '#e8f5e9';
+        }
+    });
+}
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', loadSectorAnalysis);
+</script>
+{% endblock %}

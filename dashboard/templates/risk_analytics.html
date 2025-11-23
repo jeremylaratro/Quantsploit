@@ -1,0 +1,334 @@
+{% extends "base.html" %}
+
+{% block title %}Risk Analytics - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4">
+                <i class="fas fa-chart-line"></i> Risk Analytics Dashboard
+            </h1>
+            <p class="lead">Institutional-grade risk analysis: VaR, CVaR, tail risk, drawdown curves</p>
+            <small class="text-muted">Run: {{ timestamp }}</small>
+        </div>
+    </div>
+
+    <!-- Portfolio Risk Metrics -->
+    <div class="row" id="portfolio-risk-section">
+        <div class="col-md-3">
+            <div class="stat-card red">
+                <div class="stat-label">Value at Risk (95%)</div>
+                <div class="stat-value" id="var-95">--</div>
+                <small>Expected loss at 95% confidence</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card red">
+                <div class="stat-label">CVaR (95%)</div>
+                <div class="stat-value" id="cvar-95">--</div>
+                <small>Expected shortfall</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <div class="stat-label">Max Drawdown</div>
+                <div class="stat-value" id="max-dd">--</div>
+                <small>Worst peak-to-trough decline</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <div class="stat-label">Tail Risk (Kurtosis)</div>
+                <div class="stat-value" id="kurtosis">--</div>
+                <small>Fat tails indicator</small>
+            </div>
+        </div>
+    </div>
+
+    <div class="row mt-4">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-label">Skewness</div>
+                <div class="stat-value" id="skewness">--</div>
+                <small>Return distribution asymmetry</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <div class="stat-label">Downside Frequency</div>
+                <div class="stat-value" id="downside-freq">--</div>
+                <small>% of losing periods</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <div class="stat-label">VaR (99%)</div>
+                <div class="stat-value" id="var-99">--</div>
+                <small>Extreme loss scenario</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <div class="stat-label">CVaR (99%)</div>
+                <div class="stat-value" id="cvar-99">--</div>
+                <small>Tail conditional expectation</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Return Distribution Analysis -->
+    <div class="row mt-5">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Return Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="return-distribution-chart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-percentage"></i> Risk Percentiles</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="percentiles-chart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Risk Analysis -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-table"></i> Strategy Risk Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped" id="strategy-risk-table">
+                            <thead>
+                                <tr>
+                                    <th>Strategy</th>
+                                    <th>Avg Return</th>
+                                    <th>Volatility</th>
+                                    <th>Sharpe</th>
+                                    <th>Sortino</th>
+                                    <th>Max DD</th>
+                                    <th>VaR 95%</th>
+                                    <th>Downside Risk</th>
+                                </tr>
+                            </thead>
+                            <tbody id="strategy-risk-tbody">
+                                <tr><td colspan="8" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Risk-Return Scatter -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-scatter"></i> Risk-Return Profile by Strategy</h5>
+                </div>
+                <div class="card-body">
+                    <div id="risk-return-scatter" style="height: 500px;"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Drawdown Analysis -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-arrow-trend-down"></i> Drawdown Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="drawdown-chart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+// Fetch and display risk analytics
+async function loadRiskAnalytics() {
+    try {
+        const response = await fetch(`/api/risk-analytics/{{ timestamp }}`);
+        const data = await response.json();
+
+        // Update portfolio risk metrics
+        const pr = data.portfolio_risk;
+        document.getElementById('var-95').textContent = (pr.var_95 * 100).toFixed(2) + '%';
+        document.getElementById('cvar-95').textContent = (pr.cvar_95 * 100).toFixed(2) + '%';
+        document.getElementById('var-99').textContent = (pr.var_99 * 100).toFixed(2) + '%';
+        document.getElementById('cvar-99').textContent = (pr.cvar_99 * 100).toFixed(2) + '%';
+        document.getElementById('max-dd').textContent = (pr.max_drawdown * 100).toFixed(2) + '%';
+        document.getElementById('skewness').textContent = pr.skewness.toFixed(3);
+        document.getElementById('kurtosis').textContent = pr.kurtosis.toFixed(3);
+        document.getElementById('downside-freq').textContent = pr.downside_frequency.toFixed(1) + '%';
+
+        // Return distribution chart
+        const dist = data.return_distribution;
+        createDistributionChart(dist);
+
+        // Percentiles chart
+        createPercentilesChart(dist.percentiles);
+
+        // Strategy risk table
+        populateStrategyRiskTable(data.strategy_risk);
+
+        // Risk-return scatter
+        createRiskReturnScatter(data.strategy_risk);
+
+    } catch (error) {
+        console.error('Error loading risk analytics:', error);
+    }
+}
+
+function createDistributionChart(dist) {
+    const ctx = document.getElementById('return-distribution-chart').getContext('2d');
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: ['Mean', 'Median', '25th %ile', '75th %ile', 'Min', 'Max'],
+            datasets: [{
+                label: 'Return (%)',
+                data: [
+                    dist.mean * 100,
+                    dist.median * 100,
+                    dist.percentiles['25'] * 100,
+                    dist.percentiles['75'] * 100,
+                    dist.min * 100,
+                    dist.max * 100
+                ],
+                backgroundColor: [
+                    'rgba(52, 152, 219, 0.7)',
+                    'rgba(46, 204, 113, 0.7)',
+                    'rgba(155, 89, 182, 0.7)',
+                    'rgba(241, 196, 15, 0.7)',
+                    'rgba(231, 76, 60, 0.7)',
+                    'rgba(26, 188, 156, 0.7)'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false }
+            },
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'Return (%)' }
+                }
+            }
+        }
+    });
+}
+
+function createPercentilesChart(percentiles) {
+    const ctx = document.getElementById('percentiles-chart').getContext('2d');
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: ['1st', '5th', '25th', '75th', '95th', '99th'],
+            datasets: [{
+                label: 'Return Percentiles',
+                data: [
+                    percentiles['1'] * 100,
+                    percentiles['5'] * 100,
+                    percentiles['25'] * 100,
+                    percentiles['75'] * 100,
+                    percentiles['95'] * 100,
+                    percentiles['99'] * 100
+                ],
+                borderColor: 'rgb(75, 192, 192)',
+                backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    title: { display: true, text: 'Return (%)' }
+                }
+            }
+        }
+    });
+}
+
+function populateStrategyRiskTable(strategyRisk) {
+    const tbody = document.getElementById('strategy-risk-tbody');
+    tbody.innerHTML = '';
+
+    strategyRisk.forEach(strat => {
+        const row = tbody.insertRow();
+        row.innerHTML = `
+            <td><strong>${strat.strategy}</strong></td>
+            <td>${(strat.avg_return * 100).toFixed(2)}%</td>
+            <td>${(strat.volatility * 100).toFixed(2)}%</td>
+            <td>${strat.sharpe.toFixed(2)}</td>
+            <td>${strat.sortino ? strat.sortino.toFixed(2) : 'N/A'}</td>
+            <td>${(strat.max_dd * 100).toFixed(2)}%</td>
+            <td>${(strat.var_95 * 100).toFixed(2)}%</td>
+            <td>${(strat.downside_risk * 100).toFixed(2)}%</td>
+        `;
+
+        // Color code based on risk
+        if (strat.max_dd > 0.2) {
+            row.style.backgroundColor = '#ffebee';
+        } else if (strat.sharpe > 1.5) {
+            row.style.backgroundColor = '#e8f5e9';
+        }
+    });
+}
+
+function createRiskReturnScatter(strategyRisk) {
+    const trace = {
+        x: strategyRisk.map(s => s.volatility * 100),
+        y: strategyRisk.map(s => s.avg_return * 100),
+        mode: 'markers+text',
+        type: 'scatter',
+        text: strategyRisk.map(s => s.strategy),
+        textposition: 'top center',
+        marker: {
+            size: strategyRisk.map(s => Math.abs(s.sharpe) * 10),
+            color: strategyRisk.map(s => s.sharpe),
+            colorscale: 'RdYlGn',
+            showscale: true,
+            colorbar: { title: 'Sharpe Ratio' }
+        }
+    };
+
+    const layout = {
+        title: 'Risk vs Return',
+        xaxis: { title: 'Volatility (%)' },
+        yaxis: { title: 'Return (%)' },
+        hovermode: 'closest'
+    };
+
+    Plotly.newPlot('risk-return-scatter', [trace], layout);
+}
+
+// Load data when page loads
+document.addEventListener('DOMContentLoaded', loadRiskAnalytics);
+</script>
+{% endblock %}

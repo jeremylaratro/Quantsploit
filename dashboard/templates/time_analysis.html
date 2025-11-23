@@ -1,0 +1,364 @@
+{% extends "base.html" %}
+
+{% block title %}Time Period Analysis - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-4">
+                <i class="fas fa-calendar-alt"></i> Time Period Analysis
+            </h1>
+            <p class="lead">Granular performance breakdown by time periods, quarters, and custom date ranges</p>
+            <small class="text-muted">Run: {{ timestamp }}</small>
+        </div>
+    </div>
+
+    <!-- Period Comparison Cards -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <div class="stat-label">Best Period</div>
+                <div class="stat-value" id="best-period" style="font-size: 1.2rem;">--</div>
+                <small id="best-period-return">--</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card red">
+                <div class="stat-label">Worst Period</div>
+                <div class="stat-value" id="worst-period" style="font-size: 1.2rem;">--</div>
+                <small id="worst-period-return">--</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <div class="stat-label">Most Consistent</div>
+                <div class="stat-value" id="consistent-period" style="font-size: 1.2rem;">--</div>
+                <small>Lowest volatility</small>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <div class="stat-label">Highest Sharpe</div>
+                <div class="stat-value" id="sharpe-period" style="font-size: 1.2rem;">--</div>
+                <small id="sharpe-period-value">--</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- Period Performance Chart -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-bar"></i> Performance by Period</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="period-performance-chart" height="300"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Period Metrics Comparison -->
+    <div class="row mt-4">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-chart-line"></i> Sharpe Ratio by Period</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="sharpe-by-period-chart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-percentage"></i> Win Rate by Period</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="winrate-by-period-chart" height="250"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Detailed Period Table -->
+    <div class="row mt-5">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-table"></i> Period-by-Period Breakdown</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-striped" id="period-table">
+                            <thead>
+                                <tr>
+                                    <th>Period</th>
+                                    <th>Avg Return</th>
+                                    <th>Median Return</th>
+                                    <th>Std Dev</th>
+                                    <th>Sharpe Ratio</th>
+                                    <th>Win Rate</th>
+                                    <th>Total Trades</th>
+                                    <th>Best Strategy</th>
+                                    <th>Profitable %</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="period-tbody">
+                                <tr><td colspan="10" class="text-center">Loading...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Period Volatility -->
+    <div class="row mt-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header">
+                    <h5><i class="fas fa-wave-square"></i> Return Volatility Across Periods</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="volatility-chart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<script>
+async function loadTimeAnalysis() {
+    try {
+        const response = await fetch(`/api/time-analysis/{{ timestamp }}`);
+        const data = await response.json();
+
+        // Update comparison cards
+        const comp = data.period_comparison;
+        if (comp.best_period) {
+            document.getElementById('best-period').textContent = comp.best_period;
+            const bestData = data.period_breakdown.find(p => p.period === comp.best_period);
+            if (bestData) {
+                document.getElementById('best-period-return').textContent = `${(bestData.avg_return * 100).toFixed(2)}% avg return`;
+            }
+        }
+
+        if (comp.worst_period) {
+            document.getElementById('worst-period').textContent = comp.worst_period;
+            const worstData = data.period_breakdown.find(p => p.period === comp.worst_period);
+            if (worstData) {
+                document.getElementById('worst-period-return').textContent = `${(worstData.avg_return * 100).toFixed(2)}% avg return`;
+            }
+        }
+
+        if (comp.most_consistent) {
+            document.getElementById('consistent-period').textContent = comp.most_consistent;
+        }
+
+        if (comp.highest_sharpe) {
+            document.getElementById('sharpe-period').textContent = comp.highest_sharpe;
+            const sharpeData = data.period_breakdown.find(p => p.period === comp.highest_sharpe);
+            if (sharpeData) {
+                document.getElementById('sharpe-period-value').textContent = `Sharpe: ${sharpeData.sharpe.toFixed(2)}`;
+            }
+        }
+
+        // Create charts
+        createPeriodPerformanceChart(data.period_breakdown);
+        createSharpeByPeriodChart(data.period_breakdown);
+        createWinRateByPeriodChart(data.period_breakdown);
+        createVolatilityChart(data.period_breakdown);
+
+        // Populate table
+        populatePeriodTable(data.period_breakdown);
+
+    } catch (error) {
+        console.error('Error loading time analysis:', error);
+    }
+}
+
+function createPeriodPerformanceChart(periods) {
+    const ctx = document.getElementById('period-performance-chart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: periods.map(p => p.period),
+            datasets: [
+                {
+                    label: 'Avg Return (%)',
+                    data: periods.map(p => p.avg_return * 100),
+                    backgroundColor: 'rgba(75, 192, 192, 0.7)',
+                    borderColor: 'rgba(75, 192, 192, 1)',
+                    borderWidth: 1
+                },
+                {
+                    label: 'Median Return (%)',
+                    data: periods.map(p => p.median_return * 100),
+                    backgroundColor: 'rgba(153, 102, 255, 0.7)',
+                    borderColor: 'rgba(153, 102, 255, 1)',
+                    borderWidth: 1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'Return (%)' }
+                },
+                x: {
+                    ticks: { maxRotation: 45, minRotation: 45 }
+                }
+            }
+        }
+    });
+}
+
+function createSharpeByPeriodChart(periods) {
+    const ctx = document.getElementById('sharpe-by-period-chart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: periods.map(p => p.period),
+            datasets: [{
+                label: 'Sharpe Ratio',
+                data: periods.map(p => p.sharpe),
+                borderColor: 'rgb(255, 159, 64)',
+                backgroundColor: 'rgba(255, 159, 64, 0.2)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: false,
+                    title: { display: true, text: 'Sharpe Ratio' }
+                },
+                x: {
+                    ticks: { maxRotation: 45, minRotation: 45 }
+                }
+            }
+        }
+    });
+}
+
+function createWinRateByPeriodChart(periods) {
+    const ctx = document.getElementById('winrate-by-period-chart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'bar',
+        data: {
+            labels: periods.map(p => p.period),
+            datasets: [{
+                label: 'Win Rate (%)',
+                data: periods.map(p => p.win_rate),
+                backgroundColor: periods.map(p => p.win_rate > 50 ? 'rgba(75, 192, 192, 0.7)' : 'rgba(255, 99, 132, 0.7)'),
+                borderWidth: 0
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: { display: true, text: 'Win Rate (%)' }
+                },
+                x: {
+                    ticks: { maxRotation: 45, minRotation: 45 }
+                }
+            },
+            plugins: {
+                legend: { display: false }
+            }
+        }
+    });
+}
+
+function createVolatilityChart(periods) {
+    const ctx = document.getElementById('volatility-chart').getContext('2d');
+
+    new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: periods.map(p => p.period),
+            datasets: [{
+                label: 'Std Deviation (%)',
+                data: periods.map(p => p.std_return * 100),
+                borderColor: 'rgb(231, 76, 60)',
+                backgroundColor: 'rgba(231, 76, 60, 0.1)',
+                fill: true,
+                tension: 0.4
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    title: { display: true, text: 'Volatility (%)' }
+                },
+                x: {
+                    ticks: { maxRotation: 45, minRotation: 45 }
+                }
+            }
+        }
+    });
+}
+
+function populatePeriodTable(periods) {
+    const tbody = document.getElementById('period-tbody');
+    tbody.innerHTML = '';
+
+    periods.forEach(period => {
+        const row = tbody.insertRow();
+        const profitablePercent = (period.strategies_profitable / period.total_strategies * 100).toFixed(1);
+
+        row.innerHTML = `
+            <td><strong>${period.period}</strong></td>
+            <td>${(period.avg_return * 100).toFixed(2)}%</td>
+            <td>${(period.median_return * 100).toFixed(2)}%</td>
+            <td>${(period.std_return * 100).toFixed(2)}%</td>
+            <td>${period.sharpe.toFixed(2)}</td>
+            <td>${period.win_rate.toFixed(1)}%</td>
+            <td>${period.total_trades.toLocaleString()}</td>
+            <td>${period.best_strategy}</td>
+            <td><span class="badge ${profitablePercent > 60 ? 'bg-success' : profitablePercent > 40 ? 'bg-warning' : 'bg-danger'}">${profitablePercent}%</span></td>
+            <td>
+                <button class="btn btn-sm btn-outline-primary" onclick="viewPeriod('${period.period}')">
+                    <i class="fas fa-eye"></i> View
+                </button>
+            </td>
+        `;
+
+        // Highlight best period
+        if (period.avg_return === Math.max(...periods.map(p => p.avg_return))) {
+            row.style.backgroundColor = '#e8f5e9';
+        }
+    });
+}
+
+function viewPeriod(periodName) {
+    window.location.href = `/period/{{ timestamp }}/${encodeURIComponent(periodName)}`;
+}
+
+// Load data on page load
+document.addEventListener('DOMContentLoaded', loadTimeAnalysis);
+</script>
+{% endblock %}

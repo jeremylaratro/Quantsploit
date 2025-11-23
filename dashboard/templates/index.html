@@ -31,6 +31,86 @@
     </div>
 </div>
 
+<!-- Backtest Launcher CTA -->
+<div class="row mb-4" id="launcher-cta" style="display: none;">
+    <div class="col-12">
+        <div class="card bg-gradient text-white" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <div class="card-body text-center py-4">
+                <h3><i class="fas fa-rocket"></i> Launch New Backtest</h3>
+                <p class="mb-3">Run backtests across S&P 500, NASDAQ 100, sectors, and custom ticker universes</p>
+                <a href="/backtest-launcher" class="btn btn-light btn-lg px-5">
+                    <i class="fas fa-play"></i> Go to Backtest Launcher
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Advanced Analytics Navigation -->
+<div class="row mb-4" id="advanced-nav" style="display: none;">
+    <div class="col-12">
+        <div class="card">
+            <div class="card-header bg-gradient-primary text-white">
+                <h5 class="mb-0"><i class="fas fa-rocket"></i> Institutional-Grade Analytics</h5>
+            </div>
+            <div class="card-body">
+                <div class="row g-3">
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('risk-analytics')" class="btn btn-outline-danger w-100">
+                            <i class="fas fa-exclamation-triangle"></i><br>Risk Analytics
+                            <small class="d-block text-muted">VaR, CVaR, Drawdowns</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('portfolio')" class="btn btn-outline-success w-100">
+                            <i class="fas fa-briefcase"></i><br>Portfolio Builder
+                            <small class="d-block text-muted">Multi-Strategy Allocation</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('correlation')" class="btn btn-outline-info w-100">
+                            <i class="fas fa-project-diagram"></i><br>Correlation
+                            <small class="d-block text-muted">Strategy & Symbol Correlation</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('time-analysis')" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-calendar-alt"></i><br>Time Analysis
+                            <small class="d-block text-muted">Period Breakdown</small>
+                        </a>
+                    </div>
+                </div>
+                <div class="row g-3 mt-2">
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('sector-analysis')" class="btn btn-outline-warning w-100">
+                            <i class="fas fa-industry"></i><br>Sector Analysis
+                            <small class="d-block text-muted">Performance by Sector</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('ticker-explorer')" class="btn btn-outline-secondary w-100">
+                            <i class="fas fa-search"></i><br>Ticker Explorer
+                            <small class="d-block text-muted">Advanced Filtering</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="/comparison" class="btn btn-outline-dark w-100">
+                            <i class="fas fa-code-compare"></i><br>Compare Runs
+                            <small class="d-block text-muted">Multi-Run Comparison</small>
+                        </a>
+                    </div>
+                    <div class="col-md-3">
+                        <a href="#" onclick="navigateTo('rolling-metrics')" class="btn btn-outline-primary w-100">
+                            <i class="fas fa-chart-line"></i><br>Rolling Metrics
+                            <small class="d-block text-muted">Time-Series Analysis</small>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Loading Indicator -->
 <div id="loadingIndicator" class="text-center py-5" style="display: none;">
     <div class="loading-spinner mx-auto mb-3"></div>
@@ -176,6 +256,44 @@
         </div>
     </div>
 
+    <!-- Detailed Results Table -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="chart-container">
+                <h3 class="chart-title">
+                    <i class="fas fa-table"></i> All Backtest Results
+                    <button class="btn btn-sm btn-outline-primary float-end" onclick="toggleDetailedResults()">
+                        <i class="fas fa-eye" id="toggleIcon"></i> Show/Hide
+                    </button>
+                </h3>
+                <div id="detailedResultsSection" style="display: none;">
+                    <div class="mb-3">
+                        <input type="text" class="form-control" id="resultsSearch" placeholder="Search by strategy, symbol, or period...">
+                    </div>
+                    <div class="table-responsive" style="max-height: 600px; overflow-y: auto;">
+                        <table class="table table-hover table-sm" id="allResultsTable">
+                            <thead class="sticky-top bg-white">
+                                <tr>
+                                    <th>Strategy</th>
+                                    <th>Symbol</th>
+                                    <th>Period</th>
+                                    <th>Return</th>
+                                    <th>Sharpe</th>
+                                    <th>Win Rate</th>
+                                    <th>Trades</th>
+                                    <th>Max DD</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="allResultsTableBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
 </div>
 
 {% endblock %}
@@ -208,6 +326,13 @@ function refreshData() {
     }
 }
 
+function navigateTo(page) {
+    if (currentTimestamp) {
+        window.location.href = `/${page}/${currentTimestamp}`;
+    }
+    return false;
+}
+
 async function loadDashboardData(timestamp) {
     document.getElementById('loadingIndicator').style.display = 'block';
     document.getElementById('dashboardContent').style.display = 'none';
@@ -235,9 +360,12 @@ async function loadDashboardData(timestamp) {
         createStrategyTable(strategies.strategies);
         createSymbolPerformanceChart(symbols.symbols);
         createRiskReturnScatter(detailed);
+        populateDetailedResultsTable(detailed, timestamp);
 
         document.getElementById('loadingIndicator').style.display = 'none';
         document.getElementById('dashboardContent').style.display = 'block';
+        document.getElementById('launcher-cta').style.display = 'block';
+        document.getElementById('advanced-nav').style.display = 'block';
 
     } catch (error) {
         console.error('Error loading dashboard data:', error);
@@ -579,6 +707,98 @@ function createRiskReturnScatter(detailed) {
     };
 
     Plotly.newPlot('riskReturnScatter', traces, layout, {responsive: true});
+}
+
+// Store all detailed results for filtering
+let allDetailedResults = [];
+
+function populateDetailedResultsTable(detailed, timestamp) {
+    allDetailedResults = detailed;
+    const tbody = document.getElementById('allResultsTableBody');
+    tbody.innerHTML = '';
+
+    // Sort by return descending
+    const sortedResults = [...detailed].sort((a, b) => b.total_return - a.total_return);
+
+    sortedResults.forEach(result => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${result.strategy_name}</strong></td>
+            <td><span class="badge bg-primary">${result.symbol}</span></td>
+            <td><small>${result.period_name}</small></td>
+            <td class="${result.total_return > 0 ? 'text-success' : 'text-danger'} fw-bold">
+                ${result.total_return.toFixed(2)}%
+            </td>
+            <td>${result.sharpe_ratio.toFixed(2)}</td>
+            <td>${result.win_rate.toFixed(1)}%</td>
+            <td>${result.total_trades}</td>
+            <td>${result.max_drawdown.toFixed(2)}%</td>
+            <td>
+                <a href="/candlestick/${timestamp}/${encodeURIComponent(result.strategy_name)}/${result.symbol}"
+                   class="btn btn-sm btn-primary"
+                   title="View candlestick chart">
+                    <i class="fas fa-chart-line"></i>
+                </a>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+
+    // Add search functionality
+    document.getElementById('resultsSearch').addEventListener('input', function(e) {
+        filterDetailedResults(e.target.value, timestamp);
+    });
+}
+
+function filterDetailedResults(searchTerm, timestamp) {
+    const tbody = document.getElementById('allResultsTableBody');
+    tbody.innerHTML = '';
+
+    const filtered = allDetailedResults.filter(result => {
+        const search = searchTerm.toLowerCase();
+        return result.strategy_name.toLowerCase().includes(search) ||
+               result.symbol.toLowerCase().includes(search) ||
+               result.period_name.toLowerCase().includes(search);
+    });
+
+    filtered.forEach(result => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td><strong>${result.strategy_name}</strong></td>
+            <td><span class="badge bg-primary">${result.symbol}</span></td>
+            <td><small>${result.period_name}</small></td>
+            <td class="${result.total_return > 0 ? 'text-success' : 'text-danger'} fw-bold">
+                ${result.total_return.toFixed(2)}%
+            </td>
+            <td>${result.sharpe_ratio.toFixed(2)}</td>
+            <td>${result.win_rate.toFixed(1)}%</td>
+            <td>${result.total_trades}</td>
+            <td>${result.max_drawdown.toFixed(2)}%</td>
+            <td>
+                <a href="/candlestick/${timestamp}/${encodeURIComponent(result.strategy_name)}/${result.symbol}"
+                   class="btn btn-sm btn-primary"
+                   title="View candlestick chart">
+                    <i class="fas fa-chart-line"></i>
+                </a>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function toggleDetailedResults() {
+    const section = document.getElementById('detailedResultsSection');
+    const icon = document.getElementById('toggleIcon');
+
+    if (section.style.display === 'none') {
+        section.style.display = 'block';
+        icon.classList.remove('fa-eye');
+        icon.classList.add('fa-eye-slash');
+    } else {
+        section.style.display = 'none';
+        icon.classList.remove('fa-eye-slash');
+        icon.classList.add('fa-eye');
+    }
 }
 </script>
 {% endblock %}

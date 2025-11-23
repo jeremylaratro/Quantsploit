@@ -6,6 +6,7 @@ Real-time visualization and analysis of backtesting results
 
 from flask import Flask, render_template, jsonify, request
 import json
+import markdown
 import pandas as pd
 from pathlib import Path
 from datetime import datetime
@@ -303,6 +304,322 @@ class DashboardDataLoader:
             'symbol_names': df['symbol'].unique().tolist()
         })
 
+    def get_risk_analytics(self, timestamp: str) -> Dict:
+        """Advanced risk analytics - VaR, CVaR, tail risk, etc."""
+        df = self.load_detailed_results(timestamp)
+        if df is None:
+            return {}
+
+        returns = df['total_return'].values
+
+        # Value at Risk (VaR) calculations
+        var_95 = np.percentile(returns, 5)
+        var_99 = np.percentile(returns, 1)
+
+        # Conditional VaR (CVaR/Expected Shortfall)
+        cvar_95 = returns[returns <= var_95].mean() if len(returns[returns <= var_95]) > 0 else var_95
+        cvar_99 = returns[returns <= var_99].mean() if len(returns[returns <= var_99]) > 0 else var_99
+
+        # Drawdown statistics
+        drawdowns = df['max_drawdown'].values
+        avg_drawdown = np.mean(drawdowns)
+        max_drawdown = np.max(drawdowns)
+
+        # Tail risk metrics
+        skewness = stats.skew(returns)
+        kurtosis = stats.kurtosis(returns)
+
+        # Downside risk
+        downside_returns = returns[returns < 0]
+        downside_freq = len(downside_returns) / len(returns) * 100
+
+        # Risk-adjusted metrics by strategy
+        strategy_risk = []
+        for strategy in df['strategy_name'].unique():
+            strat_data = df[df['strategy_name'] == strategy]
+            strategy_risk.append({
+                'strategy': strategy,
+                'avg_return': strat_data['total_return'].mean(),
+                'volatility': strat_data['total_return'].std(),
+                'sharpe': strat_data['sharpe_ratio'].mean(),
+                'sortino': strat_data['sortino_ratio'].mean() if 'sortino_ratio' in df.columns else None,
+                'max_dd': strat_data['max_drawdown'].max(),
+                'var_95': np.percentile(strat_data['total_return'], 5),
+                'downside_risk': strat_data['total_return'][strat_data['total_return'] < 0].std()
+            })
+
+        return convert_numpy_types({
+            'portfolio_risk': {
+                'var_95': var_95,
+                'var_99': var_99,
+                'cvar_95': cvar_95,
+                'cvar_99': cvar_99,
+                'avg_drawdown': avg_drawdown,
+                'max_drawdown': max_drawdown,
+                'skewness': skewness,
+                'kurtosis': kurtosis,
+                'downside_frequency': downside_freq
+            },
+            'strategy_risk': strategy_risk,
+            'return_distribution': {
+                'mean': np.mean(returns),
+                'median': np.median(returns),
+                'std': np.std(returns),
+                'min': np.min(returns),
+                'max': np.max(returns),
+                'percentiles': {
+                    '1': np.percentile(returns, 1),
+                    '5': np.percentile(returns, 5),
+                    '25': np.percentile(returns, 25),
+                    '75': np.percentile(returns, 75),
+                    '95': np.percentile(returns, 95),
+                    '99': np.percentile(returns, 99)
+                }
+            }
+        })
+
+    def get_correlation_analysis(self, timestamp: str) -> Dict:
+        """Correlation matrix and factor analysis"""
+        df = self.load_detailed_results(timestamp)
+        if df is None:
+            return {}
+
+        # Create pivot table: strategies x symbols with returns
+        pivot = df.pivot_table(
+            index='symbol',
+            columns='strategy_name',
+            values='total_return',
+            aggfunc='mean'
+        )
+
+        # Correlation matrix
+        corr_matrix = pivot.corr()
+
+        # Symbol correlation (transpose)
+        symbol_pivot = df.pivot_table(
+            index='strategy_name',
+            columns='symbol',
+            values='total_return',
+            aggfunc='mean'
+        )
+        symbol_corr = symbol_pivot.corr()
+
+        # Find highly correlated pairs (> 0.7)
+        high_corr_pairs = []
+        for i in range(len(corr_matrix.columns)):
+            for j in range(i+1, len(corr_matrix.columns)):
+                corr_val = corr_matrix.iloc[i, j]
+                if abs(corr_val) > 0.7:
+                    high_corr_pairs.append({
+                        'strategy1': corr_matrix.columns[i],
+                        'strategy2': corr_matrix.columns[j],
+                        'correlation': corr_val
+                    })
+
+        return convert_numpy_types({
+            'strategy_correlation': {
+                'matrix': corr_matrix.to_dict(),
+                'strategies': corr_matrix.columns.tolist()
+            },
+            'symbol_correlation': {
+                'matrix': symbol_corr.to_dict(),
+                'symbols': symbol_corr.columns.tolist()
+            },
+            'high_correlations': high_corr_pairs
+        })
+
+    def get_time_period_breakdown(self, timestamp: str) -> Dict:
+        """Detailed time period analysis with monthly/quarterly views"""
+        df = self.load_detailed_results(timestamp)
+        if df is None:
+            return {}
+
+        # Period-level analysis
+        period_stats = []
+        for period in df['period_name'].unique():
+            period_data = df[df['period_name'] == period]
+
+            period_stats.append({
+                'period': period,
+                'avg_return': period_data['total_return'].mean(),
+                'median_return': period_data['total_return'].median(),
+                'std_return': period_data['total_return'].std(),
+                'sharpe': period_data['sharpe_ratio'].mean(),
+                'win_rate': period_data['win_rate'].mean(),
+                'total_trades': period_data['total_trades'].sum(),
+                'best_strategy': period_data.loc[period_data['total_return'].idxmax(), 'strategy_name'],
+                'worst_strategy': period_data.loc[period_data['total_return'].idxmin(), 'strategy_name'],
+                'strategies_profitable': (period_data['total_return'] > 0).sum(),
+                'total_strategies': len(period_data)
+            })
+
+        return convert_numpy_types({
+            'period_breakdown': period_stats,
+            'period_comparison': {
+                'best_period': max(period_stats, key=lambda x: x['avg_return'])['period'] if period_stats else None,
+                'worst_period': min(period_stats, key=lambda x: x['avg_return'])['period'] if period_stats else None,
+                'most_consistent': min(period_stats, key=lambda x: x['std_return'])['period'] if period_stats else None,
+                'highest_sharpe': max(period_stats, key=lambda x: x['sharpe'])['period'] if period_stats else None
+            }
+        })
+
+    def get_sector_analysis(self, timestamp: str) -> Dict:
+        """Sector-based performance analysis"""
+        df = self.load_detailed_results(timestamp)
+        if df is None:
+            return {}
+
+        # Add sector classification to each symbol
+        df['sector'] = df['symbol'].apply(get_sector)
+
+        # Aggregate by sector
+        sector_stats = []
+        for sector in df['sector'].unique():
+            if sector == 'Unknown':
+                continue
+
+            sector_data = df[df['sector'] == sector]
+
+            sector_stats.append({
+                'sector': sector,
+                'avg_return': sector_data['total_return'].mean(),
+                'median_return': sector_data['total_return'].median(),
+                'sharpe': sector_data['sharpe_ratio'].mean(),
+                'win_rate': sector_data['win_rate'].mean(),
+                'num_symbols': sector_data['symbol'].nunique(),
+                'num_strategies': sector_data['strategy_name'].nunique(),
+                'total_tests': len(sector_data),
+                'best_symbol': sector_data.loc[sector_data['total_return'].idxmax(), 'symbol'] if len(sector_data) > 0 else None,
+                'best_return': sector_data['total_return'].max()
+            })
+
+        # Sort by average return
+        sector_stats.sort(key=lambda x: x['avg_return'], reverse=True)
+
+        return convert_numpy_types({
+            'sector_performance': sector_stats,
+            'best_sector': sector_stats[0]['sector'] if sector_stats else None,
+            'worst_sector': sector_stats[-1]['sector'] if sector_stats else None
+        })
+
+    def get_portfolio_construction(self, timestamp: str, num_strategies: int = 5) -> Dict:
+        """Portfolio construction analysis - best multi-strategy portfolios"""
+        df = self.load_detailed_results(timestamp)
+        if df is None:
+            return {}
+
+        # Get top strategies by Sharpe ratio
+        top_strategies = df.groupby('strategy_name').agg({
+            'total_return': 'mean',
+            'sharpe_ratio': 'mean',
+            'win_rate': 'mean',
+            'max_drawdown': 'mean'
+        }).sort_values('sharpe_ratio', ascending=False).head(num_strategies)
+
+        # Calculate portfolio statistics (equal weight)
+        portfolio_return = top_strategies['total_return'].mean()
+        portfolio_sharpe = top_strategies['sharpe_ratio'].mean()
+        portfolio_max_dd = top_strategies['max_drawdown'].mean()
+
+        # Strategy weights (can be optimized)
+        strategies_list = []
+        for strategy in top_strategies.index:
+            strategies_list.append({
+                'strategy': strategy,
+                'weight': 1.0 / num_strategies,  # Equal weight
+                'return': top_strategies.loc[strategy, 'total_return'],
+                'sharpe': top_strategies.loc[strategy, 'sharpe_ratio'],
+                'contribution': top_strategies.loc[strategy, 'total_return'] / num_strategies
+            })
+
+        # Diversification benefit
+        individual_avg_return = top_strategies['total_return'].mean()
+        individual_avg_sharpe = top_strategies['sharpe_ratio'].mean()
+
+        return convert_numpy_types({
+            'portfolio': {
+                'expected_return': portfolio_return,
+                'sharpe_ratio': portfolio_sharpe,
+                'max_drawdown': portfolio_max_dd,
+                'num_strategies': num_strategies
+            },
+            'strategies': strategies_list,
+            'diversification': {
+                'return_improvement': portfolio_return - individual_avg_return,
+                'sharpe_improvement': portfolio_sharpe - individual_avg_sharpe
+            }
+        })
+
+    def get_ticker_filtering(self, timestamp: str, filters: Dict) -> Dict:
+        """Advanced ticker filtering by sector, market cap, performance"""
+        df = self.load_detailed_results(timestamp)
+        if df is None:
+            return {}
+
+        # Add metadata
+        df['sector'] = df['symbol'].apply(get_sector)
+        df['market_cap'] = df['symbol'].apply(get_market_cap_class)
+
+        # Apply filters
+        filtered_df = df.copy()
+
+        if 'sector' in filters and filters['sector']:
+            filtered_df = filtered_df[filtered_df['sector'] == filters['sector']]
+
+        if 'market_cap' in filters and filters['market_cap']:
+            filtered_df = filtered_df[filtered_df['market_cap'] == filters['market_cap']]
+
+        if 'min_sharpe' in filters:
+            filtered_df = filtered_df[filtered_df['sharpe_ratio'] >= filters['min_sharpe']]
+
+        if 'min_return' in filters:
+            filtered_df = filtered_df[filtered_df['total_return'] >= filters['min_return']]
+
+        if 'min_win_rate' in filters:
+            filtered_df = filtered_df[filtered_df['win_rate'] >= filters['min_win_rate']]
+
+        # Return filtered results
+        return convert_numpy_types({
+            'total_results': len(filtered_df),
+            'filters_applied': filters,
+            'results': filtered_df.nlargest(100, 'total_return').to_dict('records')
+        })
+
+    def get_rolling_metrics(self, timestamp: str, window: int = 3) -> Dict:
+        """Calculate rolling performance metrics across periods"""
+        df = self.load_detailed_results(timestamp)
+        if df is None:
+            return {}
+
+        # Sort by period and calculate rolling metrics per strategy
+        rolling_data = []
+
+        for strategy in df['strategy_name'].unique():
+            strategy_data = df[df['strategy_name'] == strategy].copy()
+
+            # Sort by period
+            periods = sorted(strategy_data['period_name'].unique())
+
+            if len(periods) >= window:
+                for i in range(len(periods) - window + 1):
+                    window_periods = periods[i:i+window]
+                    window_data = strategy_data[strategy_data['period_name'].isin(window_periods)]
+
+                    rolling_data.append({
+                        'strategy': strategy,
+                        'periods': window_periods,
+                        'window': f"{window_periods[0]} to {window_periods[-1]}",
+                        'avg_return': window_data['total_return'].mean(),
+                        'avg_sharpe': window_data['sharpe_ratio'].mean(),
+                        'consistency': window_data['total_return'].std(),
+                        'win_rate': window_data['win_rate'].mean()
+                    })
+
+        return convert_numpy_types({
+            'rolling_metrics': rolling_data,
+            'window_size': window
+        })
+
 
 # Initialize data loader
 data_loader = DashboardDataLoader(RESULTS_DIR)
@@ -311,10 +628,9 @@ data_loader = DashboardDataLoader(RESULTS_DIR)
 @app.after_request
 def add_no_cache_headers(response):
     """Add no-cache headers to all responses to ensure fresh data"""
-    if request.path.startswith('/api/'):
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
     return response
 
 
@@ -324,8 +640,25 @@ def index():
     runs = data_loader.get_available_runs()
     latest_timestamp = runs[0]['timestamp'] if runs else None
 
+    # Debug: Print to console
+    print(f"DEBUG: Found {len(runs)} backtest runs")
+    for i, run in enumerate(runs):
+        print(f"  {i}: {run['timestamp']} - {run['datetime']}")
+
     return render_template('index.html', runs=runs, latest_timestamp=latest_timestamp)
 
+@app.route('/debug/runs')
+def debug_runs():
+    """Debug endpoint to see what runs are being found"""
+    runs = data_loader.get_available_runs()
+    return f"<h1>Found {len(runs)} runs:</h1><pre>{json.dumps(runs, indent=2)}</pre>"
+
+@app.route('/docs')  # or whatever route you want
+def docs():
+    with open('tickers.md', 'r') as f:
+        md_content = f.read()
+    html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'codehilite'])
+    return render_template('docs.html', content=html_content)
 
 @app.route('/api/runs')
 def api_runs():

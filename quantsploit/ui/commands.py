@@ -41,6 +41,9 @@ class CommandHandler:
             "quote": self.cmd_quote,
             "sessions": self.cmd_sessions,
             "webserver": self.cmd_webserver,
+            "analyze": self.cmd_analyze,
+            "compare": self.cmd_compare,
+            "filter": self.cmd_filter,
         }
 
     def get_command_descriptions(self) -> Dict[str, str]:
@@ -61,6 +64,9 @@ class CommandHandler:
             "history": "Show command history",
             "sessions": "Show session information",
             "webserver": "Manage analytics dashboard webserver (webserver start/stop/status/restart)",
+            "analyze": "Analyze stocks, sectors, or periods (analyze stock/sector/period <NAME>)",
+            "compare": "Compare strategies head-to-head (compare <STRATEGY1> <STRATEGY2> [--stock SYMBOL])",
+            "filter": "Filter backtest results (filter --sector AI/Tech --min-sharpe 1.0)",
             "clear": "Clear the screen",
             "exit/quit": "Exit Quantsploit",
         }
@@ -390,6 +396,275 @@ class CommandHandler:
             self.display.print_info("Make sure the dashboard is properly installed")
         except Exception as e:
             self.display.print_error(f"Webserver error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+        return True
+
+    def cmd_analyze(self, args: List[str]) -> bool:
+        """Analyze stocks, sectors, or periods from latest backtest results"""
+        if not args:
+            self.display.print_error("Usage: analyze <stock|sector|period> <NAME> [--timestamp TS]")
+            self.display.print_info("Examples:")
+            self.display.print_info("  analyze stock AAPL")
+            self.display.print_info("  analyze sector AI/Tech")
+            self.display.print_info("  analyze period 1yr")
+            self.display.print_info("  analyze stock NVDA --timestamp 20251122_203908")
+            return True
+
+        analysis_type = args[0].lower()
+
+        if analysis_type not in ['stock', 'sector', 'period']:
+            self.display.print_error(f"Unknown analysis type: {analysis_type}")
+            self.display.print_info("Use: stock, sector, or period")
+            return True
+
+        if len(args) < 2:
+            self.display.print_error(f"Usage: analyze {analysis_type} <NAME>")
+            return True
+
+        name = args[1]
+
+        # Parse optional timestamp
+        timestamp = None
+        if len(args) > 2 and args[2] == '--timestamp' and len(args) > 3:
+            timestamp = args[3]
+
+        try:
+            from pathlib import Path
+
+            # Find latest results if no timestamp specified
+            if not timestamp:
+                results_dir = Path('backtest_results')
+                csv_files = list(results_dir.glob('detailed_results_*.csv'))
+                if not csv_files:
+                    self.display.print_error("No backtest results found!")
+                    self.display.print_info("Run a backtest first using: use backtesting/comprehensive")
+                    return True
+                latest_csv = max(csv_files, key=lambda p: p.stat().st_mtime)
+                csv_path = str(latest_csv)
+                self.display.print_info(f"Using latest results: {latest_csv.name}")
+            else:
+                csv_path = f'backtest_results/detailed_results_{timestamp}.csv'
+
+            # Perform analysis based on type
+            if analysis_type == 'stock':
+                from modules.analysis.stock_analyzer import StockAnalyzer
+                analyzer = StockAnalyzer.from_csv(csv_path)
+                summary = analyzer.get_stock_summary(name.upper())
+                self.display.print(summary)
+
+            elif analysis_type == 'sector':
+                from modules.analysis.sector_deep_dive import SectorAnalyzer
+                analyzer = SectorAnalyzer.from_csv(csv_path)
+                perf = analyzer.analyze_sector(name)
+                if perf:
+                    report = analyzer.format_sector_report(perf)
+                    self.display.print(report)
+                else:
+                    self.display.print_error(f"No data available for sector: {name}")
+
+            elif analysis_type == 'period':
+                self.display.print_warning("Period analysis not yet implemented via CLI")
+                self.display.print_info("Use the Python scripts directly for now")
+
+        except ImportError as e:
+            self.display.print_error(f"Analysis module not found: {str(e)}")
+        except FileNotFoundError:
+            self.display.print_error(f"Results file not found: {csv_path}")
+        except Exception as e:
+            self.display.print_error(f"Analysis error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+        return True
+
+    def cmd_compare(self, args: List[str]) -> bool:
+        """Compare strategies head-to-head"""
+        if len(args) < 2:
+            self.display.print_error("Usage: compare <STRATEGY1> <STRATEGY2> [--stock SYMBOL] [--sector SECTOR]")
+            self.display.print_info("Examples:")
+            self.display.print_info("  compare 'SMA Crossover (20/50)' 'Kalman Adaptive Filter'")
+            self.display.print_info("  compare 'SMA Crossover (20/50)' 'Momentum (10/20/50)' --stock AAPL")
+            self.display.print_info("  compare 'Multi-Factor Scoring' 'HMM Regime Detection' --sector AI/Tech")
+            return True
+
+        # Parse strategies and optional filters
+        strategy1 = args[0]
+        strategy2 = args[1]
+        stock = None
+        sector = None
+
+        i = 2
+        while i < len(args):
+            if args[i] == '--stock' and i + 1 < len(args):
+                stock = args[i + 1].upper()
+                i += 2
+            elif args[i] == '--sector' and i + 1 < len(args):
+                sector = args[i + 1]
+                i += 2
+            else:
+                i += 1
+
+        try:
+            from pathlib import Path
+            from modules.analysis.strategy_comparator import StrategyComparator
+
+            # Find latest results
+            results_dir = Path('backtest_results')
+            csv_files = list(results_dir.glob('detailed_results_*.csv'))
+            if not csv_files:
+                self.display.print_error("No backtest results found!")
+                return True
+            latest_csv = max(csv_files, key=lambda p: p.stat().st_mtime)
+            self.display.print_info(f"Using latest results: {latest_csv.name}\n")
+
+            # Load comparator
+            comparator = StrategyComparator.from_csv(str(latest_csv))
+
+            # Compare
+            result = comparator.compare_two_strategies(
+                strategy1,
+                strategy2,
+                stock=stock,
+                sector=sector
+            )
+
+            if result:
+                report = comparator.format_comparison(result)
+                self.display.print(report)
+            else:
+                self.display.print_error("Insufficient data for comparison")
+                self.display.print_info("Make sure both strategies have been tested with enough samples")
+
+        except ImportError as e:
+            self.display.print_error(f"Comparison module not found: {str(e)}")
+        except Exception as e:
+            self.display.print_error(f"Comparison error: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+        return True
+
+    def cmd_filter(self, args: List[str]) -> bool:
+        """Filter backtest results with multiple criteria"""
+        if not args:
+            self.display.print_error("Usage: filter [options]")
+            self.display.print_info("\nFilter Options:")
+            self.display.print_info("  --sector SECTOR        Filter by sector")
+            self.display.print_info("  --symbol SYMBOL        Filter by stock symbol")
+            self.display.print_info("  --strategy STRATEGY    Filter by strategy")
+            self.display.print_info("  --period PERIOD        Filter by time period")
+            self.display.print_info("  --min-return PCT       Minimum return threshold")
+            self.display.print_info("  --min-sharpe RATIO     Minimum Sharpe ratio")
+            self.display.print_info("  --min-win-rate PCT     Minimum win rate")
+            self.display.print_info("  --max-volatility PCT   Maximum volatility")
+            self.display.print_info("  --top-n N              Show only top N results")
+            self.display.print_info("\nExamples:")
+            self.display.print_info("  filter --sector AI/Tech --min-sharpe 1.0")
+            self.display.print_info("  filter --symbol AAPL --min-return 10")
+            self.display.print_info("  filter --strategy 'Kalman Adaptive Filter' --min-win-rate 60")
+            self.display.print_info("  filter --min-sharpe 1.5 --top-n 10")
+            return True
+
+        # Parse filter arguments
+        sector = None
+        symbol = None
+        strategy = None
+        period = None
+        min_return = None
+        min_sharpe = None
+        min_win_rate = None
+        max_volatility = None
+        top_n = None
+
+        i = 0
+        while i < len(args):
+            if args[i] == '--sector' and i + 1 < len(args):
+                sector = args[i + 1]
+                i += 2
+            elif args[i] == '--symbol' and i + 1 < len(args):
+                symbol = args[i + 1].upper()
+                i += 2
+            elif args[i] == '--strategy' and i + 1 < len(args):
+                strategy = args[i + 1]
+                i += 2
+            elif args[i] == '--period' and i + 1 < len(args):
+                period = args[i + 1]
+                i += 2
+            elif args[i] == '--min-return' and i + 1 < len(args):
+                min_return = float(args[i + 1])
+                i += 2
+            elif args[i] == '--min-sharpe' and i + 1 < len(args):
+                min_sharpe = float(args[i + 1])
+                i += 2
+            elif args[i] == '--min-win-rate' and i + 1 < len(args):
+                min_win_rate = float(args[i + 1])
+                i += 2
+            elif args[i] == '--max-volatility' and i + 1 < len(args):
+                max_volatility = float(args[i + 1])
+                i += 2
+            elif args[i] == '--top-n' and i + 1 < len(args):
+                top_n = int(args[i + 1])
+                i += 2
+            else:
+                i += 1
+
+        try:
+            from pathlib import Path
+            from modules.analysis.advanced_filter import AdvancedFilter
+
+            # Find latest results
+            results_dir = Path('backtest_results')
+            csv_files = list(results_dir.glob('detailed_results_*.csv'))
+            if not csv_files:
+                self.display.print_error("No backtest results found!")
+                return True
+            latest_csv = max(csv_files, key=lambda p: p.stat().st_mtime)
+            self.display.print_info(f"Using latest results: {latest_csv.name}\n")
+
+            # Load filter
+            filter_sys = AdvancedFilter.from_csv(str(latest_csv))
+
+            # Apply filters
+            filter_kwargs = {}
+            if sector:
+                filter_kwargs['sector'] = sector
+            if symbol:
+                filter_kwargs['symbol'] = symbol
+            if strategy:
+                filter_kwargs['strategy'] = strategy
+            if period:
+                filter_kwargs['period'] = period
+            if min_return is not None:
+                filter_kwargs['min_return'] = min_return
+            if min_sharpe is not None:
+                filter_kwargs['min_sharpe'] = min_sharpe
+            if min_win_rate is not None:
+                filter_kwargs['min_win_rate'] = min_win_rate
+            if max_volatility is not None:
+                filter_kwargs['max_volatility'] = max_volatility
+
+            if top_n:
+                results_df = filter_sys.top_n(n=top_n, **filter_kwargs)
+                self.display.print_info(f"Top {top_n} results:\n")
+            else:
+                results_df = filter_sys.quick_filter(**filter_kwargs)
+                self.display.print_info(f"Found {len(results_df)} results:\n")
+
+            if len(results_df) > 0:
+                # Display results
+                display_cols = ['symbol', 'strategy_name', 'period_name', 'total_return', 'sharpe_ratio', 'win_rate']
+                available_cols = [c for c in display_cols if c in results_df.columns]
+
+                self.display.print(results_df[available_cols].to_string(index=False))
+            else:
+                self.display.print_warning("No results match the filter criteria")
+
+        except ImportError as e:
+            self.display.print_error(f"Filter module not found: {str(e)}")
+        except Exception as e:
+            self.display.print_error(f"Filter error: {str(e)}")
             import traceback
             traceback.print_exc()
 

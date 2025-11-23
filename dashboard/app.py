@@ -772,6 +772,58 @@ def docs():
                              content=f'<h1>Error Loading Documentation</h1><p>{str(e)}</p>')
 
 
+@app.route('/backtest-launcher')
+def backtest_launcher():
+    """Backtest launcher page"""
+    return render_template('backtest_launcher.html')
+
+
+@app.route('/api/launch-backtest', methods=['POST'])
+def api_launch_backtest():
+    """API: Launch a new backtest in the background"""
+    import subprocess
+
+    try:
+        data = request.get_json()
+
+        # Build command
+        script_path = Path(__file__).parent.parent / 'run_comprehensive_backtest.py'
+        cmd = ['python3', str(script_path)]
+
+        # Add symbols
+        cmd.extend(['--symbols', data['symbols']])
+
+        # Add capital and commission
+        cmd.extend(['--capital', str(data['capital'])])
+        cmd.extend(['--commission', str(data['commission'])])
+
+        # Add period-specific parameters
+        period_mode = data.get('period_mode', 'default')
+
+        if period_mode == 'custom':
+            cmd.extend(['--tspan', data['tspan']])
+            cmd.extend(['--bspan', data['bspan']])
+            cmd.extend(['--period', str(data['num_periods'])])
+        elif period_mode == 'quarterly':
+            cmd.extend(['--quarter', data['quarters']])
+            if 'quarter_periods' in data:
+                cmd.extend(['--period', str(data['quarter_periods'])])
+
+        # Launch in background
+        print(f"Launching backtest: {' '.join(cmd)}")
+        subprocess.Popen(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+        return jsonify({
+            'success': True,
+            'message': 'Backtest launched successfully',
+            'command': ' '.join(cmd)
+        })
+
+    except Exception as e:
+        print(f"Error launching backtest: {e}")
+        return jsonify({'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     import argparse
     import logging

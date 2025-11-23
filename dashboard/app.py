@@ -632,10 +632,9 @@ data_loader = DashboardDataLoader(RESULTS_DIR)
 @app.after_request
 def add_no_cache_headers(response):
     """Add no-cache headers to all responses to ensure fresh data"""
-    if request.path.startswith('/api/'):
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
     return response
 
 

@@ -75,9 +75,22 @@ class DashboardDataLoader:
             if timestamp in seen_timestamps:
                 continue
 
-            # Parse timestamp
+            # Parse timestamp (handle both YYYYmmdd_HHMMSS and YYYYmmdd_HHMMSS_counter formats)
             try:
-                dt = datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
+                # Split timestamp parts (e.g., ['20231115', '101530'] or ['20231115', '101530', '1'])
+                timestamp_parts = timestamp.split('_')
+                if len(timestamp_parts) >= 2:
+                    # Extract base timestamp (YYYYmmdd_HHMMSS)
+                    base_timestamp = '_'.join(timestamp_parts[:2])  # YYYYmmdd_HHMMSS
+                    dt = datetime.strptime(base_timestamp, '%Y%m%d_%H%M%S')
+
+                    # If there's a counter suffix, append it to the display
+                    if len(timestamp_parts) > 2:
+                        display_time = f"{dt.strftime('%Y-%m-%d %H:%M:%S')} (#{timestamp_parts[2]})"
+                    else:
+                        display_time = dt.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    continue
 
                 # Check if JSON summary exists
                 json_file = self.results_dir / f'summary_{timestamp}.json'
@@ -85,14 +98,14 @@ class DashboardDataLoader:
 
                 runs.append({
                     'timestamp': timestamp,
-                    'datetime': dt.strftime('%Y-%m-%d %H:%M:%S'),
+                    'datetime': display_time,
                     'has_json': has_json,
                     'summary_file': str(json_file) if has_json else None,
                     'csv_file': str(csv_file),
                     'report_file': str(self.results_dir / f'report_{timestamp}.md')
                 })
                 seen_timestamps.add(timestamp)
-            except ValueError:
+            except (ValueError, IndexError):
                 continue
 
         return runs

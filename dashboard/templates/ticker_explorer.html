@@ -175,10 +175,11 @@
                                     <th>Signal Acc.</th>
                                     <th>Max DD</th>
                                     <th>Trades</th>
+                                    <th>Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="results-tbody">
-                                <tr><td colspan="10" class="text-center text-muted">Select filters and click Apply to view results</td></tr>
+                                <tr><td colspan="11" class="text-center text-muted">Select filters and click Apply to view results</td></tr>
                             </tbody>
                         </table>
                     </div>
@@ -229,7 +230,7 @@ function resetFilters() {
     document.getElementById('min-return').value = '';
     document.getElementById('min-winrate').value = '';
 
-    document.getElementById('results-tbody').innerHTML = '<tr><td colspan="10" class="text-center text-muted">Select filters and click Apply to view results</td></tr>';
+    document.getElementById('results-tbody').innerHTML = '<tr><td colspan="11" class="text-center text-muted">Select filters and click Apply to view results</td></tr>';
     document.getElementById('results-count').textContent = '--';
     document.getElementById('avg-return').textContent = '--';
     document.getElementById('avg-sharpe').textContent = '--';
@@ -277,7 +278,7 @@ async function applyFilters() {
         } else {
             document.getElementById('avg-return').textContent = 'N/A';
             document.getElementById('avg-sharpe').textContent = 'N/A';
-            document.getElementById('results-tbody').innerHTML = '<tr><td colspan="10" class="text-center text-warning">No results match your filters</td></tr>';
+            document.getElementById('results-tbody').innerHTML = '<tr><td colspan="11" class="text-center text-warning">No results match your filters</td></tr>';
         }
 
     } catch (error) {
@@ -288,6 +289,7 @@ async function applyFilters() {
 function populateResultsTable(results) {
     const tbody = document.getElementById('results-tbody');
     tbody.innerHTML = '';
+    const timestamp = "{{ timestamp }}";
 
     results.slice(0, 100).forEach(result => {
         const row = tbody.insertRow();
@@ -303,6 +305,13 @@ function populateResultsTable(results) {
             <td>${result.signal_accuracy.toFixed(1)}%</td>
             <td>${(result.max_drawdown * 100).toFixed(2)}%</td>
             <td>${result.total_trades}</td>
+            <td>
+                <a href="/candlestick/${timestamp}/${encodeURIComponent(result.strategy_name)}/${result.symbol}"
+                   class="btn btn-sm btn-primary"
+                   title="View candlestick chart">
+                    <i class="fas fa-chart-line"></i>
+                </a>
+            </td>
         `;
 
         // Highlight excellent results

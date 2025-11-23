@@ -92,6 +92,7 @@
                                 <th>Max DD</th>
                                 <th>Trades</th>
                                 <th>Win Rate</th>
+                                <th>Actions</th>
                             </tr>
                         </thead>
                         <tbody id="detailedTableBody">
@@ -216,6 +217,13 @@ function createDetailedTable(data) {
             <td>${d.max_drawdown.toFixed(2)}%</td>
             <td>${d.total_trades}</td>
             <td>${d.win_rate.toFixed(1)}%</td>
+            <td>
+                <a href="/candlestick/${timestamp}/${encodeURIComponent(d.strategy_name)}/${d.symbol}"
+                   class="btn btn-sm btn-primary"
+                   title="View candlestick chart">
+                    <i class="fas fa-chart-candlestick"></i> Chart
+                </a>
+            </td>
         `;
         tbody.appendChild(row);
     });

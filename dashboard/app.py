@@ -1004,6 +1004,103 @@ def api_backtest_status(job_id):
         return jsonify({'status': 'not_found'}), 404
 
 
+@app.route('/candlestick/<timestamp>/<strategy_name>/<symbol>')
+def candlestick_view(timestamp, strategy_name, symbol):
+    """Candlestick chart view for a specific strategy and symbol"""
+    return render_template('candlestick.html',
+                         timestamp=timestamp,
+                         strategy_name=strategy_name,
+                         symbol=symbol)
+
+
+@app.route('/api/candlestick/<timestamp>/<strategy_name>/<symbol>')
+def api_candlestick(timestamp, strategy_name, symbol):
+    """API: Get candlestick data with trade signals overlaid"""
+    from quantsploit.utils.data_fetcher import DataFetcher
+
+    try:
+        # Load trade details
+        trades_file = RESULTS_DIR / f'trades_{timestamp}.csv'
+        if not trades_file.exists():
+            return jsonify({'error': 'Trade data not found. Please run a new backtest to generate trade details.'}), 404
+
+        trades_df = pd.read_csv(trades_file)
+
+        # Filter trades for this strategy and symbol
+        strategy_trades = trades_df[
+            (trades_df['strategy_name'] == strategy_name) &
+            (trades_df['symbol'] == symbol)
+        ]
+
+        if len(strategy_trades) == 0:
+            return jsonify({'error': 'No trades found for this strategy/symbol combination'}), 404
+
+        # Get the date range from trades
+        strategy_trades['entry_date'] = pd.to_datetime(strategy_trades['entry_date'])
+        strategy_trades['exit_date'] = pd.to_datetime(strategy_trades['exit_date'])
+
+        start_date = strategy_trades['entry_date'].min()
+        end_date = strategy_trades['exit_date'].max()
+
+        # Add buffer around dates
+        from datetime import timedelta
+        start_date = start_date - timedelta(days=30)
+        end_date = end_date + timedelta(days=30)
+
+        # Fetch OHLC data
+        data_fetcher = DataFetcher()
+        ohlc_data = data_fetcher.get_stock_data(
+            symbol=symbol,
+            period='3y',  # Get enough data
+            interval='1d'
+        )
+
+        if ohlc_data is None or len(ohlc_data) == 0:
+            return jsonify({'error': 'Failed to fetch stock data'}), 500
+
+        # Filter to date range
+        ohlc_data = ohlc_data.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+
+        # Prepare OHLC data for Plotly
+        ohlc_data_dict = {
+            'dates': ohlc_data.index.strftime('%Y-%m-%d').tolist(),
+            'open': ohlc_data['Open'].tolist(),
+            'high': ohlc_data['High'].tolist(),
+            'low': ohlc_data['Low'].tolist(),
+            'close': ohlc_data['Close'].tolist(),
+            'volume': ohlc_data['Volume'].tolist() if 'Volume' in ohlc_data.columns else []
+        }
+
+        # Prepare trade data
+        trades_list = []
+        for _, trade in strategy_trades.iterrows():
+            trades_list.append({
+                'entry_date': trade['entry_date'].strftime('%Y-%m-%d'),
+                'exit_date': trade['exit_date'].strftime('%Y-%m-%d'),
+                'entry_price': float(trade['entry_price']),
+                'exit_price': float(trade['exit_price']),
+                'shares': int(trade['shares']),
+                'side': trade['side'],
+                'pnl': float(trade['pnl']),
+                'pnl_pct': float(trade['pnl_pct']),
+                'mae': float(trade['mae']),
+                'mfe': float(trade['mfe'])
+            })
+
+        return jsonify(convert_numpy_types({
+            'ohlc': ohlc_data_dict,
+            'trades': trades_list,
+            'symbol': symbol,
+            'strategy': strategy_name
+        }))
+
+    except Exception as e:
+        import traceback
+        print(f"Error in candlestick API: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+
 # Global dict to store backtest job status
 backtest_jobs = {}
 

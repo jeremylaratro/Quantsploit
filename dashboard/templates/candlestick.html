@@ -1,0 +1,341 @@
+{% extends "base.html" %}
+
+{% block title %}{{ symbol }} - {{ strategy_name }} - Candlestick Chart{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row mb-4">
+        <div class="col-12">
+            <h1 class="display-6">
+                <i class="fas fa-chart-line"></i> {{ symbol }} Candlestick Chart
+            </h1>
+            <p class="lead">{{ strategy_name }}</p>
+            <nav aria-label="breadcrumb">
+                <ol class="breadcrumb">
+                    <li class="breadcrumb-item"><a href="/">Dashboard</a></li>
+                    <li class="breadcrumb-item active">{{ symbol }} - {{ strategy_name }}</li>
+                </ol>
+            </nav>
+        </div>
+    </div>
+
+    <!-- Loading Indicator -->
+    <div id="loading" class="text-center my-5">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+            <span class="visually-hidden">Loading...</span>
+        </div>
+        <p class="mt-3">Loading candlestick chart...</p>
+    </div>
+
+    <!-- Error Message -->
+    <div id="error" class="alert alert-danger d-none" role="alert">
+        <h4 class="alert-heading">Error!</h4>
+        <p id="error-message"></p>
+    </div>
+
+    <!-- Trade Summary Stats -->
+    <div id="trade-stats" class="row mb-4 d-none">
+        <div class="col-md-3">
+            <div class="stat-card">
+                <h6><i class="fas fa-exchange-alt"></i> Total Trades</h6>
+                <h2 id="total-trades">-</h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <h6><i class="fas fa-arrow-up"></i> Winning Trades</h6>
+                <h2 id="winning-trades">-</h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card red">
+                <h6><i class="fas fa-arrow-down"></i> Losing Trades</h6>
+                <h2 id="losing-trades">-</h2>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <h6><i class="fas fa-dollar-sign"></i> Total P/L</h6>
+                <h2 id="total-pnl">-</h2>
+            </div>
+        </div>
+    </div>
+
+    <!-- Candlestick Chart -->
+    <div id="chart-container" class="d-none">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5><i class="fas fa-chart-candlestick"></i> Price Action with Trade Signals</h5>
+            </div>
+            <div class="card-body">
+                <div id="candlestick-chart" style="height: 600px;"></div>
+            </div>
+        </div>
+
+        <!-- Trade Details Table -->
+        <div class="card">
+            <div class="card-header">
+                <h5><i class="fas fa-table"></i> Trade Details</h5>
+            </div>
+            <div class="card-body">
+                <div class="table-responsive">
+                    <table class="table table-hover" id="trades-table">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Entry Date</th>
+                                <th>Exit Date</th>
+                                <th>Entry Price</th>
+                                <th>Exit Price</th>
+                                <th>Shares</th>
+                                <th>Side</th>
+                                <th>P/L ($)</th>
+                                <th>P/L (%)</th>
+                                <th>MAE</th>
+                                <th>MFE</th>
+                            </tr>
+                        </thead>
+                        <tbody id="trades-table-body">
+                            <!-- Populated by JavaScript -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const timestamp = "{{ timestamp }}";
+    const strategyName = "{{ strategy_name }}";
+    const symbol = "{{ symbol }}";
+
+    // Fetch candlestick data
+    fetch(`/api/candlestick/${timestamp}/${encodeURIComponent(strategyName)}/${symbol}`)
+        .then(response => {
+            if (!response.ok) {
+                return response.json().then(err => {
+                    throw new Error(err.error || 'Failed to load data');
+                });
+            }
+            return response.json();
+        })
+        .then(data => {
+            document.getElementById('loading').classList.add('d-none');
+            document.getElementById('chart-container').classList.remove('d-none');
+            document.getElementById('trade-stats').classList.remove('d-none');
+
+            renderCandlestickChart(data);
+            populateTradeStats(data.trades);
+            populateTradeTable(data.trades);
+        })
+        .catch(error => {
+            document.getElementById('loading').classList.add('d-none');
+            document.getElementById('error').classList.remove('d-none');
+            document.getElementById('error-message').textContent = error.message;
+            console.error('Error loading candlestick data:', error);
+        });
+});
+
+function renderCandlestickChart(data) {
+    const ohlc = data.ohlc;
+    const trades = data.trades;
+
+    // Create candlestick trace
+    const candlestick = {
+        type: 'candlestick',
+        x: ohlc.dates,
+        open: ohlc.open,
+        high: ohlc.high,
+        low: ohlc.low,
+        close: ohlc.close,
+        name: data.symbol,
+        increasing: {line: {color: '#26a69a'}},
+        decreasing: {line: {color: '#ef5350'}},
+        yaxis: 'y'
+    };
+
+    const traces = [candlestick];
+
+    // Add entry signals
+    const entryDates = trades.map(t => t.entry_date);
+    const entryPrices = trades.map(t => t.entry_price);
+    const entryText = trades.map((t, i) =>
+        `Trade ${i+1} ENTRY<br>` +
+        `Price: $${t.entry_price.toFixed(2)}<br>` +
+        `Shares: ${t.shares}<br>` +
+        `Side: ${t.side.toUpperCase()}`
+    );
+
+    traces.push({
+        type: 'scatter',
+        mode: 'markers',
+        x: entryDates,
+        y: entryPrices,
+        name: 'Buy Signal',
+        marker: {
+            symbol: 'triangle-up',
+            size: 15,
+            color: '#2196F3',
+            line: {color: 'white', width: 2}
+        },
+        text: entryText,
+        hovertemplate: '%{text}<extra></extra>',
+        yaxis: 'y'
+    });
+
+    // Add exit signals with P/L color coding
+    const exitDates = trades.map(t => t.exit_date);
+    const exitPrices = trades.map(t => t.exit_price);
+    const exitColors = trades.map(t => t.pnl > 0 ? '#4CAF50' : '#F44336');
+    const exitText = trades.map((t, i) =>
+        `Trade ${i+1} EXIT<br>` +
+        `Price: $${t.exit_price.toFixed(2)}<br>` +
+        `P/L: $${t.pnl.toFixed(2)} (${t.pnl_pct.toFixed(2)}%)<br>` +
+        `MAE: $${t.mae.toFixed(2)}<br>` +
+        `MFE: $${t.mfe.toFixed(2)}`
+    );
+
+    traces.push({
+        type: 'scatter',
+        mode: 'markers',
+        x: exitDates,
+        y: exitPrices,
+        name: 'Sell Signal',
+        marker: {
+            symbol: 'triangle-down',
+            size: 15,
+            color: exitColors,
+            line: {color: 'white', width: 2}
+        },
+        text: exitText,
+        hovertemplate: '%{text}<extra></extra>',
+        yaxis: 'y'
+    });
+
+    // Add volume bars if available
+    if (ohlc.volume && ohlc.volume.length > 0) {
+        const volumeColors = ohlc.close.map((close, i) => {
+            if (i === 0) return '#26a69a';
+            return close >= ohlc.close[i-1] ? '#26a69a' : '#ef5350';
+        });
+
+        traces.push({
+            type: 'bar',
+            x: ohlc.dates,
+            y: ohlc.volume,
+            name: 'Volume',
+            marker: {color: volumeColors},
+            yaxis: 'y2',
+            opacity: 0.3
+        });
+    }
+
+    const layout = {
+        title: {
+            text: `${data.symbol} - ${data.strategy}`,
+            font: {size: 20}
+        },
+        xaxis: {
+            title: 'Date',
+            rangeslider: {visible: false},
+            type: 'date'
+        },
+        yaxis: {
+            title: 'Price ($)',
+            domain: [0.3, 1],
+            fixedrange: false
+        },
+        yaxis2: {
+            title: 'Volume',
+            domain: [0, 0.25],
+            fixedrange: false
+        },
+        showlegend: true,
+        legend: {
+            orientation: 'h',
+            yanchor: 'bottom',
+            y: 1.02,
+            xanchor: 'right',
+            x: 1
+        },
+        hovermode: 'x unified',
+        height: 600,
+        margin: {t: 80, b: 60, l: 60, r: 40}
+    };
+
+    const config = {
+        responsive: true,
+        displayModeBar: true,
+        displaylogo: false,
+        modeBarButtonsToRemove: ['lasso2d', 'select2d']
+    };
+
+    Plotly.newPlot('candlestick-chart', traces, layout, config);
+}
+
+function populateTradeStats(trades) {
+    const totalTrades = trades.length;
+    const winningTrades = trades.filter(t => t.pnl > 0).length;
+    const losingTrades = trades.filter(t => t.pnl <= 0).length;
+    const totalPnl = trades.reduce((sum, t) => sum + t.pnl, 0);
+
+    document.getElementById('total-trades').textContent = totalTrades;
+    document.getElementById('winning-trades').textContent = winningTrades;
+    document.getElementById('losing-trades').textContent = losingTrades;
+
+    const pnlElement = document.getElementById('total-pnl');
+    pnlElement.textContent = `$${totalPnl.toFixed(2)}`;
+
+    // Update the card color based on P/L
+    const pnlCard = pnlElement.closest('.stat-card');
+    pnlCard.classList.remove('green', 'red', 'blue');
+    if (totalPnl > 0) {
+        pnlCard.classList.add('green');
+    } else if (totalPnl < 0) {
+        pnlCard.classList.add('red');
+    } else {
+        pnlCard.classList.add('blue');
+    }
+}
+
+function populateTradeTable(trades) {
+    const tbody = document.getElementById('trades-table-body');
+    tbody.innerHTML = '';
+
+    trades.forEach((trade, index) => {
+        const row = document.createElement('tr');
+
+        // Apply row color based on P/L
+        if (trade.pnl > 0) {
+            row.classList.add('table-success');
+        } else if (trade.pnl < 0) {
+            row.classList.add('table-danger');
+        }
+
+        row.innerHTML = `
+            <td>${index + 1}</td>
+            <td>${trade.entry_date}</td>
+            <td>${trade.exit_date}</td>
+            <td>$${trade.entry_price.toFixed(2)}</td>
+            <td>$${trade.exit_price.toFixed(2)}</td>
+            <td>${trade.shares}</td>
+            <td><span class="badge bg-${trade.side === 'long' ? 'primary' : 'warning'}">${trade.side.toUpperCase()}</span></td>
+            <td class="${trade.pnl >= 0 ? 'text-success' : 'text-danger'} fw-bold">$${trade.pnl.toFixed(2)}</td>
+            <td class="${trade.pnl_pct >= 0 ? 'text-success' : 'text-danger'} fw-bold">${trade.pnl_pct.toFixed(2)}%</td>
+            <td class="text-danger">$${trade.mae.toFixed(2)}</td>
+            <td class="text-success">$${trade.mfe.toFixed(2)}</td>
+        `;
+
+        tbody.appendChild(row);
+    });
+}
+</script>
+
+<style>
+.stat-card.blue {
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+}
+</style>
+{% endblock %}

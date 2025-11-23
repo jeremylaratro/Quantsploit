@@ -969,6 +969,9 @@ def api_launch_backtest():
             elif period_config.get('mode') == 'quarterly':
                 quarters_str = ','.join(period_config.get('quarters', ['2']))
                 kwargs['quarters'] = quarters_str
+                # Pass years_back as num_periods for quarterly mode
+                if 'years_back' in period_config:
+                    kwargs['num_periods'] = period_config.get('years_back', 2)
 
             # Note: initial_capital is hardcoded to $100k in run_comprehensive_analysis
             # commission and quick_mode are not supported by the function

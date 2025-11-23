@@ -206,22 +206,48 @@ ALL_SECTORS = {**HIGH_LEVEL_SECTORS, **NICHE_SECTORS}
 
 # ==================== HELPER FUNCTIONS ====================
 
+def _normalize_name(name):
+    """Normalize a display name to a lookup key"""
+    return name.lower().replace(' ', '_').replace('/', '_').replace('-', '_').replace('(', '').replace(')', '')
+
+def _create_name_mapping():
+    """Create a mapping from normalized names to display names"""
+    mapping = {}
+    for display_name in HIGH_LEVEL_SECTORS.keys():
+        mapping[_normalize_name(display_name)] = display_name
+    for display_name in NICHE_SECTORS.keys():
+        mapping[_normalize_name(display_name)] = display_name
+    for display_name in CLASSIC_UNIVERSES.keys():
+        mapping[_normalize_name(display_name)] = display_name
+    return mapping
+
+# Create the reverse mapping
+_NAME_MAPPING = _create_name_mapping()
+
 def get_universe(name):
-    """Get ticker list by universe name"""
-    return ALL_SECTORS.get(name, CLASSIC_UNIVERSES.get(name, []))
+    """Get ticker list by universe name (accepts both display names and normalized keys)"""
+    # First try direct lookup
+    tickers = ALL_SECTORS.get(name, CLASSIC_UNIVERSES.get(name, None))
+    if tickers is not None:
+        return tickers
+
+    # Try normalized name lookup
+    normalized = _normalize_name(name)
+    display_name = _NAME_MAPPING.get(normalized)
+    if display_name:
+        return ALL_SECTORS.get(display_name, CLASSIC_UNIVERSES.get(display_name, []))
+
+    return []
 
 def get_all_universes():
     """Get dictionary of all available universes organized by category"""
     return {
         '=== HIGH-LEVEL SECTORS ===': None,
-        **{name: name.lower().replace(' ', '_').replace('/', '_').replace('(', '').replace(')', '')
-           for name in HIGH_LEVEL_SECTORS.keys()},
+        **{name: _normalize_name(name) for name in HIGH_LEVEL_SECTORS.keys()},
         '=== NICHE SECTORS ===': None,
-        **{name: name.lower().replace(' ', '_').replace('/', '_').replace('-', '_').replace('(', '').replace(')', '')
-           for name in NICHE_SECTORS.keys()},
+        **{name: _normalize_name(name) for name in NICHE_SECTORS.keys()},
         '=== CLASSIC INDICES ===': None,
-        **{name: name.lower().replace(' ', '_')
-           for name in CLASSIC_UNIVERSES.keys()},
+        **{name: _normalize_name(name) for name in CLASSIC_UNIVERSES.keys()},
     }
 
 def get_all_sectors():
@@ -229,8 +255,19 @@ def get_all_sectors():
     return list(HIGH_LEVEL_SECTORS.keys()) + list(NICHE_SECTORS.keys())
 
 def get_sector_tickers(sector):
-    """Get all tickers in a sector"""
-    return ALL_SECTORS.get(sector, [])
+    """Get all tickers in a sector (accepts both display names and normalized keys)"""
+    # First try direct lookup
+    tickers = ALL_SECTORS.get(sector, None)
+    if tickers is not None:
+        return tickers
+
+    # Try normalized name lookup
+    normalized = _normalize_name(sector)
+    display_name = _NAME_MAPPING.get(normalized)
+    if display_name:
+        return ALL_SECTORS.get(display_name, [])
+
+    return []
 
 def get_sector(ticker):
     """Get sector classification for a ticker"""

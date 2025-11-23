@@ -632,10 +632,9 @@ data_loader = DashboardDataLoader(RESULTS_DIR)
 @app.after_request
 def add_no_cache_headers(response):
     """Add no-cache headers to all responses to ensure fresh data"""
-    if request.path.startswith('/api/'):
-        response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
-        response.headers['Pragma'] = 'no-cache'
-        response.headers['Expires'] = '0'
+    response.headers['Cache-Control'] = 'no-cache, no-store, must-revalidate'
+    response.headers['Pragma'] = 'no-cache'
+    response.headers['Expires'] = '0'
     return response
 
 
@@ -645,7 +644,18 @@ def index():
     runs = data_loader.get_available_runs()
     latest_timestamp = runs[0]['timestamp'] if runs else None
 
+    # Debug: Print to console
+    print(f"DEBUG: Found {len(runs)} backtest runs")
+    for i, run in enumerate(runs):
+        print(f"  {i}: {run['timestamp']} - {run['datetime']}")
+
     return render_template('index.html', runs=runs, latest_timestamp=latest_timestamp)
+
+@app.route('/debug/runs')
+def debug_runs():
+    """Debug endpoint to see what runs are being found"""
+    runs = data_loader.get_available_runs()
+    return f"<h1>Found {len(runs)} runs:</h1><pre>{json.dumps(runs, indent=2)}</pre>"
 
 @app.route('/docs')  # or whatever route you want
 def docs():
@@ -812,13 +822,13 @@ def api_portfolio(timestamp):
     return jsonify(data)
 
 
+@app.route('/ticker-explorer')
 @app.route('/ticker-explorer/<timestamp>')
-def ticker_explorer(timestamp):
+def ticker_explorer(timestamp=None):
     """Ticker Explorer with Advanced Filtering"""
     universes = get_all_universes()
     sectors = get_all_sectors()
     return render_template('ticker_explorer.html',
-                         timestamp=timestamp,
                          universes=universes,
                          sectors=sectors)
 
@@ -953,6 +963,7 @@ def api_launch_backtest():
 
             # Build backtest config
             symbols = data['tickers']
+            strategies = data.get('strategies', [])  # Get selected strategies
             period_config = data.get('period_config', {})
 
             # Prepare keyword arguments (only parameters that run_comprehensive_analysis accepts)
@@ -960,6 +971,13 @@ def api_launch_backtest():
                 'symbols': symbols,
                 'output_dir': str(RESULTS_DIR)
             }
+
+            # Add strategies filter if specified
+            if strategies:
+                kwargs['strategy_keys'] = strategies
+                backtest_jobs[job_id]['log'] += f'Using {len(strategies)} selected strategies\n'
+            else:
+                backtest_jobs[job_id]['log'] += 'Using all available strategies\n'
 
             # Add period configuration
             if period_config.get('mode') == 'custom':
@@ -969,6 +987,9 @@ def api_launch_backtest():
             elif period_config.get('mode') == 'quarterly':
                 quarters_str = ','.join(period_config.get('quarters', ['2']))
                 kwargs['quarters'] = quarters_str
+                # Pass years_back as num_periods for quarterly mode
+                if 'years_back' in period_config:
+                    kwargs['num_periods'] = period_config.get('years_back', 2)
 
             # Note: initial_capital is hardcoded to $100k in run_comprehensive_analysis
             # commission and quick_mode are not supported by the function

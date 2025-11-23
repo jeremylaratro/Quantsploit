@@ -620,7 +620,8 @@ class ComprehensiveBacktester:
     """
 
     def __init__(self, symbols: List[str], initial_capital: float = 100000,
-                 commission_pct: float = 0.001, slippage_pct: float = 0.001):
+                 commission_pct: float = 0.001, slippage_pct: float = 0.001,
+                 strategy_keys: Optional[List[str]] = None):
         """
         Initialize the comprehensive backtester
 
@@ -629,17 +630,19 @@ class ComprehensiveBacktester:
             initial_capital: Starting capital for each backtest
             commission_pct: Commission percentage per trade
             slippage_pct: Slippage percentage per trade
+            strategy_keys: Optional list of strategy keys to run (None = all strategies)
         """
         self.symbols = symbols
         self.initial_capital = initial_capital
         self.commission_pct = commission_pct
         self.slippage_pct = slippage_pct
+        self.strategy_keys_filter = strategy_keys
 
         self.data_fetcher = DataFetcher()
         self.adapter = StrategyAdapter(self.data_fetcher)
 
         # Define available strategies
-        self.strategies = {
+        self.all_strategies = {
             # Basic strategies (kept for comparison)
             'sma_crossover': {
                 'name': 'SMA Crossover (20/50)',
@@ -694,6 +697,14 @@ class ComprehensiveBacktester:
                 'params': {'lookback': 50}
             }
         }
+
+        # Filter strategies if specified
+        if self.strategy_keys_filter:
+            self.strategies = {k: v for k, v in self.all_strategies.items()
+                             if k in self.strategy_keys_filter}
+            logger.info(f"Filtered to {len(self.strategies)} strategies: {list(self.strategies.keys())}")
+        else:
+            self.strategies = self.all_strategies
 
         self.results: List[StrategyPerformance] = []
         self.all_trades: List[Dict] = []
@@ -1232,7 +1243,8 @@ def run_comprehensive_analysis(symbols: List[str],
                               tspan: Optional[str] = None,
                               bspan: Optional[str] = None,
                               num_periods: Optional[int] = None,
-                              quarters: Optional[str] = None):
+                              quarters: Optional[str] = None,
+                              strategy_keys: Optional[List[str]] = None):
     """
     Convenience function to run a complete comprehensive backtest
 
@@ -1243,13 +1255,15 @@ def run_comprehensive_analysis(symbols: List[str],
         bspan: Backtest span for each period (e.g., '6m', '180d')
         num_periods: Number of separate backtest periods to run
         quarters: Quarter specification (e.g., '2' or '1,2,3')
+        strategy_keys: Optional list of strategy keys to run (None = all strategies)
     """
     # Create backtester
     backtester = ComprehensiveBacktester(
         symbols=symbols,
         initial_capital=100000,
         commission_pct=0.001,
-        slippage_pct=0.001
+        slippage_pct=0.001,
+        strategy_keys=strategy_keys
     )
 
     # Run comprehensive backtest

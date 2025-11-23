@@ -644,7 +644,18 @@ def index():
     runs = data_loader.get_available_runs()
     latest_timestamp = runs[0]['timestamp'] if runs else None
 
+    # Debug: Print to console
+    print(f"DEBUG: Found {len(runs)} backtest runs")
+    for i, run in enumerate(runs):
+        print(f"  {i}: {run['timestamp']} - {run['datetime']}")
+
     return render_template('index.html', runs=runs, latest_timestamp=latest_timestamp)
+
+@app.route('/debug/runs')
+def debug_runs():
+    """Debug endpoint to see what runs are being found"""
+    runs = data_loader.get_available_runs()
+    return f"<h1>Found {len(runs)} runs:</h1><pre>{json.dumps(runs, indent=2)}</pre>"
 
 @app.route('/docs')  # or whatever route you want
 def docs():

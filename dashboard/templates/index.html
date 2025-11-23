@@ -31,6 +31,21 @@
     </div>
 </div>
 
+<!-- Backtest Launcher CTA -->
+<div class="row mb-4" id="launcher-cta" style="display: none;">
+    <div class="col-12">
+        <div class="card bg-gradient text-white" style="background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);">
+            <div class="card-body text-center py-4">
+                <h3><i class="fas fa-rocket"></i> Launch New Backtest</h3>
+                <p class="mb-3">Run backtests across S&P 500, NASDAQ 100, sectors, and custom ticker universes</p>
+                <a href="/backtest-launcher" class="btn btn-light btn-lg px-5">
+                    <i class="fas fa-play"></i> Go to Backtest Launcher
+                </a>
+            </div>
+        </div>
+    </div>
+</div>
+
 <!-- Advanced Analytics Navigation -->
 <div class="row mb-4" id="advanced-nav" style="display: none;">
     <div class="col-12">
@@ -310,6 +325,7 @@ async function loadDashboardData(timestamp) {
 
         document.getElementById('loadingIndicator').style.display = 'none';
         document.getElementById('dashboardContent').style.display = 'block';
+        document.getElementById('launcher-cta').style.display = 'block';
         document.getElementById('advanced-nav').style.display = 'block';
 
     } catch (error) {

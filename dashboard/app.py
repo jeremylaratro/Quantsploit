@@ -15,7 +15,7 @@ from typing import Dict, List, Optional
 from scipy import stats
 from ticker_universe import (
     get_universe, get_sector, get_all_sectors, get_sector_tickers,
-    get_market_cap_class, get_all_universes, SP500_BY_SECTOR
+    get_market_cap_class, get_all_universes
 )
 
 app = Flask(__name__)

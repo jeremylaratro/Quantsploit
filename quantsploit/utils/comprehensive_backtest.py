@@ -1142,7 +1142,15 @@ class ComprehensiveBacktester:
         import os
         os.makedirs(output_dir, exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # Generate timestamp with collision avoidance
+        base_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = base_timestamp
+        counter = 1
+
+        # Check if file exists, if so append counter to avoid overwriting
+        while os.path.exists(f'{output_dir}/detailed_results_{timestamp}.csv'):
+            timestamp = f'{base_timestamp}_{counter}'
+            counter += 1
 
         try:
             # Save detailed results

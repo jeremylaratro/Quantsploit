@@ -13,7 +13,10 @@
 <div class="run-selector">
     <div class="row align-items-center">
         <div class="col-md-6">
-            <label for="runSelector" class="form-label fw-bold">Select Backtest Run:</label>
+            <label for="runSelector" class="form-label fw-bold">
+                Select Backtest Run:
+                <span class="badge bg-primary" id="runs-count">{{ runs|length }} available</span>
+            </label>
             <select id="runSelector" class="form-select">
                 <option value="">-- Select a backtest run --</option>
                 {% for run in runs %}
@@ -362,6 +365,15 @@ async function refreshRunsList() {
 
             selector.appendChild(option);
         });
+
+        // Update badge count
+        const countBadge = document.getElementById('runs-count');
+        if (countBadge) {
+            countBadge.textContent = `${runs.length} available`;
+        }
+
+        // Log to console for debugging
+        console.log(`Refreshed runs list: ${runs.length} backtest runs found`);
 
         // If no run was selected but we have runs, select the latest
         if (!currentValue && runs.length > 0) {

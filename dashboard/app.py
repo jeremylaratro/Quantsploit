@@ -964,14 +964,6 @@ def api_launch_backtest():
     def run_backtest():
         """Run backtest in background thread"""
         try:
-            # Store job status
-            backtest_jobs[job_id] = {
-                'status': 'running',
-                'progress': 0,
-                'log': 'Starting backtest...\n',
-                'start_time': datetime.now().isoformat()
-            }
-
             # Build comprehensive command
             from pathlib import Path
             import sys
@@ -988,6 +980,14 @@ def api_launch_backtest():
             strategies = data.get('strategies', [])  # Get selected strategies
             period_config = data.get('period_config', {})
             initial_capital = data.get('initial_capital', 1000)  # Default to $1000
+
+            # Log the received initial capital
+            backtest_jobs[job_id] = {
+                'status': 'running',
+                'progress': 0,
+                'log': f'Starting backtest with initial capital: ${initial_capital:,.2f}\n',
+                'start_time': datetime.now().isoformat()
+            }
 
             # Prepare keyword arguments (only parameters that run_comprehensive_analysis accepts)
             kwargs = {

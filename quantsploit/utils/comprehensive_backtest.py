@@ -614,7 +614,7 @@ class StrategyAdapter:
 
     def ml_swing_strategy(self, backtester: Backtester, date: pd.Timestamp,
                          row: pd.Series, symbol: str, data: pd.DataFrame,
-                         confidence_threshold: float = 0.65, holding_period: int = 5):
+                         confidence_threshold: float = 0.55, holding_period: int = 5):
         """
         ML Swing Trading Strategy Adapter (Simplified)
 
@@ -636,6 +636,8 @@ class StrategyAdapter:
 
         # Volatility
         volatility = close.pct_change().rolling(10).std().iloc[-1]
+        if pd.isna(volatility):
+            volatility = 0.02  # Default moderate volatility
 
         # RSI
         rsi_val = rsi(close, 14)
@@ -658,26 +660,26 @@ class StrategyAdapter:
         # Bullish signals add to score, bearish signals subtract
         score = 0.5  # Neutral starting point
 
-        # RSI contribution
-        if current_rsi < 40:
-            score += 0.2  # Oversold = bullish
-        elif current_rsi > 60:
-            score -= 0.2  # Overbought = bearish
+        # RSI contribution (stronger signal)
+        if current_rsi < 45:
+            score += 0.25  # Oversold = bullish
+        elif current_rsi > 55:
+            score -= 0.25  # Overbought = bearish
 
         # Momentum contribution
-        if roc_5 > 0.02:
+        if roc_5 > 0.01:
             score += 0.15
-        elif roc_5 < -0.02:
+        elif roc_5 < -0.01:
             score -= 0.15
 
         # MACD contribution
         score += macd_signal * 0.1
 
-        # MA trend contribution
-        score += ma_trend * 0.1
+        # MA trend contribution (stronger signal)
+        score += ma_trend * 0.15
 
         # Volatility penalty (high vol reduces confidence)
-        if not pd.isna(volatility) and volatility > 0.03:
+        if volatility > 0.03:
             score -= 0.1
 
         # Clip to 0-1 range
@@ -685,18 +687,18 @@ class StrategyAdapter:
 
         current_position = backtester.positions.get(symbol)
 
-        # Entry logic: high confidence for upward move
-        if score > confidence_threshold:
-            if current_position is None:
-                backtester.enter_long(symbol, date, row['Close'])
+        # Check exit conditions first (if we have a position)
+        if current_position is not None:
+            days_held = (date - current_position.entry_date).days
 
-        # Exit logic: low confidence or holding period exceeded
-        elif score < 0.5:
-            if current_position is not None:
-                # Check holding period
-                days_held = (date - current_position.entry_date).days
-                if days_held >= holding_period or score < 0.4:
-                    backtester.exit_position(symbol, date, row['Close'])
+            # Exit if: low confidence OR holding period exceeded OR strong bearish signal
+            if score < 0.45 or days_held >= holding_period or score < 0.35:
+                backtester.exit_position(symbol, date, row['Close'])
+                return  # Don't try to re-enter on same bar
+
+        # Entry logic: high confidence for upward move (only if no position)
+        if current_position is None and score > confidence_threshold:
+            backtester.enter_long(symbol, date, row['Close'])
 
     def pairs_trading_strategy(self, backtester: Backtester, date: pd.Timestamp,
                               row: pd.Series, symbol: str, data: pd.DataFrame,
@@ -835,7 +837,7 @@ class ComprehensiveBacktester:
             'ml_swing_trading': {
                 'name': 'ML Swing Trading',
                 'function': self.adapter.ml_swing_strategy,
-                'params': {'confidence_threshold': 0.65, 'holding_period': 5}
+                'params': {'confidence_threshold': 0.55, 'holding_period': 5}
             },
             'pairs_trading': {
                 'name': 'Pairs Trading',

@@ -64,8 +64,8 @@ Examples:
     parser.add_argument(
         '--capital',
         type=float,
-        default=100000,
-        help='Initial capital for backtests (default: 100000)'
+        default=1000,
+        help='Initial capital for backtests (default: 1000)'
     )
 
     parser.add_argument(
@@ -161,6 +161,7 @@ Examples:
         results_df, summary = run_comprehensive_analysis(
             symbols=symbols,
             output_dir=args.output,
+            initial_capital=args.capital,
             tspan=args.tspan,
             bspan=args.bspan,
             num_periods=args.period,

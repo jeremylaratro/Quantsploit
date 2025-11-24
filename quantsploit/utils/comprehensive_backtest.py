@@ -21,7 +21,7 @@ from quantsploit.modules.strategies.sma_crossover import SMACrossover
 from quantsploit.modules.strategies.mean_reversion import MeanReversion
 from quantsploit.modules.strategies.momentum_signals import MomentumSignals
 from quantsploit.modules.strategies.multifactor_scoring import MultiFactorScoring
-from quantsploit.utils.ta_compat import rsi, atr, adx, bbands
+from quantsploit.utils.ta_compat import rsi, atr, adx, bbands, macd
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)

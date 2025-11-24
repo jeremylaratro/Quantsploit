@@ -136,7 +136,7 @@ REAL-WORLD APPLICATION:
         "INITIAL_CAPITAL": {
             "description": "Initial capital for backtesting",
             "required": False,
-            "value": 100000
+            "value": 1000
         },
         "POSITION_SIZE": {
             "description": "Position size as fraction of capital (0.0-1.0)",

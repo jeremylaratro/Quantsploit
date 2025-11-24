@@ -36,7 +36,7 @@ class ComprehensiveStrategyBacktest(BaseModule):
                 'description': 'Directory to save results'
             },
             'INITIAL_CAPITAL': {
-                'value': '100000',
+                'value': '1000',
                 'required': False,
                 'description': 'Initial capital for backtests'
             },

@@ -987,11 +987,13 @@ def api_launch_backtest():
             symbols = data['tickers']
             strategies = data.get('strategies', [])  # Get selected strategies
             period_config = data.get('period_config', {})
+            initial_capital = data.get('initial_capital', 1000)  # Default to $1000
 
             # Prepare keyword arguments (only parameters that run_comprehensive_analysis accepts)
             kwargs = {
                 'symbols': symbols,
-                'output_dir': str(RESULTS_DIR)
+                'output_dir': str(RESULTS_DIR),
+                'initial_capital': initial_capital
             }
 
             # Add strategies filter if specified
@@ -1013,8 +1015,7 @@ def api_launch_backtest():
                 if 'years_back' in period_config:
                     kwargs['num_periods'] = period_config.get('years_back', 2)
 
-            # Note: initial_capital is hardcoded to $100k in run_comprehensive_analysis
-            # commission and quick_mode are not supported by the function
+            # Note: commission and quick_mode are not yet supported by the comprehensive backtest function
 
             backtest_jobs[job_id]['log'] += f'Testing {len(symbols)} symbols...\n'
             backtest_jobs[job_id]['progress'] = 10

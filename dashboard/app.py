@@ -1048,6 +1048,62 @@ def api_backtest_status(job_id):
         return jsonify({'status': 'not_found'}), 404
 
 
+@app.route('/reddit-sentiment')
+def reddit_sentiment():
+    """Reddit Sentiment Analysis Dashboard"""
+    return render_template('reddit_sentiment.html')
+
+
+@app.route('/api/reddit-sentiment')
+def api_reddit_sentiment():
+    """API: Analyze Reddit sentiment for stock tickers"""
+    import sys
+    from pathlib import Path
+
+    # Add quantsploit to path
+    quantsploit_path = Path(__file__).parent.parent
+    sys.path.insert(0, str(quantsploit_path))
+
+    try:
+        from quantsploit.core.framework import Framework
+        from quantsploit.modules.analysis.reddit_sentiment import RedditSentiment
+
+        # Get parameters from query string
+        subreddits = request.args.get('subreddits', 'wallstreetbets,stocks,investing,StockMarket,options')
+        time_filter = request.args.get('time_filter', 'day')
+        post_limit = request.args.get('post_limit', '100', type=int)
+        min_mentions = request.args.get('min_mentions', '3', type=int)
+
+        # Initialize framework and module
+        framework = Framework()
+        sentiment_module = RedditSentiment(framework)
+
+        # Set options
+        sentiment_module.set_option('SUBREDDITS', subreddits)
+        sentiment_module.set_option('TIME_FILTER', time_filter)
+        sentiment_module.set_option('POST_LIMIT', post_limit)
+        sentiment_module.set_option('MIN_MENTIONS', min_mentions)
+
+        # Run analysis
+        results = sentiment_module.run()
+
+        return jsonify(convert_numpy_types(results))
+
+    except ImportError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Reddit sentiment module not available: {str(e)}. Please install dependencies: pip install praw vaderSentiment'
+        }), 500
+    except Exception as e:
+        import traceback
+        print(f"Error in Reddit sentiment API: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
 @app.route('/candlestick/<timestamp>/<strategy_name>/<symbol>')
 def candlestick_view(timestamp, strategy_name, symbol):
     """Candlestick chart view for a specific strategy and symbol"""

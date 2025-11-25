@@ -7,9 +7,10 @@ import os
 import math
 import pandas as pd
 import re
-from typing import Dict, Any, List, Tuple
+from typing import Dict, Any, List, Tuple, Pattern
 from datetime import datetime, timedelta
 from quantsploit.core.module import BaseModule
+from quantsploit.utils.ticker_validator import get_validator
 from collections import defaultdict, Counter
 
 try:
@@ -41,25 +42,269 @@ class RedditSentiment(BaseModule):
         'THE', 'A', 'I', 'AM', 'ARE', 'IS', 'WAS', 'WERE', 'BE', 'BEEN',
         'DD', 'YOLO', 'WSB', 'CEO', 'CFO', 'IPO', 'PE', 'EPS', 'ATH', 'ATL',
         'EDIT', 'TLDR', 'TL', 'DR', 'IMO', 'IMHO', 'OP', 'FOMO', 'FUD',
-        'USA', 'US', 'UK', 'EU', 'CEO', 'CTO', 'VP', 'ETF', 'SPY', 'QQQ',
-        'IT', 'AI', 'ML', 'API', 'CEO', 'CPA', 'IRS', 'SEC', 'GDP', 'CPI',
+        'USA', 'US', 'UK', 'EU', 'CEO', 'CTO', 'VP', 'ETF',
+        'IT', 'AI', 'ML', 'API', 'CPA', 'IRS', 'SEC', 'GDP', 'CPI',
         'PM', 'AM', 'UTC', 'EST', 'PST', 'MST', 'CST', 'NOT', 'AND', 'OR',
         'IF', 'BUT', 'SO', 'AS', 'AT', 'BY', 'FOR', 'FROM', 'IN', 'OF', 'ON',
-        'TO', 'UP', 'OUT', 'MY', 'YOUR', 'ALL', 'NEW', 'OLD', 'NOW', 'JUST'
+        'TO', 'UP', 'OUT', 'MY', 'YOUR', 'ALL', 'NEW', 'OLD', 'NOW', 'JUST',
+        'AN', 'HE', 'SHE', 'WE', 'THEY', 'HAS', 'HAD', 'DO', 'DOES', 'DID',
+        'WILL', 'WOULD', 'COULD', 'SHOULD', 'MAY', 'MIGHT', 'CAN', 'CANT',
+        'EOD', 'AH', 'PM', 'ETA', 'FAQ', 'FYI', 'ASAP', 'RIP', 'LOL', 'LMAO',
+        'OMG', 'WTF', 'SMH', 'TBH', 'IDK', 'IRL', 'NSFW', 'OC', 'OP', 'PSA'
     }
 
+    # MASSIVELY EXPANDED POSITIVE SENTIMENT LEXICON
+    # Covers: trading strategies, options, meme stock culture, momentum indicators
     POSITIVE_CUES = {
-        "bullish", "moon", "mooning", "uptrend", "surge", "beat", "beats", "beating",
-        "strong", "stronger", "strength", "gain", "gains", "green", "rally", "pumping",
-        "undervalued", "cheap", "breakout", "rip", "ripping", "squeeze", "alpha",
-        "run", "running", "momentum", "profit", "profits", "profitable"
+        # Core bullish terms
+        "bullish", "bull", "bulls", "mega-bull", "super-bull", "uber-bull",
+
+        # Moon/rocket terminology
+        "moon", "mooning", "moonshot", "moonbound", "moons", "mooned",
+        "rocket", "rockets", "rocketing", "rocketed", "rocketship",
+        "🚀", "💎", "🌙", "📈", "🔥", "💰", "🤑",
+
+        # Trend & momentum
+        "uptrend", "uptrending", "upturn", "upside", "upmove", "upswing",
+        "surge", "surging", "surged", "surges", "momentum", "breakout",
+        "breaking-out", "broke-out", "breakthrough", "blast-off", "blastoff",
+
+        # Performance & gains
+        "beat", "beats", "beating", "crushed", "crushing", "smashed", "killed",
+        "gain", "gains", "gaining", "gained", "gainer", "gainz", "tendies",
+        "profit", "profits", "profitable", "profiting", "printing",
+        "green", "greens", "greenday", "biggreen", "massive-gains",
+
+        # Quality & value
+        "strong", "stronger", "strongest", "strength", "solid", "robust",
+        "healthy", "quality", "undervalued", "cheap", "discount", "bargain",
+        "value", "steal", "opportunity", "gem", "hidden-gem", "sleeper",
+
+        # Price action
+        "rally", "rallying", "rallied", "rallies", "rip", "ripping", "ripped",
+        "pump", "pumping", "pumped", "pumps", "squeeze", "squeezing", "squeezed",
+        "run", "running", "runner", "runup", "run-up", "explode", "exploding",
+        "pop", "popping", "popped", "spike", "spiking", "spiked", "skyrocket",
+
+        # Fundamental positives
+        "earnings-beat", "revenue-growth", "expansion", "innovation", "growth",
+        "scalable", "profitable", "cash-flow", "positive-outlook", "upgrade",
+        "outperform", "overperform", "beat-estimates", "guidance-raise",
+
+        # Trading strategies (bullish)
+        "long", "calls", "call", "buying-calls", "bought-calls", "itm", "otm",
+        "leaps", "deep-itm", "going-long", "entered-long", "accumulating",
+        "accumulation", "buying-dip", "btfd", "buy-the-dip", "dip-buying",
+        "hold", "holding", "hodl", "hodling", "diamond-hands", "💎🙌",
+
+        # Market psychology (positive)
+        "confident", "conviction", "bullish-case", "thesis", "DD", "solid-dd",
+        "backing-truck", "loading", "loaded", "loading-up", "doubling-down",
+        "adding", "adding-more", "averaging-down", "buying-more",
+
+        # Momentum indicators
+        "volume-spike", "high-volume", "breaking-resistance", "new-high",
+        "all-time-high", "ath", "52w-high", "gamma-squeeze", "short-squeeze",
+        "shorts-squeezed", "covering", "forced-covering", "gap-up", "gapping",
+
+        # Options/derivatives (bullish)
+        "high-oi", "call-volume", "unusual-options", "smart-money", "whale-buy",
+        "dark-pool-buying", "insider-buying", "institutional-buying",
+
+        # Social sentiment
+        "hype", "hyped", "trending", "viral", "fomo", "everyone-buying",
+        "to-the-moon", "lambo", "lambos", "yacht", "retire", "retirement",
+
+        # Technical analysis (bullish)
+        "golden-cross", "ma-cross", "bullish-flag", "cup-and-handle",
+        "ascending-triangle", "bull-flag", "higher-highs", "higher-lows",
+        "macd-cross", "rsi-oversold", "bounce", "bouncing", "reversal",
+
+        # Company-specific positives
+        "partnership", "acquisition", "merger", "buyback", "dividend",
+        "dividend-increase", "split", "stock-split", "spinoff", "ipo-success",
+
+        # Misc positive
+        "alpha", "outperforming", "leader", "dominance", "catalyst",
+        "upcoming-catalyst", "news", "good-news", "positive", "optimistic",
+        "hopium", "copium", "stonks", "stonk", "money-printer", "brrr"
     }
 
+    # MASSIVELY EXPANDED NEGATIVE SENTIMENT LEXICON
     NEGATIVE_CUES = {
-        "bearish", "dump", "dumping", "crash", "crashing", "downtrend", "selloff",
-        "weak", "weaker", "weakness", "loss", "losses", "red", "bagholder", "bags",
-        "overvalued", "expensive", "collapse", "collapsing", "dilution", "bankrupt",
-        "fraud", "scam", "dead", "bleeding", "short", "shorting"
+        # Core bearish terms
+        "bearish", "bear", "bears", "mega-bear", "super-bearish",
+
+        # Crash/collapse terminology
+        "dump", "dumping", "dumped", "dumps", "crash", "crashing", "crashed",
+        "collapse", "collapsing", "collapsed", "tank", "tanking", "tanked",
+        "plunge", "plunging", "plunged", "crater", "cratering", "cratered",
+        "📉", "💀", "🔴", "⚠️", "🩸",
+
+        # Trend & momentum (negative)
+        "downtrend", "downtrending", "downturn", "downside", "downmove",
+        "selloff", "sell-off", "selling", "mass-selling", "capitulation",
+        "bleeding", "bloodbath", "blood-red", "massacre", "slaughter",
+
+        # Performance & losses
+        "loss", "losses", "losing", "lost", "loser", "red", "reds", "bagholding",
+        "bagholder", "bags", "heavy-bags", "caught-bag", "holding-bags",
+        "miss", "missed", "missing", "disappointed", "disappointment",
+
+        # Quality & value (negative)
+        "weak", "weaker", "weakest", "weakness", "fragile", "vulnerable",
+        "overvalued", "overpriced", "expensive", "bubble", "frothy", "stretched",
+        "worthless", "trash", "garbage", "scam", "fraud", "ponzi", "rug",
+
+        # Price action (negative)
+        "drop", "dropping", "dropped", "fall", "falling", "fell", "decline",
+        "declining", "declined", "sink", "sinking", "sunk", "tumble", "tumbling",
+        "free-fall", "freefall", "nosedive", "cliff", "drill", "drilling",
+
+        # Fundamental negatives
+        "earnings-miss", "revenue-decline", "layoffs", "bankruptcy", "bankrupt",
+        "chapter-11", "liquidation", "insolvent", "debt", "overleveraged",
+        "cash-burn", "burning-cash", "dilution", "dilutive", "share-dilution",
+
+        # Trading strategies (bearish)
+        "short", "shorting", "shorted", "shorts", "puts", "put", "buying-puts",
+        "bought-puts", "selling-calls", "sold-calls", "going-short",
+        "entered-short", "fade", "fading", "faded", "selling", "sold", "exit",
+
+        # Market psychology (negative)
+        "fear", "panic", "panic-selling", "scared", "terrified", "worried",
+        "concerned", "doubt", "doubting", "uncertain", "uncertainty",
+        "hopeless", "despair", "giving-up", "capitulating", "throwing-towel",
+
+        # Momentum indicators (negative)
+        "low-volume", "no-volume", "breaking-support", "new-low", "52w-low",
+        "all-time-low", "death-cross", "ma-death", "gap-down", "gapping-down",
+
+        # Options/derivatives (bearish)
+        "high-puts", "put-volume", "unusual-puts", "insider-selling",
+        "institutional-selling", "dumping-shares", "offering", "secondary",
+
+        # Social sentiment (negative)
+        "fud", "spreading-fud", "doubt", "hate", "hated", "despised",
+        "avoid", "stay-away", "warning", "red-flag", "red-flags", "concern",
+
+        # Technical analysis (bearish)
+        "death-cross", "bearish-flag", "head-and-shoulders", "double-top",
+        "triple-top", "descending-triangle", "bear-flag", "lower-highs",
+        "lower-lows", "breakdown", "breaking-down", "broke-down",
+
+        # Company-specific negatives
+        "investigation", "sec-investigation", "lawsuit", "sued", "fraud",
+        "scandal", "controversy", "recall", "fine", "penalty", "regulation",
+        "ban", "banned", "restricted", "delisted", "delisting",
+
+        # Risk & warnings
+        "risky", "risk", "dangerous", "caution", "warning", "trap", "bull-trap",
+        "dead-cat", "dead-cat-bounce", "falling-knife", "catching-knife",
+
+        # Misc negative
+        "rekt", "wrecked", "destroyed", "demolished", "annihilated", "toast",
+        "done", "finished", "over", "dead", "dying", "doomed", "failure",
+        "fail", "failed", "rug-pull", "pump-and-dump", "exit-scam"
+    }
+
+    # REGEX PATTERNS FOR SPELLING VARIATIONS & SLANG
+    # These patterns catch common misspellings, leetspeak, and deliberate variations
+    POSITIVE_PATTERNS = [
+        # Moon variations
+        (re.compile(r'm[o0]{2,}n', re.I), 0.03),
+        (re.compile(r'mo+ning', re.I), 0.03),
+        (re.compile(r'ro+cket', re.I), 0.03),
+        (re.compile(r'🚀+'), 0.02),
+
+        # Diamond hands variations
+        (re.compile(r'diamond.?hands?', re.I), 0.04),
+        (re.compile(r'💎+.*🙌+'), 0.04),
+        (re.compile(r'h[o0]dl', re.I), 0.03),
+
+        # Bullish variations
+        (re.compile(r'bu+l+ish', re.I), 0.03),
+        (re.compile(r'bul+s?', re.I), 0.02),
+
+        # Tendies/gains
+        (re.compile(r'tendies?', re.I), 0.03),
+        (re.compile(r'gainz+', re.I), 0.02),
+        (re.compile(r'pr[o0]fit', re.I), 0.02),
+
+        # Pump/squeeze
+        (re.compile(r'pu+mp', re.I), 0.02),
+        (re.compile(r'sque+ze', re.I), 0.03),
+        (re.compile(r'sho+rt.?sque+ze', re.I), 0.04),
+
+        # BTFD
+        (re.compile(r'btfd', re.I), 0.03),
+        (re.compile(r'buy.?the.?f.{0,3}dip', re.I), 0.03),
+
+        # To the moon
+        (re.compile(r'to+.?the+.?mo+n', re.I), 0.04),
+        (re.compile(r'lambo+', re.I), 0.02),
+
+        # Brrr (money printer)
+        (re.compile(r'br+r+', re.I), 0.02),
+        (re.compile(r'money.?printer', re.I), 0.02),
+
+        # Calls/long
+        (re.compile(r'buying.?cal+s', re.I), 0.02),
+        (re.compile(r'long.?cal+s', re.I), 0.02),
+    ]
+
+    NEGATIVE_PATTERNS = [
+        # Bearish variations
+        (re.compile(r'be+a+rish', re.I), -0.03),
+        (re.compile(r'be+a+rs?', re.I), -0.02),
+
+        # Dump/crash
+        (re.compile(r'du+mp', re.I), -0.03),
+        (re.compile(r'cra+sh', re.I), -0.03),
+        (re.compile(r'📉+'), -0.02),
+
+        # Bagholder
+        (re.compile(r'bag.?hold', re.I), -0.03),
+        (re.compile(r'heavy.?bags', re.I), -0.03),
+        (re.compile(r'holding.?bags', re.I), -0.03),
+
+        # Rekt/wrecked
+        (re.compile(r're+kt', re.I), -0.03),
+        (re.compile(r'wre+cke*d', re.I), -0.03),
+
+        # Paper hands
+        (re.compile(r'paper.?hands?', re.I), -0.03),
+        (re.compile(r'📄+.*🙌+'), -0.03),
+
+        # Dead/dying
+        (re.compile(r'de+a+d', re.I), -0.02),
+        (re.compile(r'dying', re.I), -0.02),
+        (re.compile(r'💀+'), -0.02),
+
+        # Rug pull
+        (re.compile(r'ru+g.?pu+l+', re.I), -0.04),
+        (re.compile(r'pump.?and.?dump', re.I), -0.04),
+
+        # FUD
+        (re.compile(r'fu+d+', re.I), -0.02),
+        (re.compile(r'spreading.?fud', re.I), -0.03),
+
+        # Puts/short
+        (re.compile(r'buying.?puts', re.I), -0.02),
+        (re.compile(r'going.?short', re.I), -0.02),
+
+        # Drilling/tanking
+        (re.compile(r'dri+l+ing', re.I), -0.03),
+        (re.compile(r'tanking', re.I), -0.03),
+    ]
+
+    # Negation words that flip sentiment
+    NEGATION_WORDS = {
+        'not', 'no', 'never', 'none', 'nobody', 'nothing', 'neither', 'nowhere',
+        'isnt', "isn't", 'arent', "aren't", 'wasnt', "wasn't", 'werent', "weren't",
+        'dont', "don't", 'doesnt', "doesn't", 'didnt', "didn't", 'wont', "won't",
+        'wouldnt', "wouldn't", 'shouldnt', "shouldn't", 'cant', "can't", 'cannot',
+        'couldnt', "couldn't", 'hardly', 'barely', 'scarcely', 'without'
     }
 
     @property
@@ -130,6 +375,16 @@ class RedditSentiment(BaseModule):
                 "value": "auto",
                 "required": False,
                 "description": "auto (API if creds else scrape), api, or scrape (JSON from old.reddit.com)"
+            },
+            "VALIDATE_TICKERS": {
+                "value": True,
+                "required": False,
+                "description": "Validate tickers against comprehensive database of valid symbols (recommended)"
+            },
+            "ADVANCED_SENTIMENT": {
+                "value": True,
+                "required": False,
+                "description": "Use advanced sentiment analysis with regex patterns and negation detection"
             }
         })
 
@@ -152,6 +407,8 @@ class RedditSentiment(BaseModule):
         filter_symbol = self.get_option("FILTER_SYMBOL").strip().upper()
         min_mentions = int(self.get_option("MIN_MENTIONS"))
         access_mode = str(self.get_option("ACCESS_MODE")).lower()
+        validate_tickers = bool(self.get_option("VALIDATE_TICKERS"))
+        advanced_sentiment = bool(self.get_option("ADVANCED_SENTIMENT"))
 
         if sort not in {"top", "new", "hot"}:
             return {"success": False, "error": f"Invalid SORT '{sort}'. Use top, new, or hot."}
@@ -238,14 +495,14 @@ class RedditSentiment(BaseModule):
 
                         total_posts_analyzed += 1
                         post_text = f"{post.title} {post.selftext}"
-                        tickers = self._extract_tickers(post_text)
+                        tickers = self._extract_tickers(post_text, validate_tickers)
 
                         for ticker in tickers:
                             if filter_symbol and ticker != filter_symbol:
                                 continue
 
                             mention_score = self._score_ticker_sentiment(
-                                ticker, post.title, post.selftext, analyzer
+                                ticker, post.title, post.selftext, analyzer, advanced_sentiment
                             )
                             weight = self._calculate_quality_weight(post.score)
                             if ticker in post.title:
@@ -274,14 +531,14 @@ class RedditSentiment(BaseModule):
 
                                 for comment in comments:
                                     total_comments_analyzed += 1
-                                    comment_tickers = self._extract_tickers(comment.body)
+                                    comment_tickers = self._extract_tickers(comment.body, validate_tickers)
                                     comment_score = getattr(comment, "score", 0)
 
                                     for ticker in comment_tickers:
                                         if filter_symbol and ticker != filter_symbol:
                                             continue
 
-                                        mention_score = self._score_text_with_cues(comment.body, analyzer)
+                                        mention_score = self._score_text_with_cues(comment.body, analyzer, advanced_sentiment)
                                         weight = 0.6 * self._calculate_quality_weight(comment_score)
 
                                         self._accumulate_ticker_data(
@@ -302,14 +559,14 @@ class RedditSentiment(BaseModule):
 
                         total_posts_analyzed += 1
                         post_text = f"{post['title']} {post['selftext']}"
-                        tickers = self._extract_tickers(post_text)
+                        tickers = self._extract_tickers(post_text, validate_tickers)
 
                         for ticker in tickers:
                             if filter_symbol and ticker != filter_symbol:
                                 continue
 
                             mention_score = self._score_ticker_sentiment(
-                                ticker, post["title"], post["selftext"], analyzer
+                                ticker, post["title"], post["selftext"], analyzer, advanced_sentiment
                             )
                             weight = self._calculate_quality_weight(post["score"])
                             if ticker in post["title"]:
@@ -382,8 +639,17 @@ class RedditSentiment(BaseModule):
             'top_10_tickers': results[:10]
         }
 
-    def _extract_tickers(self, text: str) -> List[str]:
-        """Extract potential stock tickers from text"""
+    def _extract_tickers(self, text: str, validate: bool = True) -> List[str]:
+        """
+        Extract potential stock tickers from text with optional validation
+
+        Args:
+            text: Text to extract tickers from
+            validate: Whether to validate against ticker database (default: True)
+
+        Returns:
+            List of valid ticker symbols
+        """
         # Find all uppercase words
         potential_tickers = self.TICKER_PATTERN.findall(text)
 
@@ -393,7 +659,26 @@ class RedditSentiment(BaseModule):
             if ticker not in self.EXCLUDE_WORDS and len(ticker) <= 5:
                 tickers.append(ticker)
 
-        return list(set(tickers))  # Remove duplicates
+        # Remove duplicates
+        unique_tickers = list(set(tickers))
+
+        # Validate against ticker database if enabled
+        if validate:
+            try:
+                validator = get_validator()
+                valid_tickers = validator.validate_batch(unique_tickers)
+
+                # Report invalid tickers if in verbose mode
+                invalid = validator.get_invalid_tickers(unique_tickers)
+                if invalid and len(invalid) <= 10:  # Only log if reasonable number
+                    print(f"[Filtered] Invalid tickers: {', '.join(sorted(invalid)[:10])}")
+
+                return valid_tickers
+            except Exception as e:
+                print(f"[WARN] Ticker validation failed: {e}, proceeding without validation")
+                return unique_tickers
+
+        return unique_tickers
 
     def _categorize_sentiment(self, compound_score: float) -> str:
         """Categorize sentiment score"""
@@ -557,28 +842,136 @@ class RedditSentiment(BaseModule):
         parts = re.split(r'[.!?;\n]+', text)
         return [p.strip() for p in parts if p and len(p.strip()) > 2]
 
-    def _score_text_with_cues(self, text: str, analyzer) -> float:
-        """Base VADER score with finance-specific lexical adjustments."""
+    def _score_text_with_cues(self, text: str, analyzer, advanced: bool = True) -> float:
+        """
+        Advanced sentiment scoring with finance-specific lexical adjustments,
+        regex pattern matching, and negation detection.
+
+        Args:
+            text: Text to analyze
+            analyzer: VADER sentiment analyzer instance
+            advanced: Use advanced features (regex, negation detection)
+
+        Returns:
+            Sentiment score between -1.0 and 1.0
+        """
+        # Base VADER score
         base = analyzer.polarity_scores(text)['compound']
-        tokens = re.findall(r"[A-Za-z']+", text.lower())
 
+        if not advanced:
+            # Use simpler legacy scoring
+            tokens = re.findall(r"[A-Za-z']+", text.lower())
+            boost = 0.0
+            for token in tokens:
+                if token in self.POSITIVE_CUES:
+                    boost += 0.02
+                if token in self.NEGATIVE_CUES:
+                    boost -= 0.02
+
+            exclamation_boost = min(text.count('!'), 3) * 0.02
+            boost += exclamation_boost
+
+            score = max(-1.0, min(1.0, base + max(-0.15, min(0.15, boost))))
+            return score
+
+        # ADVANCED SENTIMENT ANALYSIS
         boost = 0.0
-        for token in tokens:
+        text_lower = text.lower()
+
+        # 1. LEXICAL MATCHING - Check for sentiment cue words
+        tokens = re.findall(r"[A-Za-z']+", text_lower)
+
+        # Build bigrams and trigrams for better context
+        words = text_lower.split()
+        bigrams = [f"{words[i]}-{words[i+1]}" for i in range(len(words)-1)] if len(words) > 1 else []
+        trigrams = [f"{words[i]}-{words[i+1]}-{words[i+2]}" for i in range(len(words)-2)] if len(words) > 2 else []
+
+        # Check all n-grams against sentiment cues
+        all_tokens = tokens + bigrams + trigrams
+        for token in all_tokens:
             if token in self.POSITIVE_CUES:
-                boost += 0.02
+                boost += 0.025
             if token in self.NEGATIVE_CUES:
-                boost -= 0.02
+                boost -= 0.025
 
-        exclamation_boost = min(text.count('!'), 3) * 0.02
-        boost += exclamation_boost
+        # 2. REGEX PATTERN MATCHING - Catch spelling variations and slang
+        for pattern, weight in self.POSITIVE_PATTERNS:
+            matches = pattern.findall(text)
+            if matches:
+                boost += weight * min(len(matches), 3)  # Cap at 3 matches per pattern
 
-        score = max(-1.0, min(1.0, base + max(-0.15, min(0.15, boost))))
+        for pattern, weight in self.NEGATIVE_PATTERNS:
+            matches = pattern.findall(text)
+            if matches:
+                boost += weight * min(len(matches), 3)  # weight is already negative
+
+        # 3. NEGATION DETECTION - Flip sentiment if negation words precede sentiment words
+        # Split into sentences for better negation detection
+        sentences = re.split(r'[.!?;]', text_lower)
+
+        for sentence in sentences:
+            sentence_words = sentence.split()
+            for i, word in enumerate(sentence_words):
+                # Check if this word is a negation
+                if word in self.NEGATION_WORDS:
+                    # Look ahead for sentiment words (within next 3 words)
+                    for j in range(i+1, min(i+4, len(sentence_words))):
+                        next_word = sentence_words[j]
+                        # If we find a positive cue, flip it to negative
+                        if next_word in self.POSITIVE_CUES:
+                            boost -= 0.04  # Penalty for negated positive
+                        # If we find a negative cue, flip it to positive
+                        elif next_word in self.NEGATIVE_CUES:
+                            boost += 0.04  # Bonus for negated negative
+
+        # 4. EMPHASIS INDICATORS
+        # Exclamation marks
+        exclamation_count = text.count('!')
+        if exclamation_count > 0:
+            boost += min(exclamation_count, 3) * 0.02
+
+        # ALL CAPS WORDS (indicates strong emotion)
+        caps_words = re.findall(r'\b[A-Z]{4,}\b', text)  # 4+ letter all-caps words
+        if caps_words:
+            boost += min(len(caps_words), 3) * 0.015
+
+        # Repeated letters (e.g., "sooooo bullish")
+        repeated_letter_matches = re.findall(r'(\w)\1{2,}', text_lower)
+        if repeated_letter_matches:
+            boost += min(len(repeated_letter_matches), 3) * 0.01
+
+        # 5. EMOJI SENTIMENT
+        positive_emojis = ['🚀', '🌙', '💎', '📈', '🔥', '💰', '🤑', '🙌', '💪', '👍', '✅', '🟢']
+        negative_emojis = ['📉', '💀', '🔴', '⚠️', '🩸', '👎', '❌', '🔻', '📄']
+
+        for emoji in positive_emojis:
+            boost += text.count(emoji) * 0.02
+
+        for emoji in negative_emojis:
+            boost -= text.count(emoji) * 0.02
+
+        # Cap the boost to prevent extreme swings
+        boost = max(-0.25, min(0.25, boost))
+
+        # Combine base VADER score with our custom boost
+        score = max(-1.0, min(1.0, base + boost))
+
         return score
 
-    def _score_ticker_sentiment(self, ticker: str, title: str, body: str, analyzer) -> float:
+    def _score_ticker_sentiment(self, ticker: str, title: str, body: str, analyzer, advanced: bool = True) -> float:
         """
         Score sentiment for a specific ticker using its sentence-level context,
         with a fallback to whole-text scoring.
+
+        Args:
+            ticker: Stock ticker symbol
+            title: Post title
+            body: Post body/content
+            analyzer: VADER sentiment analyzer instance
+            advanced: Use advanced sentiment features
+
+        Returns:
+            Sentiment score between -1.0 and 1.0
         """
         title = title or ""
         body = body or ""
@@ -595,9 +988,9 @@ class RedditSentiment(BaseModule):
             else:
                 contexts = [combined]
 
-        scores = [self._score_text_with_cues(ctx, analyzer) for ctx in contexts if ctx]
+        scores = [self._score_text_with_cues(ctx, analyzer, advanced) for ctx in contexts if ctx]
         if not scores:
-            return self._score_text_with_cues(combined, analyzer)
+            return self._score_text_with_cues(combined, analyzer, advanced)
         return sum(scores) / len(scores)
 
     def _calculate_quality_weight(self, score: float) -> float:

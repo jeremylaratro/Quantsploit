@@ -14,7 +14,24 @@ This feature adds three main components to Quantsploit:
 
 ### Sentiment Analyzer
 - **Multi-Subreddit Analysis**: Simultaneously analyzes multiple subreddits (wallstreetbets, stocks, investing, etc.)
-- **Ticker Extraction**: Automatically extracts stock ticker symbols from post titles and content
+- **Advanced Ticker Validation**: Validates extracted tickers against a comprehensive database of 300+ valid symbols (NYSE, NASDAQ, AMEX)
+  - Filters out random acronyms and capital letters that aren't real stocks
+  - Includes major stocks, ETFs, meme stocks, and crypto-related tickers
+  - Auto-updates with S&P 500 and NASDAQ-100 if internet access available
+- **Massively Expanded Sentiment Lexicons**: 200+ positive and 200+ negative sentiment terms covering:
+  - Trading strategies (calls, puts, LEAPS, spreads, etc.)
+  - Options terminology (ITM, OTM, gamma squeeze, etc.)
+  - Meme stock culture (diamond hands, paper hands, tendies, moon, etc.)
+  - Technical indicators (golden cross, death cross, breakout, etc.)
+  - Company fundamentals (earnings beat, dilution, bankruptcy, etc.)
+- **Advanced Pattern Matching**: Regex patterns catch spelling variations and deliberate misspellings
+  - Handles leetspeak (h0dl, pr0fit, m00n)
+  - Catches repeated letters (mooooning, buuuullish)
+  - Recognizes trading slang (BTFD, rug pull, pump and dump)
+- **Negation Detection**: Contextual analysis flips sentiment when negation words precede sentiment terms
+  - "not bullish" correctly interpreted as negative
+  - "not a scam" correctly interpreted as positive
+- **Emoji Sentiment Analysis**: Recognizes 🚀📈💎🌙🔥 and other trading emojis
 - **Contextual Sentiment**: VADER sentiment with finance-specific lexical cues and ticker-aware sentence context (titles weighted higher)
 - **Comment Analysis**: Optional deep analysis of comments for comprehensive sentiment
 - **Quality Filtering**: Filters by upvotes, post scores, and mention frequency
@@ -151,6 +168,8 @@ Make sure `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT` ar
 | FILTER_SYMBOL | "" | Only analyze specific ticker |
 | MIN_MENTIONS | 3 | Minimum mentions to include ticker |
 | ACCESS_MODE | auto | auto uses API if creds exist, else scrape; api forces PRAW; scrape uses public JSON (no comments) |
+| **VALIDATE_TICKERS** | **True** | **Validate tickers against database of valid symbols (RECOMMENDED - filters out acronyms)** |
+| **ADVANCED_SENTIMENT** | **True** | **Use advanced sentiment with regex patterns and negation detection (RECOMMENDED)** |
 
 ### Trading Strategy Options
 
@@ -170,17 +189,36 @@ Make sure `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT` ar
 ### Sentiment Analysis Pipeline
 
 1. **Data Collection**:
-   - Connects to Reddit API
+   - Connects to Reddit API or scrapes old.reddit.com JSON endpoints
    - Fetches hot/top posts from specified subreddits
    - Extracts post titles, content, and comments
 
-2. **Ticker Extraction**:
+2. **Ticker Extraction** (ENHANCED):
    - Regex pattern matching for uppercase tickers (1-5 letters)
-   - Filters common words (AND, OR, THE, etc.)
-   - Validates against known stock symbols
+   - Filters common words (AND, OR, THE, etc.) with expanded 80+ word exclusion list
+   - **NEW: Validates against comprehensive database of 300+ valid stock symbols**
+   - **NEW: Automatically fetches S&P 500 and NASDAQ-100 tickers when available**
+   - Filters out random acronyms like "LOL", "LMAO", "WTF" that aren't stocks
 
-3. **Sentiment Scoring**:
-   - VADER analyzes each mention
+3. **Advanced Sentiment Scoring** (MASSIVELY ENHANCED):
+   - Base VADER sentiment analysis
+   - **NEW: 200+ positive sentiment terms** (moon, rocket, diamond hands, calls, squeeze, etc.)
+   - **NEW: 200+ negative sentiment terms** (dump, crash, bagholder, puts, rug pull, etc.)
+   - **NEW: Regex pattern matching** for spelling variations:
+     - "mooooning" → detected as bullish
+     - "h0dl" or "hodl" → detected as bullish
+     - "re+kt" → detected as bearish
+   - **NEW: Negation detection**:
+     - "not bullish" → correctly scored as negative
+     - "not a scam" → correctly scored as positive
+     - "no dump" → correctly scored as positive
+   - **NEW: Emoji sentiment analysis**:
+     - 🚀🌙💎📈 → positive boost
+     - 📉💀🔴 → negative boost
+   - **NEW: Emphasis detection**:
+     - ALL CAPS words → stronger sentiment
+     - Multiple exclamation marks!!! → stronger sentiment
+     - Repeated letters (sooooo) → stronger sentiment
    - Compound score: -1 (very negative) to +1 (very positive)
    - Aggregates sentiment across all mentions
 
@@ -188,6 +226,21 @@ Make sure `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT` ar
    - Calculates weighted sentiment strength
    - Considers mention volume, post quality, sentiment distribution
    - Generates BUY/HOLD/SELL signals with confidence levels
+
+### Example Sentiment Detection
+
+**Before Enhancement:**
+- "TSLA to the mooooon 🚀🚀🚀" → Base VADER score only
+- "Not bullish on GME" → Incorrectly positive
+- "WORK is a ticker but it's just a common word" → False positive ticker
+
+**After Enhancement:**
+- "TSLA to the mooooon 🚀🚀🚀" → **Highly positive** (moon + rocket patterns + emoji boost)
+- "Not bullish on GME" → **Correctly negative** (negation detection)
+- "WORK is a ticker but it's just a common word" → **Filtered out** (not a valid ticker)
+- "Diamond hands 💎🙌 holding calls" → **Very positive** (meme culture + options terms)
+- "Paper hands selling for a loss" → **Negative** (weak sentiment + negative terms)
+- "Bought puts, this is tanking" → **Very negative** (bearish options + crash terms)
 
 ### Sentiment Categories
 

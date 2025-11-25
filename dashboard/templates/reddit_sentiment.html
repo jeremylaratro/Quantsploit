@@ -26,6 +26,14 @@
                        placeholder="Comma-separated subreddits">
             </div>
             <div class="col-md-3">
+                <label class="form-label">Sort</label>
+                <select class="form-select" id="sort">
+                    <option value="top" selected>Top</option>
+                    <option value="new">New</option>
+                    <option value="hot">Hot</option>
+                </select>
+            </div>
+            <div class="col-md-3">
                 <label class="form-label">Time Filter</label>
                 <select class="form-select" id="timeFilter">
                     <option value="hour">Past Hour</option>
@@ -33,6 +41,7 @@
                     <option value="week">Past Week</option>
                     <option value="month">Past Month</option>
                 </select>
+                <small class="text-muted">Used only when Sort = Top</small>
             </div>
             <div class="col-md-2">
                 <label class="form-label">Post Limit</label>
@@ -201,6 +210,7 @@ let sentimentScatterChart = null;
 function analyzeSentiment() {
     const subreddits = document.getElementById('subreddits').value;
     const timeFilter = document.getElementById('timeFilter').value;
+    const sort = document.getElementById('sort').value;
     const postLimit = document.getElementById('postLimit').value;
 
     // Show loading spinner
@@ -208,7 +218,7 @@ function analyzeSentiment() {
     document.getElementById('resultsContainer').style.display = 'none';
 
     // Make API call
-    fetch(`/api/reddit-sentiment?subreddits=${encodeURIComponent(subreddits)}&time_filter=${timeFilter}&post_limit=${postLimit}`)
+    fetch(`/api/reddit-sentiment?subreddits=${encodeURIComponent(subreddits)}&time_filter=${timeFilter}&sort=${sort}&post_limit=${postLimit}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {

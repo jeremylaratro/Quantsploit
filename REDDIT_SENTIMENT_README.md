@@ -15,7 +15,7 @@ This feature adds three main components to Quantsploit:
 ### Sentiment Analyzer
 - **Multi-Subreddit Analysis**: Simultaneously analyzes multiple subreddits (wallstreetbets, stocks, investing, etc.)
 - **Ticker Extraction**: Automatically extracts stock ticker symbols from post titles and content
-- **VADER Sentiment Analysis**: Uses VADER (Valence Aware Dictionary and sEntiment Reasoner) for financial sentiment
+- **Contextual Sentiment**: VADER sentiment with finance-specific lexical cues and ticker-aware sentence context (titles weighted higher)
 - **Comment Analysis**: Optional deep analysis of comments for comprehensive sentiment
 - **Quality Filtering**: Filters by upvotes, post scores, and mention frequency
 - **Sentiment Categories**: Classifies sentiment as Very Bullish, Bullish, Neutral, Bearish, Very Bearish
@@ -48,18 +48,39 @@ This feature adds three main components to Quantsploit:
    - `vaderSentiment` - Sentiment analysis specifically tuned for social media
    - `textblob` - Additional NLP capabilities
 
-2. **Reddit API Credentials** (Optional for enhanced features):
+2. **Reddit API Credentials (Required by Reddit)**
 
-   The system works in read-only mode without credentials, but for higher rate limits:
+   Reddit now requires real API credentials even for read-only access. If you skip this step you will see 401 errors.
 
-   a. Create a Reddit app at: https://www.reddit.com/prefs/apps
-   b. Set environment variables:
+   a. Create a Reddit app at https://www.reddit.com/prefs/apps  
+      - Click "create another app" -> type: **script**  
+      - Name: e.g. "Quantsploit Sentiment"  
+      - Redirect URI: `http://localhost:8080` (unused here but required)
+   b. Export credentials before running the analyzer (use your Reddit username in the user agent):
       ```bash
       export REDDIT_CLIENT_ID="your_client_id"
       export REDDIT_CLIENT_SECRET="your_client_secret"
+      export REDDIT_USER_AGENT="Quantsploit Sentiment (by u/your_username)"
       ```
+      Windows (Powershell):
+      ```powershell
+      $env:REDDIT_CLIENT_ID="your_client_id"
+      $env:REDDIT_CLIENT_SECRET="your_client_secret"
+      $env:REDDIT_USER_AGENT="Quantsploit Sentiment (by u/your_username)"
+      ```
+   c. If you see HTTP 401: regenerate the secret, confirm the app type is **script**, and double-check the env vars are set in the shell that launches Quantsploit.
+
+3. **API-Free Scrape Mode**
+
+   If you cannot request API access, set `ACCESS_MODE` to `scrape` to use the public JSON endpoints on `old.reddit.com` (no credentials). Comment analysis is disabled in this mode.
+   ```bash
+   export ACCESS_MODE="scrape"
+   export REDDIT_USER_AGENT="Quantsploit Reddit Sentiment (scrape mode)"
+   ```
 
 ## Usage
+
+Make sure `REDDIT_CLIENT_ID`, `REDDIT_CLIENT_SECRET`, and `REDDIT_USER_AGENT` are set in your shell before starting the CLI or dashboard.
 
 ### Command Line Interface
 
@@ -101,6 +122,7 @@ This feature adds three main components to Quantsploit:
 2. **Access Sentiment Analysis**:
    - Open browser to `http://localhost:5000`
    - Click "Reddit Sentiment" in navigation
+   - Dashboard defaults to `ACCESS_MODE=scrape` (old.reddit.com JSON, no comments) so it works without API creds
    - Configure analysis parameters:
      - Subreddits to analyze
      - Time filter (hour, day, week, month)
@@ -120,13 +142,15 @@ This feature adds three main components to Quantsploit:
 | Option | Default | Description |
 |--------|---------|-------------|
 | SUBREDDITS | wallstreetbets,stocks,investing,StockMarket,options | Comma-separated list of subreddits |
-| TIME_FILTER | day | Time range: hour, day, week, month, year, all |
+| SORT | top | Sort order: top, new, hot |
+| TIME_FILTER | day | For SORT=top: hour, day, week, month, year, all (ignored for other sorts) |
 | POST_LIMIT | 100 | Number of posts per subreddit |
 | MIN_SCORE | 10 | Minimum upvote score for posts |
 | ANALYZE_COMMENTS | True | Whether to analyze comments |
 | COMMENT_LIMIT | 50 | Max comments per post |
 | FILTER_SYMBOL | "" | Only analyze specific ticker |
 | MIN_MENTIONS | 3 | Minimum mentions to include ticker |
+| ACCESS_MODE | auto | auto uses API if creds exist, else scrape; api forces PRAW; scrape uses public JSON (no comments) |
 
 ### Trading Strategy Options
 
@@ -289,7 +313,7 @@ dashboard/
 
 ### Data Flow
 1. User triggers analysis (CLI or web)
-2. RedditSentiment module fetches data from Reddit API
+2. RedditSentiment module fetches data from Reddit API (or scrape mode if API access is unavailable)
 3. VADER analyzes sentiment of each mention
 4. Results aggregated and cached
 5. Trading strategy generates signals based on sentiment

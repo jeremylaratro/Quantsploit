@@ -1073,6 +1073,7 @@ def api_reddit_sentiment():
         time_filter = request.args.get('time_filter', 'day')
         post_limit = request.args.get('post_limit', '100', type=int)
         min_mentions = request.args.get('min_mentions', '3', type=int)
+        sort = request.args.get('sort', 'top')
 
         # Initialize framework and module
         framework = Framework()
@@ -1083,6 +1084,12 @@ def api_reddit_sentiment():
         sentiment_module.set_option('TIME_FILTER', time_filter)
         sentiment_module.set_option('POST_LIMIT', post_limit)
         sentiment_module.set_option('MIN_MENTIONS', min_mentions)
+        sentiment_module.set_option('SORT', sort)
+
+        # Force scrape mode for the dashboard by default to avoid API credential requirements
+        sentiment_module.set_option('ACCESS_MODE', 'scrape')
+        # Comment analysis is not available in scrape mode; keep explicit to avoid surprises
+        sentiment_module.set_option('ANALYZE_COMMENTS', False)
 
         # Run analysis
         results = sentiment_module.run()

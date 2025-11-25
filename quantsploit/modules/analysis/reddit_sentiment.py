@@ -154,13 +154,13 @@ class RedditSentiment(BaseModule):
         total_posts_analyzed = 0
         total_comments_analyzed = 0
 
-        self.print_info(f"Analyzing {len(subreddits)} subreddit(s)...")
+        print(f"Analyzing {len(subreddits)} subreddit(s)...")
 
         # Spider Reddit
         for subreddit_name in subreddits:
             try:
                 subreddit = reddit.subreddit(subreddit_name)
-                self.print_info(f"Fetching posts from r/{subreddit_name}...")
+                print(f"Fetching posts from r/{subreddit_name}...")
 
                 # Get top posts based on time filter
                 posts = subreddit.top(time_filter=time_filter, limit=post_limit)
@@ -236,7 +236,7 @@ class RedditSentiment(BaseModule):
                             pass
 
             except Exception as e:
-                self.print_error(f"Error analyzing r/{subreddit_name}: {str(e)}")
+                print(f"Error analyzing r/{subreddit_name}: {str(e)}")
                 continue
 
         # Calculate aggregate metrics
@@ -319,25 +319,25 @@ class RedditSentiment(BaseModule):
     def show_results(self, results: Dict[str, Any]):
         """Display results in a formatted way"""
         if not results.get('success'):
-            self.print_error(results.get('error', 'Unknown error'))
+            print(f"Error: {results.get('error', 'Unknown error')}")
             return
 
-        self.print_good(f"\n{'='*80}")
-        self.print_good(f"Reddit Sentiment Analysis Results")
-        self.print_good(f"{'='*80}")
-        self.print_info(f"Subreddits: {', '.join(results['subreddits_analyzed'])}")
-        self.print_info(f"Time Filter: {results['time_filter']}")
-        self.print_info(f"Posts Analyzed: {results['total_posts']}")
-        self.print_info(f"Comments Analyzed: {results['total_comments']}")
-        self.print_info(f"Tickers Found: {results['tickers_found']}")
-        self.print_good(f"{'='*80}\n")
+        print(f"\n{'='*80}")
+        print(f"Reddit Sentiment Analysis Results")
+        print(f"{'='*80}")
+        print(f"Subreddits: {', '.join(results['subreddits_analyzed'])}")
+        print(f"Time Filter: {results['time_filter']}")
+        print(f"Posts Analyzed: {results['total_posts']}")
+        print(f"Comments Analyzed: {results['total_comments']}")
+        print(f"Tickers Found: {results['tickers_found']}")
+        print(f"{'='*80}\n")
 
         # Display top 10 tickers
-        self.print_good("Top 10 Most Mentioned Tickers with Sentiment:\n")
+        print("Top 10 Most Mentioned Tickers with Sentiment:\n")
 
         header = f"{'Ticker':<8} {'Mentions':<10} {'Sentiment':<12} {'Category':<18} {'Strength':<10}"
-        self.print_info(header)
-        self.print_info("-" * len(header))
+        print(header)
+        print("-" * len(header))
 
         for ticker_data in results['top_10_tickers']:
             ticker = ticker_data['ticker']
@@ -346,22 +346,8 @@ class RedditSentiment(BaseModule):
             category = ticker_data['sentiment_category']
             strength = ticker_data['sentiment_strength']
 
-            # Color code based on sentiment
             sentiment_str = f"{sentiment:+.4f}"
-            if sentiment >= 0.05:
-                sentiment_color = "green"
-            elif sentiment <= -0.05:
-                sentiment_color = "red"
-            else:
-                sentiment_color = "yellow"
-
             row = f"{ticker:<8} {mentions:<10} {sentiment_str:<12} {category:<18} {strength:<10.4f}"
+            print(row)
 
-            if sentiment >= 0.05:
-                self.print_good(row)
-            elif sentiment <= -0.05:
-                self.print_error(row)
-            else:
-                self.print_warning(row)
-
-        self.print_good(f"\n{'='*80}\n")
+        print(f"\n{'='*80}\n")

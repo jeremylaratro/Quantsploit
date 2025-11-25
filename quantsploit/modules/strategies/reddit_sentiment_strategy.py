@@ -183,7 +183,7 @@ WARNINGS:
         if symbol:
             sentiment_module.set_option("FILTER_SYMBOL", symbol)
 
-        self.print_info("Fetching Reddit sentiment data...")
+        print("Fetching Reddit sentiment data...")
         sentiment_results = sentiment_module.run()
 
         if not sentiment_results.get('success'):

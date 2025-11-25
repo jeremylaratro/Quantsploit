@@ -113,12 +113,24 @@
                             <thead>
                                 <tr>
                                     <th>Rank</th>
-                                    <th>Ticker</th>
-                                    <th>Mentions</th>
-                                    <th>Sentiment</th>
-                                    <th>Category</th>
-                                    <th>Signal</th>
-                                    <th>Strength</th>
+                                    <th onclick="sortTable('ticker')" style="cursor: pointer;">
+                                        Ticker <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('mentions')" style="cursor: pointer;">
+                                        Mentions <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('sentiment')" style="cursor: pointer;">
+                                        Sentiment <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('category')" style="cursor: pointer;">
+                                        Category <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('signal')" style="cursor: pointer;">
+                                        Signal <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('strength')" style="cursor: pointer;">
+                                        Strength <i class="fas fa-sort"></i>
+                                    </th>
                                 </tr>
                             </thead>
                             <tbody id="topTickersBody">
@@ -206,6 +218,8 @@
 let sentimentData = null;
 let sentimentPieChart = null;
 let sentimentScatterChart = null;
+let currentSort = { column: 'mentions', ascending: false };
+let displayedTickers = [];
 
 function analyzeSentiment() {
     const subreddits = document.getElementById('subreddits').value;
@@ -275,10 +289,15 @@ function displayResults(data) {
 }
 
 function updateTopTickersTable(tickers) {
+    displayedTickers = tickers;
+    renderTickersTable();
+}
+
+function renderTickersTable() {
     const tbody = document.getElementById('topTickersBody');
     tbody.innerHTML = '';
 
-    tickers.forEach((ticker, index) => {
+    displayedTickers.forEach((ticker, index) => {
         const row = document.createElement('tr');
 
         const sentimentClass = ticker.avg_sentiment >= 0.05 ? 'text-success' :
@@ -298,6 +317,68 @@ function updateTopTickersTable(tickers) {
         `;
         tbody.appendChild(row);
     });
+}
+
+function sortTable(column) {
+    // Toggle sort direction if clicking same column
+    if (currentSort.column === column) {
+        currentSort.ascending = !currentSort.ascending;
+    } else {
+        currentSort.column = column;
+        currentSort.ascending = false;  // Default to descending for new column
+    }
+
+    // Sort the displayed tickers
+    displayedTickers.sort((a, b) => {
+        let aVal, bVal;
+
+        switch(column) {
+            case 'ticker':
+                aVal = a.ticker;
+                bVal = b.ticker;
+                break;
+            case 'mentions':
+                aVal = a.mentions;
+                bVal = b.mentions;
+                break;
+            case 'sentiment':
+                aVal = a.avg_sentiment;
+                bVal = b.avg_sentiment;
+                break;
+            case 'category':
+                aVal = a.sentiment_category;
+                bVal = b.sentiment_category;
+                break;
+            case 'signal':
+                aVal = a.avg_sentiment > 0.3 ? 2 : a.avg_sentiment > 0.1 ? 1 : 0;
+                bVal = b.avg_sentiment > 0.3 ? 2 : b.avg_sentiment > 0.1 ? 1 : 0;
+                break;
+            case 'strength':
+                aVal = a.sentiment_strength;
+                bVal = b.sentiment_strength;
+                break;
+            default:
+                return 0;
+        }
+
+        // Handle string vs number comparison
+        if (typeof aVal === 'string') {
+            if (currentSort.ascending) {
+                return aVal.localeCompare(bVal);
+            } else {
+                return bVal.localeCompare(aVal);
+            }
+        } else {
+            if (currentSort.ascending) {
+                return aVal - bVal;
+            } else {
+                return bVal - aVal;
+            }
+        }
+    });
+
+    // Re-render the table
+    renderTickersTable();
 }
 
 function updateSentimentCharts(tickers) {

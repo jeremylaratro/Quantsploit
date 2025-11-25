@@ -653,10 +653,10 @@ class RedditSentiment(BaseModule):
         # Find all uppercase words
         potential_tickers = self.TICKER_PATTERN.findall(text)
 
-        # Filter out common words and invalid tickers
+        # Filter out common words
         tickers = []
         for ticker in potential_tickers:
-            if ticker not in self.EXCLUDE_WORDS and len(ticker) <= 5:
+            if ticker not in self.EXCLUDE_WORDS and 1 <= len(ticker) <= 5:
                 tickers.append(ticker)
 
         # Remove duplicates
@@ -668,10 +668,14 @@ class RedditSentiment(BaseModule):
                 validator = get_validator()
                 valid_tickers = validator.validate_batch(unique_tickers)
 
-                # Report invalid tickers if in verbose mode
+                # Report invalid tickers for debugging (but not too spammy)
                 invalid = validator.get_invalid_tickers(unique_tickers)
-                if invalid and len(invalid) <= 10:  # Only log if reasonable number
-                    print(f"[Filtered] Invalid tickers: {', '.join(sorted(invalid)[:10])}")
+                if invalid:
+                    # Only show first 5 to avoid spam
+                    invalid_sample = sorted(invalid)[:5]
+                    more = f" (+{len(invalid) - 5} more)" if len(invalid) > 5 else ""
+                    if len(invalid) <= 15:  # Only log if not too many
+                        print(f"  [Filtered] {', '.join(invalid_sample)}{more}")
 
                 return valid_tickers
             except Exception as e:
@@ -801,14 +805,11 @@ class RedditSentiment(BaseModule):
 
     def _scrape_subreddit_json(self, subreddit: str, sort: str, time_filter: str, limit: int) -> List[Dict[str, Any]]:
         """
-        Fetch posts using the public JSON endpoints on old.reddit.com.
+        Fetch posts using the public JSON endpoints on old.reddit.com with pagination support.
         This avoids the authenticated API but still provides post bodies.
+        Supports fetching more than 100 posts through pagination.
         """
         base_url = f"https://old.reddit.com/r/{subreddit}/{sort}/.json"
-        params = {"limit": limit}
-        if sort == "top":
-            params["t"] = time_filter
-
         headers = {
             "User-Agent": os.getenv(
                 "REDDIT_USER_AGENT",
@@ -816,26 +817,70 @@ class RedditSentiment(BaseModule):
             )
         }
 
-        resp = requests.get(base_url, headers=headers, params=params, timeout=15)
-        if resp.status_code == 429:
-            raise RuntimeError("Rate limited by Reddit. Slow down requests or try again later.")
-        if resp.status_code != 200:
-            raise RuntimeError(f"Failed to scrape r/{subreddit} ({resp.status_code}).")
+        all_posts = []
+        after = None
+        requests_made = 0
+        max_requests = 10  # Safety limit to prevent infinite loops
 
-        data = resp.json()
-        posts = []
+        # Reddit returns max 100 posts per request, so we need pagination
+        while len(all_posts) < limit and requests_made < max_requests:
+            # Calculate how many more posts we need
+            remaining = limit - len(all_posts)
+            request_limit = min(100, remaining)  # Reddit's max is 100 per request
 
-        for child in data.get("data", {}).get("children", []):
-            post = child.get("data", {})
-            posts.append({
-                "title": post.get("title", ""),
-                "selftext": post.get("selftext", "") or "",
-                "score": post.get("score", 0),
-                "created": post.get("created_utc", datetime.utcnow().timestamp()),
-                "url": f"https://www.reddit.com{post.get('permalink', '')}",
-            })
+            params = {"limit": request_limit}
+            if sort == "top":
+                params["t"] = time_filter
+            if after:
+                params["after"] = after
 
-        return posts
+            try:
+                import time
+                if requests_made > 0:
+                    time.sleep(2)  # Rate limiting: wait 2 seconds between requests
+
+                resp = requests.get(base_url, headers=headers, params=params, timeout=15)
+                if resp.status_code == 429:
+                    print(f"[WARN] Rate limited by Reddit, waiting 10 seconds...")
+                    time.sleep(10)
+                    continue
+                if resp.status_code != 200:
+                    print(f"[WARN] Failed to scrape r/{subreddit} ({resp.status_code}), stopping pagination")
+                    break
+
+                data = resp.json()
+                children = data.get("data", {}).get("children", [])
+
+                if not children:
+                    # No more posts available
+                    break
+
+                for child in children:
+                    post = child.get("data", {})
+                    all_posts.append({
+                        "title": post.get("title", ""),
+                        "selftext": post.get("selftext", "") or "",
+                        "score": post.get("score", 0),
+                        "created": post.get("created_utc", datetime.utcnow().timestamp()),
+                        "url": f"https://www.reddit.com{post.get('permalink', '')}",
+                    })
+
+                # Get the "after" token for pagination
+                after = data.get("data", {}).get("after")
+                requests_made += 1
+
+                if not after:
+                    # No more pages available
+                    break
+
+                print(f"[INFO] Fetched {len(all_posts)}/{limit} posts from r/{subreddit}...")
+
+            except Exception as e:
+                print(f"[WARN] Error during pagination: {e}, returning {len(all_posts)} posts")
+                break
+
+        print(f"[INFO] Total posts fetched from r/{subreddit}: {len(all_posts)}")
+        return all_posts
 
     def _split_sentences(self, text: str) -> List[str]:
         """Lightweight sentence splitter to avoid heavy dependencies."""

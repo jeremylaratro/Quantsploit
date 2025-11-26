@@ -1074,6 +1074,7 @@ def api_reddit_sentiment():
         post_limit = request.args.get('post_limit', '100', type=int)
         min_mentions = request.args.get('min_mentions', '3', type=int)
         sort = request.args.get('sort', 'top')
+        debug_mode = request.args.get('debug_mode', 'false').lower() == 'true'
 
         # Initialize framework and module
         framework = Framework()
@@ -1085,6 +1086,7 @@ def api_reddit_sentiment():
         sentiment_module.set_option('POST_LIMIT', post_limit)
         sentiment_module.set_option('MIN_MENTIONS', min_mentions)
         sentiment_module.set_option('SORT', sort)
+        sentiment_module.set_option('DEBUG_MODE', debug_mode)
 
         # Force scrape mode for the dashboard by default to avoid API credential requirements
         sentiment_module.set_option('ACCESS_MODE', 'scrape')

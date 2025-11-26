@@ -47,6 +47,16 @@
                 <label class="form-label">Post Limit</label>
                 <input type="number" class="form-control" id="postLimit" value="100" min="10" max="500">
             </div>
+            <div class="col-md-2">
+                <label class="form-label">Debug Mode</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="debugMode">
+                    <label class="form-check-label" for="debugMode">
+                        Enable Debug
+                    </label>
+                </div>
+                <small class="text-muted">Output in server console</small>
+            </div>
             <div class="col-md-3">
                 <label class="form-label">&nbsp;</label>
                 <button class="btn btn-primary w-100" onclick="analyzeSentiment()">
@@ -226,18 +236,24 @@ function analyzeSentiment() {
     const timeFilter = document.getElementById('timeFilter').value;
     const sort = document.getElementById('sort').value;
     const postLimit = document.getElementById('postLimit').value;
+    const debugMode = document.getElementById('debugMode').checked;
 
     // Show loading spinner
     document.getElementById('loadingSpinner').style.display = 'block';
     document.getElementById('resultsContainer').style.display = 'none';
 
     // Make API call
-    fetch(`/api/reddit-sentiment?subreddits=${encodeURIComponent(subreddits)}&time_filter=${timeFilter}&sort=${sort}&post_limit=${postLimit}`)
+    fetch(`/api/reddit-sentiment?subreddits=${encodeURIComponent(subreddits)}&time_filter=${timeFilter}&sort=${sort}&post_limit=${postLimit}&debug_mode=${debugMode}`)
         .then(response => response.json())
         .then(data => {
             if (data.success) {
                 sentimentData = data;
                 displayResults(data);
+
+                // If debug mode is enabled, show reminder in console
+                if (debugMode) {
+                    console.log('Debug mode enabled - detailed output in server console');
+                }
             } else {
                 alert('Error: ' + data.error);
             }

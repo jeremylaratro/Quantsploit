@@ -385,6 +385,11 @@ class RedditSentiment(BaseModule):
                 "value": True,
                 "required": False,
                 "description": "Use advanced sentiment analysis with regex patterns and negation detection"
+            },
+            "DEBUG_MODE": {
+                "value": False,
+                "required": False,
+                "description": "Enable verbose debug output showing sentiment calculation details"
             }
         })
 
@@ -409,6 +414,7 @@ class RedditSentiment(BaseModule):
         access_mode = str(self.get_option("ACCESS_MODE")).lower()
         validate_tickers = bool(self.get_option("VALIDATE_TICKERS"))
         advanced_sentiment = bool(self.get_option("ADVANCED_SENTIMENT"))
+        debug_mode = bool(self.get_option("DEBUG_MODE"))
 
         if sort not in {"top", "new", "hot"}:
             return {"success": False, "error": f"Invalid SORT '{sort}'. Use top, new, or hot."}
@@ -502,7 +508,7 @@ class RedditSentiment(BaseModule):
                                 continue
 
                             mention_score = self._score_ticker_sentiment(
-                                ticker, post.title, post.selftext, analyzer, advanced_sentiment
+                                ticker, post.title, post.selftext, analyzer, advanced_sentiment, debug_mode
                             )
                             weight = self._calculate_quality_weight(post.score)
                             if ticker in post.title:
@@ -538,7 +544,7 @@ class RedditSentiment(BaseModule):
                                         if filter_symbol and ticker != filter_symbol:
                                             continue
 
-                                        mention_score = self._score_text_with_cues(comment.body, analyzer, advanced_sentiment)
+                                        mention_score = self._score_text_with_cues(comment.body, analyzer, advanced_sentiment, debug_mode)
                                         weight = 0.6 * self._calculate_quality_weight(comment_score)
 
                                         self._accumulate_ticker_data(
@@ -566,7 +572,7 @@ class RedditSentiment(BaseModule):
                                 continue
 
                             mention_score = self._score_ticker_sentiment(
-                                ticker, post["title"], post["selftext"], analyzer, advanced_sentiment
+                                ticker, post["title"], post["selftext"], analyzer, advanced_sentiment, debug_mode
                             )
                             weight = self._calculate_quality_weight(post["score"])
                             if ticker in post["title"]:
@@ -887,7 +893,7 @@ class RedditSentiment(BaseModule):
         parts = re.split(r'[.!?;\n]+', text)
         return [p.strip() for p in parts if p and len(p.strip()) > 2]
 
-    def _score_text_with_cues(self, text: str, analyzer, advanced: bool = True) -> float:
+    def _score_text_with_cues(self, text: str, analyzer, advanced: bool = True, debug: bool = False) -> float:
         """
         Advanced sentiment scoring with finance-specific lexical adjustments,
         regex pattern matching, and negation detection.
@@ -902,6 +908,13 @@ class RedditSentiment(BaseModule):
         """
         # Base VADER score
         base = analyzer.polarity_scores(text)['compound']
+
+        if debug:
+            print(f"\n{'='*80}")
+            print(f"DEBUG: Sentiment Analysis")
+            print(f"{'='*80}")
+            print(f"Text: {text[:200]}{'...' if len(text) > 200 else ''}")
+            print(f"Base VADER score: {base:.4f}")
 
         if not advanced:
             # Use simpler legacy scoring
@@ -923,6 +936,15 @@ class RedditSentiment(BaseModule):
         boost = 0.0
         text_lower = text.lower()
 
+        debug_info = {
+            'positive_words': [],
+            'negative_words': [],
+            'positive_patterns': [],
+            'negative_patterns': [],
+            'negations': [],
+            'emphasis': {}
+        }
+
         # 1. LEXICAL MATCHING - Check for sentiment cue words
         tokens = re.findall(r"[A-Za-z']+", text_lower)
 
@@ -936,19 +958,27 @@ class RedditSentiment(BaseModule):
         for token in all_tokens:
             if token in self.POSITIVE_CUES:
                 boost += 0.025
+                if debug:
+                    debug_info['positive_words'].append(token)
             if token in self.NEGATIVE_CUES:
                 boost -= 0.025
+                if debug:
+                    debug_info['negative_words'].append(token)
 
         # 2. REGEX PATTERN MATCHING - Catch spelling variations and slang
         for pattern, weight in self.POSITIVE_PATTERNS:
             matches = pattern.findall(text)
             if matches:
                 boost += weight * min(len(matches), 3)  # Cap at 3 matches per pattern
+                if debug:
+                    debug_info['positive_patterns'].append(f"{matches} ({weight * min(len(matches), 3):+.3f})")
 
         for pattern, weight in self.NEGATIVE_PATTERNS:
             matches = pattern.findall(text)
             if matches:
                 boost += weight * min(len(matches), 3)  # weight is already negative
+                if debug:
+                    debug_info['negative_patterns'].append(f"{matches} ({weight * min(len(matches), 3):+.3f})")
 
         # 3. NEGATION DETECTION - Flip sentiment if negation words precede sentiment words
         # Split into sentences for better negation detection
@@ -965,45 +995,82 @@ class RedditSentiment(BaseModule):
                         # If we find a positive cue, flip it to negative
                         if next_word in self.POSITIVE_CUES:
                             boost -= 0.04  # Penalty for negated positive
+                            if debug:
+                                debug_info['negations'].append(f"'{word} {next_word}' (-0.04)")
                         # If we find a negative cue, flip it to positive
                         elif next_word in self.NEGATIVE_CUES:
                             boost += 0.04  # Bonus for negated negative
+                            if debug:
+                                debug_info['negations'].append(f"'{word} {next_word}' (+0.04)")
 
         # 4. EMPHASIS INDICATORS
         # Exclamation marks
         exclamation_count = text.count('!')
         if exclamation_count > 0:
-            boost += min(exclamation_count, 3) * 0.02
+            emphasis_boost = min(exclamation_count, 3) * 0.02
+            boost += emphasis_boost
+            if debug:
+                debug_info['emphasis']['exclamations'] = f"{exclamation_count} (!!! → +{emphasis_boost:.3f})"
 
         # ALL CAPS WORDS (indicates strong emotion)
         caps_words = re.findall(r'\b[A-Z]{4,}\b', text)  # 4+ letter all-caps words
         if caps_words:
-            boost += min(len(caps_words), 3) * 0.015
+            caps_boost = min(len(caps_words), 3) * 0.015
+            boost += caps_boost
+            if debug:
+                debug_info['emphasis']['caps_words'] = f"{caps_words} (+{caps_boost:.3f})"
 
         # Repeated letters (e.g., "sooooo bullish")
         repeated_letter_matches = re.findall(r'(\w)\1{2,}', text_lower)
         if repeated_letter_matches:
-            boost += min(len(repeated_letter_matches), 3) * 0.01
+            repeat_boost = min(len(repeated_letter_matches), 3) * 0.01
+            boost += repeat_boost
+            if debug:
+                debug_info['emphasis']['repeated_letters'] = f"{len(repeated_letter_matches)} matches (+{repeat_boost:.3f})"
 
         # 5. EMOJI SENTIMENT
         positive_emojis = ['🚀', '🌙', '💎', '📈', '🔥', '💰', '🤑', '🙌', '💪', '👍', '✅', '🟢']
         negative_emojis = ['📉', '💀', '🔴', '⚠️', '🩸', '👎', '❌', '🔻', '📄']
 
+        emoji_boost = 0
         for emoji in positive_emojis:
-            boost += text.count(emoji) * 0.02
+            count = text.count(emoji)
+            if count > 0:
+                emoji_boost += count * 0.02
+                if debug:
+                    debug_info['emphasis'][f'emoji_{emoji}'] = f"+{count * 0.02:.3f}"
 
         for emoji in negative_emojis:
-            boost -= text.count(emoji) * 0.02
+            count = text.count(emoji)
+            if count > 0:
+                emoji_boost -= count * 0.02
+                if debug:
+                    debug_info['emphasis'][f'emoji_{emoji}'] = f"{count * 0.02:.3f}"
+
+        boost += emoji_boost
 
         # Cap the boost to prevent extreme swings
+        boost_before_cap = boost
         boost = max(-0.25, min(0.25, boost))
 
         # Combine base VADER score with our custom boost
         score = max(-1.0, min(1.0, base + boost))
 
+        if debug:
+            print(f"\n--- SENTIMENT BREAKDOWN ---")
+            print(f"Positive words found: {debug_info['positive_words'] or 'None'}")
+            print(f"Negative words found: {debug_info['negative_words'] or 'None'}")
+            print(f"Positive patterns: {debug_info['positive_patterns'] or 'None'}")
+            print(f"Negative patterns: {debug_info['negative_patterns'] or 'None'}")
+            print(f"Negations detected: {debug_info['negations'] or 'None'}")
+            print(f"Emphasis: {debug_info['emphasis'] or 'None'}")
+            print(f"\nBoost calculation: {boost_before_cap:.4f} (capped to {boost:.4f})")
+            print(f"Final score: {base:.4f} (base) + {boost:.4f} (boost) = {score:.4f}")
+            print(f"{'='*80}\n")
+
         return score
 
-    def _score_ticker_sentiment(self, ticker: str, title: str, body: str, analyzer, advanced: bool = True) -> float:
+    def _score_ticker_sentiment(self, ticker: str, title: str, body: str, analyzer, advanced: bool = True, debug: bool = False) -> float:
         """
         Score sentiment for a specific ticker using its sentence-level context,
         with a fallback to whole-text scoring.
@@ -1033,10 +1100,18 @@ class RedditSentiment(BaseModule):
             else:
                 contexts = [combined]
 
-        scores = [self._score_text_with_cues(ctx, analyzer, advanced) for ctx in contexts if ctx]
+        if debug:
+            print(f"\n🎯 Analyzing ticker: {ticker}")
+            print(f"Contexts found: {len(contexts)}")
+
+        scores = [self._score_text_with_cues(ctx, analyzer, advanced, debug) for ctx in contexts if ctx]
         if not scores:
-            return self._score_text_with_cues(combined, analyzer, advanced)
-        return sum(scores) / len(scores)
+            return self._score_text_with_cues(combined, analyzer, advanced, debug)
+
+        avg_score = sum(scores) / len(scores)
+        if debug:
+            print(f"Average sentiment for {ticker}: {avg_score:.4f}\n")
+        return avg_score
 
     def _calculate_quality_weight(self, score: float) -> float:
         """Weight sentiment contributions by content quality (upvotes/score)."""

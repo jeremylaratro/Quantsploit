@@ -300,11 +300,128 @@ class RedditSentiment(BaseModule):
 
     # Negation words that flip sentiment
     NEGATION_WORDS = {
+        # Basic negations
         'not', 'no', 'never', 'none', 'nobody', 'nothing', 'neither', 'nowhere',
+
+        # Contractions
         'isnt', "isn't", 'arent', "aren't", 'wasnt', "wasn't", 'werent', "weren't",
         'dont', "don't", 'doesnt', "doesn't", 'didnt', "didn't", 'wont', "won't",
         'wouldnt', "wouldn't", 'shouldnt', "shouldn't", 'cant', "can't", 'cannot',
-        'couldnt', "couldn't", 'hardly', 'barely', 'scarcely', 'without'
+        'couldnt', "couldn't", 'hasnt', "hasn't", 'havent', "haven't", 'hadnt', "hadn't",
+        'mustnt', "mustn't", 'mightnt', "mightn't", 'shant', "shan't",
+
+        # Quantifiers & modifiers
+        'hardly', 'barely', 'scarcely', 'seldom', 'rarely',
+
+        # Prepositions with negation sense
+        'without', 'lacking', 'absent',
+
+        # Negative conjunctions
+        'nor',
+
+        # Dismissals
+        'doubt', 'doubtful', 'unlikely', 'impossible'
+    }
+
+    # HIGH-CONFIDENCE PHRASE PATTERNS
+    # These phrases have strong sentiment signals and override normal scoring
+    # Format: (pattern, sentiment_score, is_regex)
+    # Sentiment score range: -1.0 (very negative) to +1.0 (very positive)
+    HIGH_CONFIDENCE_PHRASES = [
+        # Very negative phrases (personal loss/failure)
+        (re.compile(r"it'?s (all )?over( for me)?", re.I), -0.75),
+        (re.compile(r"i'?m (so |totally |completely )?done", re.I), -0.70),
+        (re.compile(r"i'?m (so |totally |completely )?cooked", re.I), -0.75),
+        (re.compile(r"(i'?m |got )?re+kt", re.I), -0.80),
+        (re.compile(r"lost everything", re.I), -0.85),
+        (re.compile(r"blew up my account", re.I), -0.90),
+        (re.compile(r"account (is )?wiped", re.I), -0.85),
+        (re.compile(r"need .{1,20} to break even", re.I), -0.65),  # "need MSTR to hit $320 to break even"
+        (re.compile(r"(down|lost) \d+%", re.I), -0.60),
+        (re.compile(r"bleeding (out|money)", re.I), -0.70),
+        (re.compile(r"gave up", re.I), -0.65),
+        (re.compile(r"throwing in the towel", re.I), -0.70),
+        (re.compile(r"can'?t take (it|this) anymore", re.I), -0.75),
+
+        # Negative financial phrases
+        (re.compile(r"ponzi(-| )?(scheme|ratio)", re.I), -0.65),
+        (re.compile(r"(total |complete )?rug pull", re.I), -0.80),
+        (re.compile(r"exit scam", re.I), -0.85),
+        (re.compile(r"going (to )?zero", re.I), -0.75),
+        (re.compile(r"worthless", re.I), -0.70),
+
+        # Very positive phrases (company dominance/success)
+        (re.compile(r"(market |total |complete )?dominance", re.I), 0.65),
+        (re.compile(r"crushing (it|the competition)", re.I), 0.70),
+        (re.compile(r"absolute[ly]* dominating", re.I), 0.70),
+        (re.compile(r"(best|strongest) in (the )?sector", re.I), 0.60),
+        (re.compile(r"(clear|obvious) winner", re.I), 0.65),
+        (re.compile(r"no competition", re.I), 0.60),
+        (re.compile(r"(industry |market )?leader", re.I), 0.55),
+
+        # Major gains/wins
+        (re.compile(r"(took|locked in|realized) \d+%.*gains?", re.I), 0.75),
+        (re.compile(r"up \d{2,}%", re.I), 0.60),  # "up 130%"
+        (re.compile(r"\d+x gains?", re.I), 0.70),  # "10x gains"
+        (re.compile(r"printing money", re.I), 0.65),
+        (re.compile(r"(keep|still) printing", re.I), 0.60),
+        (re.compile(r"life[- ]changing gains?", re.I), 0.80),
+        (re.compile(r"lambo (soon|time|when)", re.I), 0.60),
+
+        # Momentum/trajectory
+        (re.compile(r"can'?t stop won'?t stop", re.I), 0.65),
+        (re.compile(r"no stopping (it|this)", re.I), 0.60),
+        (re.compile(r"unstoppable", re.I), 0.60),
+        (re.compile(r"going parabolic", re.I), 0.70),
+        (re.compile(r"straight (to|to the) moon", re.I), 0.65),
+    ]
+
+    # HIGH-CONFIDENCE TERM WEIGHTS
+    # These specific terms get higher weights than the default 0.025
+    # This helps overcome VADER misinterpretations
+    HIGH_WEIGHT_POSITIVE = {
+        "dominance": 0.15,
+        "dominating": 0.15,
+        "crushing": 0.12,
+        "leader": 0.10,
+        "winner": 0.10,
+        "outperform": 0.12,
+        "beat": 0.10,
+        "beats": 0.10,
+        "smashed": 0.12,
+        "moonshot": 0.15,
+        "gamma-squeeze": 0.15,
+        "short-squeeze": 0.15,
+    }
+
+    HIGH_WEIGHT_NEGATIVE = {
+        "over": 0.10,  # as in "it's over"
+        "done": 0.10,  # as in "I'm done"
+        "cooked": 0.15,
+        "rekt": 0.15,
+        "wrecked": 0.15,
+        "destroyed": 0.12,
+        "annihilated": 0.12,
+        "worthless": 0.15,
+        "scam": 0.12,
+        "ponzi": 0.15,
+        "rug": 0.12,
+        "fraud": 0.12,
+    }
+
+    # CONTEXT-AWARE OUTCOME INDICATORS
+    # When these appear near a ticker, amplify the sentiment
+    POSITIVE_OUTCOMES = {
+        "gains", "gain", "profit", "profits", "up", "rally", "rallying", "surge",
+        "surging", "moon", "mooning", "rocket", "rocketing", "beat", "beats",
+        "crushing", "smashed", "won", "winning", "success", "printing", "green",
+        "dominance", "dominating", "leader", "outperform", "outperforming"
+    }
+
+    NEGATIVE_OUTCOMES = {
+        "loss", "losses", "down", "crash", "crashing", "dump", "dumping", "tank",
+        "tanking", "drop", "dropping", "fall", "falling", "miss", "missed",
+        "disaster", "failed", "failing", "red", "bleeding", "collapse", "collapsing"
     }
 
     @property
@@ -659,10 +776,19 @@ class RedditSentiment(BaseModule):
         # Find all uppercase words
         potential_tickers = self.TICKER_PATTERN.findall(text)
 
-        # Filter out common words
+        # Filter out common words and handle single-letter ticker collisions
         tickers = []
         for ticker in potential_tickers:
             if ticker not in self.EXCLUDE_WORDS and 1 <= len(ticker) <= 5:
+                # Special handling for single-letter tickers to prevent false positives
+                if len(ticker) == 1:
+                    # Check if it's likely an abbreviation (e.g., "U.S.", "U.K.", "U.N.")
+                    # by seeing if it's followed by a period in the original text
+                    pattern = re.compile(rf'\b{re.escape(ticker)}\.')
+                    if pattern.search(text):
+                        # Skip this ticker - likely an abbreviation
+                        continue
+
                 tickers.append(ticker)
 
         # Remove duplicates
@@ -942,8 +1068,25 @@ class RedditSentiment(BaseModule):
             'positive_patterns': [],
             'negative_patterns': [],
             'negations': [],
-            'emphasis': {}
+            'emphasis': {},
+            'high_confidence': None
         }
+
+        # STEP 0: CHECK HIGH-CONFIDENCE PHRASES FIRST
+        # These phrases override normal sentiment analysis
+        for pattern, score in self.HIGH_CONFIDENCE_PHRASES:
+            if pattern.search(text):
+                if debug:
+                    match = pattern.search(text).group()
+                    debug_info['high_confidence'] = f"'{match}' → {score:.2f}"
+                    print(f"\n{'='*80}")
+                    print(f"DEBUG: HIGH-CONFIDENCE PHRASE DETECTED")
+                    print(f"{'='*80}")
+                    print(f"Text: {text[:200]}{'...' if len(text) > 200 else ''}")
+                    print(f"Matched phrase: '{match}'")
+                    print(f"Override score: {score:.2f}")
+                    print(f"{'='*80}\n")
+                return score  # Return immediately, bypassing all other analysis
 
         # 1. LEXICAL MATCHING - Check for sentiment cue words
         tokens = re.findall(r"[A-Za-z']+", text_lower)
@@ -957,13 +1100,17 @@ class RedditSentiment(BaseModule):
         all_tokens = tokens + bigrams + trigrams
         for token in all_tokens:
             if token in self.POSITIVE_CUES:
-                boost += 0.025
+                # Use high weight if available, otherwise default 0.025
+                weight = self.HIGH_WEIGHT_POSITIVE.get(token, 0.025)
+                boost += weight
                 if debug:
-                    debug_info['positive_words'].append(token)
+                    debug_info['positive_words'].append(f"{token} (+{weight:.3f})")
             if token in self.NEGATIVE_CUES:
-                boost -= 0.025
+                # Use high weight if available, otherwise default 0.025
+                weight = self.HIGH_WEIGHT_NEGATIVE.get(token, 0.025)
+                boost -= weight
                 if debug:
-                    debug_info['negative_words'].append(token)
+                    debug_info['negative_words'].append(f"{token} (-{weight:.3f})")
 
         # 2. REGEX PATTERN MATCHING - Catch spelling variations and slang
         for pattern, weight in self.POSITIVE_PATTERNS:
@@ -1109,9 +1256,35 @@ class RedditSentiment(BaseModule):
             return self._score_text_with_cues(combined, analyzer, advanced, debug)
 
         avg_score = sum(scores) / len(scores)
+
+        # CONTEXT-AWARE BOOST: Amplify sentiment if ticker appears near outcome indicators
+        combined_lower = combined.lower()
+        tokens = re.findall(r"[A-Za-z']+", combined_lower)
+
+        positive_outcome_count = sum(1 for token in tokens if token in self.POSITIVE_OUTCOMES)
+        negative_outcome_count = sum(1 for token in tokens if token in self.NEGATIVE_OUTCOMES)
+
+        # Apply context multiplier if we detect outcome words
+        context_multiplier = 1.0
+        if positive_outcome_count > 0 and avg_score > 0:
+            # Amplify positive sentiment when positive outcomes are mentioned
+            context_multiplier = 1.0 + min(positive_outcome_count * 0.15, 0.3)
+            if debug:
+                print(f"[Context boost] Found {positive_outcome_count} positive outcome words → {context_multiplier:.2f}x multiplier")
+        elif negative_outcome_count > 0 and avg_score < 0:
+            # Amplify negative sentiment when negative outcomes are mentioned
+            context_multiplier = 1.0 + min(negative_outcome_count * 0.15, 0.3)
+            if debug:
+                print(f"[Context boost] Found {negative_outcome_count} negative outcome words → {context_multiplier:.2f}x multiplier")
+
+        final_score = max(-1.0, min(1.0, avg_score * context_multiplier))
+
         if debug:
-            print(f"Average sentiment for {ticker}: {avg_score:.4f}\n")
-        return avg_score
+            print(f"Base sentiment for {ticker}: {avg_score:.4f}")
+            print(f"Context multiplier: {context_multiplier:.2f}")
+            print(f"Final sentiment: {final_score:.4f}\n")
+
+        return final_score
 
     def _calculate_quality_weight(self, score: float) -> float:
         """Weight sentiment contributions by content quality (upvotes/score)."""

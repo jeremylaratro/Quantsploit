@@ -55,7 +55,7 @@
                         Enable Debug
                     </label>
                 </div>
-                <small class="text-muted">Output in server console</small>
+                <small class="text-muted">Shows detailed sentiment analysis</small>
             </div>
             <div class="col-md-3">
                 <label class="form-label">&nbsp;</label>
@@ -176,9 +176,9 @@
         </div>
     </div>
 
-    <!-- Top Posts for Selected Ticker -->
+    <!-- Top Posts and Debug Info for Selected Ticker -->
     <div class="row mb-4">
-        <div class="col-12">
+        <div class="col-lg-6">
             <div class="card">
                 <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
                     <h5 class="mb-0"><i class="fas fa-comments"></i> Top Reddit Posts</h5>
@@ -187,7 +187,19 @@
                 </div>
                 <div class="card-body">
                     <div id="topPostsContainer">
-                        <p class="text-muted">Select a ticker to view top posts</p>
+                        <p class="text-muted">Click a ticker or select one to view top posts</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-bug"></i> Debug Info <span id="debugTickerName"></span></h5>
+                </div>
+                <div class="card-body">
+                    <div id="debugContainer" style="max-height: 600px; overflow-y: auto;">
+                        <p class="text-muted">Click a ticker to view sentiment analysis debug information</p>
                     </div>
                 </div>
             </div>
@@ -324,14 +336,32 @@ function renderTickersTable() {
 
         row.innerHTML = `
             <td><strong>#${index + 1}</strong></td>
-            <td><strong>${ticker.ticker}</strong></td>
+            <td><strong><a href="#" class="ticker-link" data-ticker="${ticker.ticker}" style="text-decoration: none; color: inherit;">${ticker.ticker}</a></strong></td>
             <td>${ticker.mentions}</td>
             <td class="${sentimentClass}"><strong>${ticker.avg_sentiment.toFixed(3)}</strong></td>
             <td><span class="badge bg-secondary">${ticker.sentiment_category}</span></td>
             <td>${signal}</td>
             <td>${ticker.sentiment_strength.toFixed(2)}</td>
         `;
+
+        // Make the entire row clickable
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function(e) {
+            if (!e.target.classList.contains('ticker-link')) {
+                selectTicker(ticker.ticker);
+            }
+        });
+
         tbody.appendChild(row);
+    });
+
+    // Add click handlers for ticker links
+    document.querySelectorAll('.ticker-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectTicker(this.dataset.ticker);
+        });
     });
 }
 
@@ -500,12 +530,24 @@ function updateSentimentCharts(tickers) {
     });
 }
 
+function selectTicker(ticker) {
+    // Update the ticker selector dropdown
+    document.getElementById('tickerSelector').value = ticker;
+
+    // Update posts and debug info
+    updateTopPosts();
+    updateDebugInfo(ticker);
+
+    // Scroll to the posts/debug section
+    document.getElementById('topPostsContainer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
 function updateTopPosts() {
     const selectedTicker = document.getElementById('tickerSelector').value;
     const container = document.getElementById('topPostsContainer');
 
     if (!selectedTicker || !sentimentData) {
-        container.innerHTML = '<p class="text-muted">Select a ticker to view top posts</p>';
+        container.innerHTML = '<p class="text-muted">Click a ticker or select one to view top posts</p>';
         return;
     }
 
@@ -536,6 +578,127 @@ function updateTopPosts() {
         `;
     });
     html += '</div>';
+
+    container.innerHTML = html;
+}
+
+function updateDebugInfo(ticker) {
+    const container = document.getElementById('debugContainer');
+    const tickerNameSpan = document.getElementById('debugTickerName');
+
+    if (!ticker || !sentimentData) {
+        container.innerHTML = '<p class="text-muted">Click a ticker to view sentiment analysis debug information</p>';
+        tickerNameSpan.textContent = '';
+        return;
+    }
+
+    tickerNameSpan.textContent = `for ${ticker}`;
+
+    const tickerData = sentimentData.results.find(r => r.ticker === ticker);
+    if (!tickerData || !tickerData.top_posts || tickerData.top_posts.length === 0) {
+        container.innerHTML = '<p class="text-muted">No debug information available for this ticker</p>';
+        return;
+    }
+
+    // Filter posts with debug info
+    const postsWithDebug = tickerData.top_posts.filter(post => post.debug);
+
+    if (postsWithDebug.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No debug information available. Enable Debug Mode and run analysis again to see detailed sentiment breakdown.</div>';
+        return;
+    }
+
+    let html = '';
+    postsWithDebug.forEach((post, idx) => {
+        const debug = post.debug;
+
+        html += `
+            <div class="card mb-3">
+                <div class="card-header" style="background-color: #f8f9fa;">
+                    <strong>Post ${idx + 1}:</strong> ${post.title}
+                    <br><small class="text-muted">Score: ${post.score} | Created: ${post.created}</small>
+                </div>
+                <div class="card-body" style="font-size: 0.9em;">
+                    <h6>🎯 Ticker: ${debug.ticker}</h6>
+                    <p><strong>Contexts Found:</strong> ${debug.contexts_found}</p>
+                    <p><strong>Final Sentiment Score:</strong> <span class="badge bg-${debug.final_score >= 0.05 ? 'success' : debug.final_score <= -0.05 ? 'danger' : 'warning'}">${debug.final_score}</span></p>
+                    <p><strong>Context Multiplier:</strong> ${debug.context_multiplier}x</p>
+
+                    ${debug.positive_outcome_count > 0 ? `<p class="text-success">✅ Positive Outcomes: ${debug.positive_outcome_count}</p>` : ''}
+                    ${debug.negative_outcome_count > 0 ? `<p class="text-danger">❌ Negative Outcomes: ${debug.negative_outcome_count}</p>` : ''}
+
+                    <hr>
+                    <h6>📊 Sentiment Context Details:</h6>
+        `;
+
+        if (debug.context_details && debug.context_details.length > 0) {
+            debug.context_details.forEach((ctx, ctxIdx) => {
+                html += `
+                    <div class="mb-3 p-2" style="background-color: #f8f9fa; border-left: 3px solid #007bff;">
+                        <strong>Context ${ctxIdx + 1}:</strong>
+                        <p class="mb-1"><em>"${ctx.text_preview}"</em></p>
+                        <div class="row">
+                            <div class="col-6">
+                                <small><strong>Base Score:</strong> ${ctx.base_score}</small><br>
+                                <small><strong>Boost:</strong> ${ctx.boost > 0 ? '+' : ''}${ctx.boost}</small><br>
+                                <small><strong>Final:</strong> ${ctx.final_score}</small>
+                            </div>
+                            <div class="col-6">
+                                ${ctx.high_confidence ? `<span class="badge bg-warning">High Confidence: ${ctx.high_confidence}</span>` : ''}
+                            </div>
+                        </div>
+
+                        ${ctx.positive_words && ctx.positive_words.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-success">Positive Words:</strong>
+                                <div>${ctx.positive_words.join(', ')}</div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.negative_words && ctx.negative_words.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-danger">Negative Words:</strong>
+                                <div>${ctx.negative_words.join(', ')}</div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.positive_patterns && ctx.positive_patterns.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-success">Positive Patterns:</strong>
+                                <div><small>${ctx.positive_patterns.join(', ')}</small></div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.negative_patterns && ctx.negative_patterns.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-danger">Negative Patterns:</strong>
+                                <div><small>${ctx.negative_patterns.join(', ')}</small></div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.negations && ctx.negations.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-warning">Negations Detected:</strong>
+                                <div><small>${ctx.negations.join(', ')}</small></div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.emphasis && Object.keys(ctx.emphasis).length > 0 ? `
+                            <div class="mt-2">
+                                <strong>Emphasis Indicators:</strong>
+                                <div><small>${Object.entries(ctx.emphasis).map(([k,v]) => `${k}: ${v}`).join(', ')}</small></div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    });
 
     container.innerHTML = html;
 }

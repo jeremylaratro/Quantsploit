@@ -1,0 +1,220 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Analysis - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <h1 class="mb-4">
+        <i class="fas fa-chart-line"></i> Stock Analysis
+        <span id="timestamp-display" class="badge bg-secondary ms-2"></span>
+    </h1>
+
+    <!-- Summary Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <i class="fas fa-coins metric-icon"></i>
+                <div class="stat-label">Total Stocks</div>
+                <div class="stat-value" id="total-stocks">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <i class="fas fa-trophy metric-icon"></i>
+                <div class="stat-label">Best Performer</div>
+                <div class="stat-value" id="best-stock" style="font-size: 1.8rem;">-</div>
+                <div class="stat-label" id="best-stock-return">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <i class="fas fa-chart-bar metric-icon"></i>
+                <div class="stat-label">Average Return</div>
+                <div class="stat-value" id="avg-return">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <i class="fas fa-balance-scale metric-icon"></i>
+                <div class="stat-label">Median Sharpe</div>
+                <div class="stat-value" id="median-sharpe">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stocks Table -->
+    <div class="chart-container">
+        <h3 class="chart-title">All Stocks Performance</h3>
+
+        <!-- Search/Filter -->
+        <div class="row mb-3">
+            <div class="col-md-6">
+                <input type="text" id="searchInput" class="form-control" placeholder="Search by ticker symbol...">
+            </div>
+            <div class="col-md-3">
+                <select id="filterReliability" class="form-select">
+                    <option value="">All Reliability</option>
+                    <option value="High">High</option>
+                    <option value="Medium">Medium</option>
+                    <option value="Low">Low</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <select id="sortBy" class="form-select">
+                    <option value="avg_return">Sort by Avg Return</option>
+                    <option value="median_return">Sort by Median Return</option>
+                    <option value="best_return">Sort by Best Return</option>
+                    <option value="avg_sharpe">Sort by Sharpe Ratio</option>
+                </select>
+            </div>
+        </div>
+
+        <div class="table-responsive">
+            <table class="table table-striped table-hover" id="stocksTable">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Symbol</th>
+                        <th>Avg Return</th>
+                        <th>Median Return</th>
+                        <th>Best Return</th>
+                        <th>Worst Return</th>
+                        <th>Best Strategy</th>
+                        <th>Best Period</th>
+                        <th>Sharpe</th>
+                        <th>Volatility</th>
+                        <th>Tests</th>
+                        <th>Reliability</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="stocksTableBody">
+                    <tr>
+                        <td colspan="13" class="text-center">
+                            <div class="loading-spinner"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const timestamp = '{{ timestamp }}';
+    let allStocks = [];
+    let filteredStocks = [];
+
+    document.getElementById('timestamp-display').textContent = timestamp;
+
+    // Load stocks data
+    fetch(`/api/stocks/${timestamp}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading data: ' + data.error);
+                return;
+            }
+
+            allStocks = data.stocks;
+            filteredStocks = [...allStocks];
+
+            // Update summary stats
+            document.getElementById('total-stocks').textContent = data.count;
+
+            if (data.stocks.length > 0) {
+                const best = data.stocks[0];  // Already sorted by avg_return
+                document.getElementById('best-stock').textContent = best.symbol;
+                document.getElementById('best-stock-return').textContent = `${best.avg_return.toFixed(2)}%`;
+
+                const avgReturn = data.stocks.reduce((sum, s) => sum + s.avg_return, 0) / data.count;
+                document.getElementById('avg-return').textContent = `${avgReturn.toFixed(2)}%`;
+
+                const medianSharpe = calculateMedian(data.stocks.map(s => s.avg_sharpe));
+                document.getElementById('median-sharpe').textContent = medianSharpe.toFixed(2);
+            }
+
+            renderTable();
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading stocks data');
+        });
+
+    function calculateMedian(arr) {
+        const sorted = arr.slice().sort((a, b) => a - b);
+        const mid = Math.floor(sorted.length / 2);
+        return sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2;
+    }
+
+    function renderTable() {
+        const tbody = document.getElementById('stocksTableBody');
+        tbody.innerHTML = '';
+
+        if (filteredStocks.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="13" class="text-center">No stocks match the filter criteria</td></tr>';
+            return;
+        }
+
+        filteredStocks.forEach((stock, index) => {
+            const row = document.createElement('tr');
+            row.style.cursor = 'pointer';
+            row.onclick = () => window.location.href = `/stock/${timestamp}/${stock.symbol}`;
+
+            const returnBadgeClass = stock.avg_return >= 0 ? 'positive' : 'negative';
+            const reliabilityClass = stock.reliability === 'High' ? 'success' : stock.reliability === 'Medium' ? 'warning' : 'secondary';
+
+            row.innerHTML = `
+                <td><strong>#${index + 1}</strong></td>
+                <td><strong>${stock.symbol}</strong></td>
+                <td><span class="badge-return ${returnBadgeClass}">${stock.avg_return.toFixed(2)}%</span></td>
+                <td>${stock.median_return.toFixed(2)}%</td>
+                <td class="text-success"><strong>${stock.best_return.toFixed(2)}%</strong></td>
+                <td class="text-danger">${stock.worst_return.toFixed(2)}%</td>
+                <td><small>${stock.best_strategy}</small></td>
+                <td><small>${stock.best_period}</small></td>
+                <td>${stock.avg_sharpe.toFixed(2)}</td>
+                <td>${stock.avg_volatility.toFixed(2)}%</td>
+                <td><span class="badge bg-info">${stock.total_backtests}</span></td>
+                <td><span class="badge bg-${reliabilityClass}">${stock.reliability}</span></td>
+                <td><a href="/stock/${timestamp}/${stock.symbol}" class="btn btn-sm btn-primary">Details</a></td>
+            `;
+
+            tbody.appendChild(row);
+        });
+    }
+
+    // Search functionality
+    document.getElementById('searchInput').addEventListener('input', function(e) {
+        const search = e.target.value.toLowerCase();
+        applyFilters(search);
+    });
+
+    // Reliability filter
+    document.getElementById('filterReliability').addEventListener('change', function(e) {
+        const search = document.getElementById('searchInput').value.toLowerCase();
+        applyFilters(search);
+    });
+
+    // Sort functionality
+    document.getElementById('sortBy').addEventListener('change', function(e) {
+        const sortKey = e.target.value;
+        filteredStocks.sort((a, b) => b[sortKey] - a[sortKey]);
+        renderTable();
+    });
+
+    function applyFilters(search) {
+        const reliabilityFilter = document.getElementById('filterReliability').value;
+
+        filteredStocks = allStocks.filter(stock => {
+            const matchesSearch = !search || stock.symbol.toLowerCase().includes(search);
+            const matchesReliability = !reliabilityFilter || stock.reliability === reliabilityFilter;
+            return matchesSearch && matchesReliability;
+        });
+
+        renderTable();
+    }
+</script>
+{% endblock %}

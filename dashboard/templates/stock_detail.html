@@ -1,0 +1,294 @@
+{% extends "base.html" %}
+
+{% block title %}{{ symbol }} Analysis - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>
+            <i class="fas fa-chart-line"></i> {{ symbol }} Stock Analysis
+        </h1>
+        <a href="/stocks/{{ timestamp }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to All Stocks
+        </a>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <i class="fas fa-chart-bar metric-icon"></i>
+                <div class="stat-label">Average Return</div>
+                <div class="stat-value" id="avg-return">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <i class="fas fa-bullseye metric-icon"></i>
+                <div class="stat-label">Best Return</div>
+                <div class="stat-value" id="best-return">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <i class="fas fa-balance-scale metric-icon"></i>
+                <div class="stat-label">Sharpe Ratio</div>
+                <div class="stat-value" id="sharpe-ratio">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <i class="fas fa-chart-area metric-icon"></i>
+                <div class="stat-label">Volatility</div>
+                <div class="stat-value" id="volatility">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Best Configuration -->
+    <div class="chart-container mb-4">
+        <h3 class="chart-title">Best Configuration</h3>
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table">
+                    <tr>
+                        <th>Best Strategy:</th>
+                        <td id="best-strategy">-</td>
+                    </tr>
+                    <tr>
+                        <th>Best Period:</th>
+                        <td id="best-period">-</td>
+                    </tr>
+                    <tr>
+                        <th>Return:</th>
+                        <td><span id="best-combo-return" class="badge-return positive">-</span></td>
+                    </tr>
+                    <tr>
+                        <th>Sharpe:</th>
+                        <td id="best-combo-sharpe">-</td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table">
+                    <tr>
+                        <th>Most Consistent Strategy:</th>
+                        <td id="most-consistent">-</td>
+                    </tr>
+                    <tr>
+                        <th>Total Backtests:</th>
+                        <td id="total-backtests">-</td>
+                    </tr>
+                    <tr>
+                        <th>Strategies Tested:</th>
+                        <td id="total-strategies">-</td>
+                    </tr>
+                    <tr>
+                        <th>Reliability:</th>
+                        <td><span id="reliability" class="badge">-</span></td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Strategy Rankings -->
+    <div class="chart-container mb-4">
+        <h3 class="chart-title">Strategy Performance Rankings</h3>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Strategy</th>
+                        <th>Risk Class</th>
+                        <th>Avg Return</th>
+                        <th>Median</th>
+                        <th>Best</th>
+                        <th>Worst</th>
+                        <th>Sharpe</th>
+                        <th>Win Rate</th>
+                        <th>Success Rate</th>
+                        <th>Consistency</th>
+                        <th>Reliability</th>
+                    </tr>
+                </thead>
+                <tbody id="strategyTable">
+                    <tr>
+                        <td colspan="12" class="text-center">
+                            <div class="loading-spinner"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Period Analysis -->
+    <div class="chart-container">
+        <h3 class="chart-title">Performance by Time Period</h3>
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Period</th>
+                        <th>Best Strategy</th>
+                        <th>Best Return</th>
+                        <th>Best Sharpe</th>
+                        <th>Avg Return</th>
+                        <th>Median Return</th>
+                        <th>Profitable Strategies</th>
+                    </tr>
+                </thead>
+                <tbody id="periodTable">
+                    <tr>
+                        <td colspan="7" class="text-center">
+                            <div class="loading-spinner"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Performance Chart -->
+    <div class="chart-container mt-4">
+        <h3 class="chart-title">Strategy Returns Comparison</h3>
+        <canvas id="strategyChart" height="100"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const timestamp = '{{ timestamp }}';
+    const symbol = '{{ symbol }}';
+
+    // Load stock detail data
+    fetch(`/api/stock/${timestamp}/${symbol}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading data: ' + data.error);
+                return;
+            }
+
+            // Update overview stats
+            document.getElementById('avg-return').textContent = `${data.overall_avg_return.toFixed(2)}%`;
+            document.getElementById('best-return').textContent = `${data.overall_best_return.toFixed(2)}%`;
+            document.getElementById('sharpe-ratio').textContent = data.avg_sharpe.toFixed(2);
+            document.getElementById('volatility').textContent = `${data.avg_volatility.toFixed(2)}%`;
+
+            // Update best configuration
+            document.getElementById('best-strategy').textContent = data.best_strategy;
+            document.getElementById('best-period').textContent = data.best_period;
+            document.getElementById('best-combo-return').textContent = `${data.best_combination_return.toFixed(2)}%`;
+            document.getElementById('best-combo-sharpe').textContent = data.best_combination_sharpe.toFixed(2);
+            document.getElementById('most-consistent').textContent = data.most_consistent_strategy;
+            document.getElementById('total-backtests').textContent = data.total_backtests;
+            document.getElementById('total-strategies').textContent = data.total_strategies;
+
+            const reliabilityBadge = document.getElementById('reliability');
+            reliabilityBadge.textContent = data.reliability_rating;
+            reliabilityBadge.className = `badge bg-${data.reliability_rating === 'High' ? 'success' : data.reliability_rating === 'Medium' ? 'warning' : 'secondary'}`;
+
+            // Populate strategy rankings table
+            const strategyTable = document.getElementById('strategyTable');
+            strategyTable.innerHTML = '';
+
+            data.strategy_rankings.forEach((strat, index) => {
+                const row = document.createElement('tr');
+                const returnClass = strat.avg_return >= 0 ? 'positive' : 'negative';
+                const reliabilityClass = strat.reliability === 'High' ? 'success' : strat.reliability === 'Medium' ? 'warning' : 'secondary';
+
+                row.innerHTML = `
+                    <td><strong>#${index + 1}</strong></td>
+                    <td><strong>${strat.strategy_name}</strong></td>
+                    <td><span class="badge bg-secondary">${strat.risk_class}</span></td>
+                    <td><span class="badge-return ${returnClass}">${strat.avg_return.toFixed(2)}%</span></td>
+                    <td>${strat.median_return.toFixed(2)}%</td>
+                    <td class="text-success">${strat.best_return.toFixed(2)}%</td>
+                    <td class="text-danger">${strat.worst_return.toFixed(2)}%</td>
+                    <td>${strat.avg_sharpe.toFixed(2)}</td>
+                    <td>${strat.avg_win_rate.toFixed(1)}%</td>
+                    <td>${strat.success_rate.toFixed(1)}% (${strat.profitable_periods}/${strat.total_periods})</td>
+                    <td>${strat.return_consistency.toFixed(3)}</td>
+                    <td><span class="badge bg-${reliabilityClass}">${strat.reliability}</span></td>
+                `;
+                strategyTable.appendChild(row);
+            });
+
+            // Populate period analysis table
+            const periodTable = document.getElementById('periodTable');
+            periodTable.innerHTML = '';
+
+            data.period_analysis.forEach(period => {
+                const row = document.createElement('tr');
+                const returnClass = period.avg_return >= 0 ? 'positive' : 'negative';
+
+                row.innerHTML = `
+                    <td><strong>${period.period_name}</strong></td>
+                    <td>${period.best_strategy}</td>
+                    <td class="text-success"><strong>${period.best_return.toFixed(2)}%</strong></td>
+                    <td>${period.best_sharpe.toFixed(2)}</td>
+                    <td><span class="badge-return ${returnClass}">${period.avg_return.toFixed(2)}%</span></td>
+                    <td>${period.median_return.toFixed(2)}%</td>
+                    <td>${period.profitable_strategies}/${period.total_strategies}</td>
+                `;
+                periodTable.appendChild(row);
+            });
+
+            // Create strategy comparison chart
+            createStrategyChart(data.strategy_rankings);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading stock data');
+        });
+
+    function createStrategyChart(strategies) {
+        const ctx = document.getElementById('strategyChart').getContext('2d');
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: strategies.map(s => s.strategy_name),
+                datasets: [{
+                    label: 'Average Return (%)',
+                    data: strategies.map(s => s.avg_return),
+                    backgroundColor: strategies.map(s => s.avg_return >= 0 ? 'rgba(39, 174, 96, 0.7)' : 'rgba(231, 76, 60, 0.7)'),
+                    borderColor: strategies.map(s => s.avg_return >= 0 ? 'rgba(39, 174, 96, 1)' : 'rgba(231, 76, 60, 1)'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Return (%)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: false
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

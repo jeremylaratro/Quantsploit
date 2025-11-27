@@ -624,12 +624,31 @@ class RedditSentiment(BaseModule):
                             if filter_symbol and ticker != filter_symbol:
                                 continue
 
-                            mention_score = self._score_ticker_sentiment(
+                            sentiment_result = self._score_ticker_sentiment(
                                 ticker, post.title, post.selftext, analyzer, advanced_sentiment, debug_mode
                             )
+
+                            # Handle debug mode where result is (score, debug_info)
+                            if debug_mode:
+                                mention_score, debug_info = sentiment_result
+                            else:
+                                mention_score = sentiment_result
+                                debug_info = None
+
                             weight = self._calculate_quality_weight(post.score)
                             if ticker in post.title:
                                 weight *= 1.2  # emphasize explicit title mentions
+
+                            post_info = {
+                                'title': post.title[:100],
+                                'score': post.score,
+                                'url': f"https://reddit.com{post.permalink}",
+                                'created': datetime.fromtimestamp(post.created_utc).strftime('%Y-%m-%d %H:%M'),
+                                'sentiment': mention_score,
+                                'subreddit': subreddit_name
+                            }
+                            if debug_info:
+                                post_info['debug'] = debug_info
 
                             self._accumulate_ticker_data(
                                 ticker_data,
@@ -637,14 +656,7 @@ class RedditSentiment(BaseModule):
                                 mention_score,
                                 weight,
                                 post_score=post.score,
-                                post_info={
-                                    'title': post.title[:100],
-                                    'score': post.score,
-                                    'url': f"https://reddit.com{post.permalink}",
-                                    'created': datetime.fromtimestamp(post.created_utc).strftime('%Y-%m-%d %H:%M'),
-                                    'sentiment': mention_score,
-                                    'subreddit': subreddit_name
-                                }
+                                post_info=post_info
                             )
 
                         if analyze_comments:
@@ -661,7 +673,14 @@ class RedditSentiment(BaseModule):
                                         if filter_symbol and ticker != filter_symbol:
                                             continue
 
-                                        mention_score = self._score_text_with_cues(comment.body, analyzer, advanced_sentiment, debug_mode)
+                                        sentiment_result = self._score_text_with_cues(comment.body, analyzer, advanced_sentiment, debug_mode)
+
+                                        # Handle debug mode
+                                        if debug_mode:
+                                            mention_score, _ = sentiment_result  # We don't store comment debug info
+                                        else:
+                                            mention_score = sentiment_result
+
                                         weight = 0.6 * self._calculate_quality_weight(comment_score)
 
                                         self._accumulate_ticker_data(
@@ -688,12 +707,31 @@ class RedditSentiment(BaseModule):
                             if filter_symbol and ticker != filter_symbol:
                                 continue
 
-                            mention_score = self._score_ticker_sentiment(
+                            sentiment_result = self._score_ticker_sentiment(
                                 ticker, post["title"], post["selftext"], analyzer, advanced_sentiment, debug_mode
                             )
+
+                            # Handle debug mode where result is (score, debug_info)
+                            if debug_mode:
+                                mention_score, debug_info = sentiment_result
+                            else:
+                                mention_score = sentiment_result
+                                debug_info = None
+
                             weight = self._calculate_quality_weight(post["score"])
                             if ticker in post["title"]:
                                 weight *= 1.2
+
+                            post_info = {
+                                'title': post["title"][:100],
+                                'score': post["score"],
+                                'url': post["url"],
+                                'created': datetime.fromtimestamp(post["created"]).strftime('%Y-%m-%d %H:%M'),
+                                'sentiment': mention_score,
+                                'subreddit': subreddit_name
+                            }
+                            if debug_info:
+                                post_info['debug'] = debug_info
 
                             self._accumulate_ticker_data(
                                 ticker_data,
@@ -701,14 +739,7 @@ class RedditSentiment(BaseModule):
                                 mention_score,
                                 weight,
                                 post_score=post["score"],
-                                post_info={
-                                    'title': post["title"][:100],
-                                    'score': post["score"],
-                                    'url': post["url"],
-                                    'created': datetime.fromtimestamp(post["created"]).strftime('%Y-%m-%d %H:%M'),
-                                    'sentiment': mention_score,
-                                    'subreddit': subreddit_name
-                                }
+                                post_info=post_info
                             )
 
             except Exception as e:
@@ -1019,7 +1050,7 @@ class RedditSentiment(BaseModule):
         parts = re.split(r'[.!?;\n]+', text)
         return [p.strip() for p in parts if p and len(p.strip()) > 2]
 
-    def _score_text_with_cues(self, text: str, analyzer, advanced: bool = True, debug: bool = False) -> float:
+    def _score_text_with_cues(self, text: str, analyzer, advanced: bool = True, debug: bool = False):
         """
         Advanced sentiment scoring with finance-specific lexical adjustments,
         regex pattern matching, and negation detection.
@@ -1028,9 +1059,10 @@ class RedditSentiment(BaseModule):
             text: Text to analyze
             analyzer: VADER sentiment analyzer instance
             advanced: Use advanced features (regex, negation detection)
+            debug: If True, return tuple of (score, debug_info), else just score
 
         Returns:
-            Sentiment score between -1.0 and 1.0
+            Sentiment score between -1.0 and 1.0, or (score, debug_info) if debug=True
         """
         # Base VADER score
         base = analyzer.polarity_scores(text)['compound']
@@ -1215,9 +1247,25 @@ class RedditSentiment(BaseModule):
             print(f"Final score: {base:.4f} (base) + {boost:.4f} (boost) = {score:.4f}")
             print(f"{'='*80}\n")
 
+            # Return both score and debug info
+            return score, {
+                'text_preview': text[:200] + ('...' if len(text) > 200 else ''),
+                'base_score': round(base, 4),
+                'boost': round(boost, 4),
+                'boost_before_cap': round(boost_before_cap, 4),
+                'final_score': round(score, 4),
+                'positive_words': debug_info['positive_words'],
+                'negative_words': debug_info['negative_words'],
+                'positive_patterns': debug_info['positive_patterns'],
+                'negative_patterns': debug_info['negative_patterns'],
+                'negations': debug_info['negations'],
+                'emphasis': debug_info['emphasis'],
+                'high_confidence': debug_info['high_confidence']
+            }
+
         return score
 
-    def _score_ticker_sentiment(self, ticker: str, title: str, body: str, analyzer, advanced: bool = True, debug: bool = False) -> float:
+    def _score_ticker_sentiment(self, ticker: str, title: str, body: str, analyzer, advanced: bool = True, debug: bool = False):
         """
         Score sentiment for a specific ticker using its sentence-level context,
         with a fallback to whole-text scoring.
@@ -1228,9 +1276,10 @@ class RedditSentiment(BaseModule):
             body: Post body/content
             analyzer: VADER sentiment analyzer instance
             advanced: Use advanced sentiment features
+            debug: If True, return tuple of (score, debug_info), else just score
 
         Returns:
-            Sentiment score between -1.0 and 1.0
+            Sentiment score between -1.0 and 1.0, or (score, debug_info) if debug=True
         """
         title = title or ""
         body = body or ""
@@ -1251,9 +1300,17 @@ class RedditSentiment(BaseModule):
             print(f"\n🎯 Analyzing ticker: {ticker}")
             print(f"Contexts found: {len(contexts)}")
 
-        scores = [self._score_text_with_cues(ctx, analyzer, advanced, debug) for ctx in contexts if ctx]
-        if not scores:
+        # Handle debug mode where score_text returns (score, debug_info)
+        results = [self._score_text_with_cues(ctx, analyzer, advanced, debug) for ctx in contexts if ctx]
+        if not results:
             return self._score_text_with_cues(combined, analyzer, advanced, debug)
+
+        # Extract scores and debug info if in debug mode
+        if debug:
+            scores = [r[0] for r in results]
+            debug_infos = [r[1] for r in results]
+        else:
+            scores = results
 
         avg_score = sum(scores) / len(scores)
 
@@ -1283,6 +1340,19 @@ class RedditSentiment(BaseModule):
             print(f"Base sentiment for {ticker}: {avg_score:.4f}")
             print(f"Context multiplier: {context_multiplier:.2f}")
             print(f"Final sentiment: {final_score:.4f}\n")
+
+            # Combine all debug info and return with score
+            combined_debug = {
+                'ticker': ticker,
+                'contexts_found': len(contexts),
+                'avg_score': round(avg_score, 4),
+                'context_multiplier': round(context_multiplier, 2),
+                'final_score': round(final_score, 4),
+                'positive_outcome_count': positive_outcome_count,
+                'negative_outcome_count': negative_outcome_count,
+                'context_details': debug_infos  # All context-level debug info
+            }
+            return final_score, combined_debug
 
         return final_score
 

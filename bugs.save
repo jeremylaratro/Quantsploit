@@ -1,0 +1,39 @@
+[('class:prompt', 'quantsploit')]([('class:module', 'Pattern Recognition')]) > use analysis/technical_indicators
+[+] Loaded module: Technical Indicators
+[*] Calculate common technical indicators (RSI, MACD, SMA, EMA, Bollinger Bands)
+[('class:prompt', 'quantsploit')]([('class:module', 'Technical Indicators')]) > options
+                                                  Module Options                                                   
+┏━━━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━┳━━━━━━━━━━┳━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┓
+┃ Option     ┃ Current Value           ┃ Required ┃ Description                                                   ┃
+┡━━━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━╇━━━━━━━━━━╇━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━┩
+│ SYMBOL     │                         │ yes      │ Stock/Option symbol                                           │
+│ PERIOD     │ 1y                      │ no       │ Data period (1d,5d,1mo,3mo,6mo,1y,2y,5y,10y,ytd,max)          │
+│ INTERVAL   │ 1d                      │ no       │ Data interval (1m,2m,5m,15m,30m,60m,90m,1h,1d,5d,1wk,1mo,3mo) │
+│ INDICATORS │ RSI,MACD,SMA,EMA,BBANDS │ no       │ Comma-separated list of indicators to calculate               │
+│ RSI_PERIOD │ 14                      │ no       │ RSI period                                                    │
+│ SMA_PERIOD │ 20                      │ no       │ SMA period                                                    │
+│ EMA_PERIOD │ 12                      │ no       │ EMA period                                                    │
+└────────────┴─────────────────────────┴──────────┴───────────────────────────────────────────────────────────────┘
+[('class:prompt', 'quantsploit')]([('class:module', 'Technical Indicators')]) > set SYMBOL ASTS
+[+] Set SYMBOL => ASTS
+[('class:prompt', 'quantsploit')]([('class:module', 'Technical Indicators')]) > run
+[*] Running module: Technical Indicators...
+
+
+[-] Execution failed: 'BBU_5_2.0'
+[('class:prompt', 'quantsploit')]([('class:module', 'Technical Indicators')]) > run
+[*] Running module: Technical Indicators...
+
+
+[-] Execution failed: 'BBU_5_2.0'
+[('class:prompt', 'quantsploit')]([('class:module', 'Technical Indicators')]) > set PERIOD 6mo
+[+] Set PERIOD => 6mo
+[('class:prompt', 'quantsploit')]([('class:module', 'Technical Indicators')]) > run
+[*] Running module: Technical Indicators...
+
+
+[-] Execution failed: 'BBU_5_2.0'
+
+---
+
+

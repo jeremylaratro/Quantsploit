@@ -2,8 +2,25 @@
 Helper utility functions
 """
 
-from typing import List, Dict, Any
-from tabulate import tabulate
+from typing import Any, Dict, List
+
+try:
+    from tabulate import tabulate
+except ImportError:  # pragma: no cover - graceful fallback when optional dep missing
+    def tabulate(data, headers=None, tablefmt="simple"):
+        """Minimal tabulate fallback to avoid hard dependency during imports."""
+        headers = headers or []
+        lines = []
+        if headers:
+            lines.append("\t".join(map(str, headers)))
+        for row in data:
+            if isinstance(row, dict):
+                values = [row.get(h, "") for h in headers] if headers else row.values()
+            else:
+                values = row
+            lines.append("\t".join(map(str, values)))
+        return "\n".join(lines)
+
 from rich.console import Console
 from rich.table import Table
 

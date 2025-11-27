@@ -13,7 +13,10 @@
 <div class="run-selector">
     <div class="row align-items-center">
         <div class="col-md-6">
-            <label for="runSelector" class="form-label fw-bold">Select Backtest Run:</label>
+            <label for="runSelector" class="form-label fw-bold">
+                Select Backtest Run:
+                <span class="badge bg-primary" id="runs-count">{{ runs|length }} available</span>
+            </label>
             <select id="runSelector" class="form-select">
                 <option value="">-- Select a backtest run --</option>
                 {% for run in runs %}
@@ -300,7 +303,7 @@
 
 {% block extra_js %}
 <script>
-let currentTimestamp = "{{ latest_timestamp }}";
+let currentTimestamp = {% if latest_timestamp %}"{{ latest_timestamp }}"{% else %}null{% endif %};
 
 // Chart instances
 let returnDistChart, sharpeDistChart, symbolPerfChart;
@@ -309,7 +312,15 @@ let returnDistChart, sharpeDistChart, symbolPerfChart;
 document.addEventListener('DOMContentLoaded', function() {
     if (currentTimestamp) {
         loadDashboardData(currentTimestamp);
+    } else {
+        // No results available - show the launcher CTA
+        document.getElementById('launcher-cta').style.display = 'block';
     }
+
+    // Auto-refresh the runs list every 10 seconds to catch new backtests
+    setInterval(async function() {
+        await refreshRunsList();
+    }, 10000);
 });
 
 // Run selector change event
@@ -320,9 +331,66 @@ document.getElementById('runSelector').addEventListener('change', function() {
     }
 });
 
-function refreshData() {
+async function refreshData() {
+    // Refresh the list of available runs
+    await refreshRunsList();
+
+    // Reload current data if a run is selected
     if (currentTimestamp) {
         loadDashboardData(currentTimestamp);
+    }
+}
+
+async function refreshRunsList() {
+    try {
+        const response = await fetch('/api/runs');
+        const runs = await response.json();
+
+        const selector = document.getElementById('runSelector');
+        const currentValue = selector.value;
+
+        // Clear existing options except the first one
+        selector.innerHTML = '<option value="">-- Select a backtest run --</option>';
+
+        // Add all runs
+        runs.forEach(run => {
+            const option = document.createElement('option');
+            option.value = run.timestamp;
+            option.textContent = run.datetime;
+
+            // Restore selection if it still exists
+            if (run.timestamp === currentValue) {
+                option.selected = true;
+            }
+
+            selector.appendChild(option);
+        });
+
+        // Update badge count
+        const countBadge = document.getElementById('runs-count');
+        if (countBadge) {
+            countBadge.textContent = `${runs.length} available`;
+        }
+
+        // Log to console for debugging
+        console.log(`Refreshed runs list: ${runs.length} backtest runs found`);
+
+        // If no run was selected but we have runs, select the latest
+        if (!currentValue && runs.length > 0) {
+            selector.value = runs[0].timestamp;
+            currentTimestamp = runs[0].timestamp;
+            loadDashboardData(currentTimestamp);
+
+            // Hide launcher CTA and show dashboard
+            document.getElementById('launcher-cta').style.display = 'none';
+        } else if (runs.length === 0) {
+            // Show launcher CTA if no runs available
+            document.getElementById('launcher-cta').style.display = 'block';
+            document.getElementById('dashboardContent').style.display = 'none';
+            document.getElementById('advanced-nav').style.display = 'none';
+        }
+    } catch (error) {
+        console.error('Error refreshing runs list:', error);
     }
 }
 

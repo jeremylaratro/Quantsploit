@@ -1,0 +1,762 @@
+{% extends "base.html" %}
+
+{% block title %}Reddit Sentiment Analysis - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="row mb-4">
+    <div class="col-12">
+        <h1 class="display-4 fw-bold text-center mb-4">
+            <i class="fab fa-reddit"></i> Reddit Sentiment Analysis Dashboard
+        </h1>
+        <p class="text-center text-muted">Real-time social media sentiment tracking for stock tickers</p>
+    </div>
+</div>
+
+<!-- Control Panel -->
+<div class="card mb-4">
+    <div class="card-header bg-gradient-primary text-white">
+        <h5 class="mb-0"><i class="fas fa-sliders-h"></i> Analysis Settings</h5>
+    </div>
+    <div class="card-body">
+        <div class="row g-3">
+            <div class="col-md-4">
+                <label class="form-label">Subreddits</label>
+                <input type="text" class="form-control" id="subreddits"
+                       value="wallstreetbets,stocks,investing,StockMarket,options"
+                       placeholder="Comma-separated subreddits">
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Sort</label>
+                <select class="form-select" id="sort">
+                    <option value="top" selected>Top</option>
+                    <option value="new">New</option>
+                    <option value="hot">Hot</option>
+                </select>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Time Filter</label>
+                <select class="form-select" id="timeFilter">
+                    <option value="hour">Past Hour</option>
+                    <option value="day" selected>Past Day</option>
+                    <option value="week">Past Week</option>
+                    <option value="month">Past Month</option>
+                </select>
+                <small class="text-muted">Used only when Sort = Top</small>
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Post Limit</label>
+                <input type="number" class="form-control" id="postLimit" value="100" min="10" max="500">
+            </div>
+            <div class="col-md-2">
+                <label class="form-label">Debug Mode</label>
+                <div class="form-check mt-2">
+                    <input class="form-check-input" type="checkbox" id="debugMode">
+                    <label class="form-check-label" for="debugMode">
+                        Enable Debug
+                    </label>
+                </div>
+                <small class="text-muted">Shows detailed sentiment analysis</small>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">&nbsp;</label>
+                <button class="btn btn-primary w-100" onclick="analyzeSentiment()">
+                    <i class="fas fa-play"></i> Run Analysis
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Spinner -->
+<div id="loadingSpinner" class="text-center my-5" style="display: none;">
+    <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;">
+        <span class="visually-hidden">Loading...</span>
+    </div>
+    <p class="mt-3 text-muted">Analyzing Reddit sentiment...</p>
+</div>
+
+<!-- Results Container -->
+<div id="resultsContainer" style="display: none;">
+
+    <!-- Summary Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <i class="fas fa-comments fa-2x mb-2"></i>
+                <div class="stat-label">Posts Analyzed</div>
+                <div class="stat-value" id="totalPosts">0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <i class="fas fa-chart-line fa-2x mb-2"></i>
+                <div class="stat-label">Tickers Found</div>
+                <div class="stat-value" id="tickersFound">0</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <i class="fas fa-fire fa-2x mb-2"></i>
+                <div class="stat-label">Top Sentiment</div>
+                <div class="stat-value" id="topSentiment">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card" id="signalCard">
+                <i class="fas fa-bullseye fa-2x mb-2"></i>
+                <div class="stat-label">Buy Signals</div>
+                <div class="stat-value" id="buySignals">0</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Tickers Table and Chart -->
+    <div class="row mb-4">
+        <div class="col-lg-7">
+            <div class="card">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-trophy"></i> Top 10 Most Mentioned Tickers</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="topTickersTable">
+                            <thead>
+                                <tr>
+                                    <th>Rank</th>
+                                    <th onclick="sortTable('ticker')" style="cursor: pointer;">
+                                        Ticker <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('mentions')" style="cursor: pointer;">
+                                        Mentions <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('sentiment')" style="cursor: pointer;">
+                                        Sentiment <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('category')" style="cursor: pointer;">
+                                        Category <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('signal')" style="cursor: pointer;">
+                                        Signal <i class="fas fa-sort"></i>
+                                    </th>
+                                    <th onclick="sortTable('strength')" style="cursor: pointer;">
+                                        Strength <i class="fas fa-sort"></i>
+                                    </th>
+                                </tr>
+                            </thead>
+                            <tbody id="topTickersBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-5">
+            <div class="card">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-chart-pie"></i> Sentiment Distribution</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="sentimentPieChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Sentiment vs Mentions Scatter Plot -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-chart-scatter"></i> Sentiment vs Mention Volume</h5>
+                </div>
+                <div class="card-body">
+                    <canvas id="sentimentScatterChart"></canvas>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Posts and Debug Info for Selected Ticker -->
+    <div class="row mb-4">
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-gradient-primary text-white d-flex justify-content-between align-items-center">
+                    <h5 class="mb-0"><i class="fas fa-comments"></i> Top Reddit Posts</h5>
+                    <select class="form-select form-select-sm" id="tickerSelector" style="max-width: 200px;" onchange="updateTopPosts()">
+                    </select>
+                </div>
+                <div class="card-body">
+                    <div id="topPostsContainer">
+                        <p class="text-muted">Click a ticker or select one to view top posts</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-lg-6">
+            <div class="card">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-bug"></i> Debug Info <span id="debugTickerName"></span></h5>
+                </div>
+                <div class="card-body">
+                    <div id="debugContainer" style="max-height: 600px; overflow-y: auto;">
+                        <p class="text-muted">Click a ticker to view sentiment analysis debug information</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Trading Signals -->
+    <div class="row mb-4">
+        <div class="col-12">
+            <div class="card">
+                <div class="card-header bg-gradient-primary text-white">
+                    <h5 class="mb-0"><i class="fas fa-signal"></i> Trading Signals</h5>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover" id="signalsTable">
+                            <thead>
+                                <tr>
+                                    <th>Ticker</th>
+                                    <th>Signal</th>
+                                    <th>Confidence</th>
+                                    <th>Sentiment Score</th>
+                                    <th>Mentions</th>
+                                    <th>Reasons</th>
+                                </tr>
+                            </thead>
+                            <tbody id="signalsBody">
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let sentimentData = null;
+let sentimentPieChart = null;
+let sentimentScatterChart = null;
+let currentSort = { column: 'mentions', ascending: false };
+let displayedTickers = [];
+
+function analyzeSentiment() {
+    const subreddits = document.getElementById('subreddits').value;
+    const timeFilter = document.getElementById('timeFilter').value;
+    const sort = document.getElementById('sort').value;
+    const postLimit = document.getElementById('postLimit').value;
+    const debugMode = document.getElementById('debugMode').checked;
+
+    // Show loading spinner
+    document.getElementById('loadingSpinner').style.display = 'block';
+    document.getElementById('resultsContainer').style.display = 'none';
+
+    // Make API call
+    fetch(`/api/reddit-sentiment?subreddits=${encodeURIComponent(subreddits)}&time_filter=${timeFilter}&sort=${sort}&post_limit=${postLimit}&debug_mode=${debugMode}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                sentimentData = data;
+                displayResults(data);
+
+                // If debug mode is enabled, show reminder in console
+                if (debugMode) {
+                    console.log('Debug mode enabled - detailed output in server console');
+                }
+            } else {
+                alert('Error: ' + data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Failed to fetch sentiment data: ' + error);
+        })
+        .finally(() => {
+            document.getElementById('loadingSpinner').style.display = 'none';
+        });
+}
+
+function displayResults(data) {
+    // Show results container
+    document.getElementById('resultsContainer').style.display = 'block';
+
+    // Update summary stats
+    document.getElementById('totalPosts').textContent = data.total_posts.toLocaleString();
+    document.getElementById('tickersFound').textContent = data.tickers_found;
+
+    if (data.top_10_tickers.length > 0) {
+        const topTicker = data.top_10_tickers[0];
+        document.getElementById('topSentiment').textContent = topTicker.ticker;
+    }
+
+    // Count buy signals
+    const buySignals = data.results.filter(r => r.avg_sentiment > 0.3).length;
+    document.getElementById('buySignals').textContent = buySignals;
+
+    // Update top tickers table
+    updateTopTickersTable(data.top_10_tickers);
+
+    // Update sentiment charts
+    updateSentimentCharts(data.top_10_tickers);
+
+    // Populate ticker selector
+    const tickerSelector = document.getElementById('tickerSelector');
+    tickerSelector.innerHTML = '<option value="">-- Select Ticker --</option>';
+    data.top_10_tickers.forEach(ticker => {
+        const option = document.createElement('option');
+        option.value = ticker.ticker;
+        option.textContent = `${ticker.ticker} (${ticker.mentions} mentions)`;
+        tickerSelector.appendChild(option);
+    });
+
+    // Update signals table (using simple heuristic)
+    updateSignalsTable(data.results);
+}
+
+function updateTopTickersTable(tickers) {
+    displayedTickers = tickers;
+    renderTickersTable();
+}
+
+function renderTickersTable() {
+    const tbody = document.getElementById('topTickersBody');
+    tbody.innerHTML = '';
+
+    displayedTickers.forEach((ticker, index) => {
+        const row = document.createElement('tr');
+
+        const sentimentClass = ticker.avg_sentiment >= 0.05 ? 'text-success' :
+                              ticker.avg_sentiment <= -0.05 ? 'text-danger' : 'text-warning';
+
+        const signal = ticker.avg_sentiment > 0.3 ? '🟢 BUY' :
+                      ticker.avg_sentiment > 0.1 ? '🟡 HOLD' : '🔴 AVOID';
+
+        row.innerHTML = `
+            <td><strong>#${index + 1}</strong></td>
+            <td><strong><a href="#" class="ticker-link" data-ticker="${ticker.ticker}" style="text-decoration: none; color: inherit;">${ticker.ticker}</a></strong></td>
+            <td>${ticker.mentions}</td>
+            <td class="${sentimentClass}"><strong>${ticker.avg_sentiment.toFixed(3)}</strong></td>
+            <td><span class="badge bg-secondary">${ticker.sentiment_category}</span></td>
+            <td>${signal}</td>
+            <td>${ticker.sentiment_strength.toFixed(2)}</td>
+        `;
+
+        // Make the entire row clickable
+        row.style.cursor = 'pointer';
+        row.addEventListener('click', function(e) {
+            if (!e.target.classList.contains('ticker-link')) {
+                selectTicker(ticker.ticker);
+            }
+        });
+
+        tbody.appendChild(row);
+    });
+
+    // Add click handlers for ticker links
+    document.querySelectorAll('.ticker-link').forEach(link => {
+        link.addEventListener('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            selectTicker(this.dataset.ticker);
+        });
+    });
+}
+
+function sortTable(column) {
+    // Toggle sort direction if clicking same column
+    if (currentSort.column === column) {
+        currentSort.ascending = !currentSort.ascending;
+    } else {
+        currentSort.column = column;
+        currentSort.ascending = false;  // Default to descending for new column
+    }
+
+    // Sort the displayed tickers
+    displayedTickers.sort((a, b) => {
+        let aVal, bVal;
+
+        switch(column) {
+            case 'ticker':
+                aVal = a.ticker;
+                bVal = b.ticker;
+                break;
+            case 'mentions':
+                aVal = a.mentions;
+                bVal = b.mentions;
+                break;
+            case 'sentiment':
+                aVal = a.avg_sentiment;
+                bVal = b.avg_sentiment;
+                break;
+            case 'category':
+                aVal = a.sentiment_category;
+                bVal = b.sentiment_category;
+                break;
+            case 'signal':
+                aVal = a.avg_sentiment > 0.3 ? 2 : a.avg_sentiment > 0.1 ? 1 : 0;
+                bVal = b.avg_sentiment > 0.3 ? 2 : b.avg_sentiment > 0.1 ? 1 : 0;
+                break;
+            case 'strength':
+                aVal = a.sentiment_strength;
+                bVal = b.sentiment_strength;
+                break;
+            default:
+                return 0;
+        }
+
+        // Handle string vs number comparison
+        if (typeof aVal === 'string') {
+            if (currentSort.ascending) {
+                return aVal.localeCompare(bVal);
+            } else {
+                return bVal.localeCompare(aVal);
+            }
+        } else {
+            if (currentSort.ascending) {
+                return aVal - bVal;
+            } else {
+                return bVal - aVal;
+            }
+        }
+    });
+
+    // Re-render the table
+    renderTickersTable();
+}
+
+function updateSentimentCharts(tickers) {
+    // Sentiment Pie Chart
+    const sentimentCategories = {};
+    tickers.forEach(ticker => {
+        const category = ticker.sentiment_category;
+        sentimentCategories[category] = (sentimentCategories[category] || 0) + 1;
+    });
+
+    const pieCtx = document.getElementById('sentimentPieChart').getContext('2d');
+    if (sentimentPieChart) {
+        sentimentPieChart.destroy();
+    }
+
+    sentimentPieChart = new Chart(pieCtx, {
+        type: 'doughnut',
+        data: {
+            labels: Object.keys(sentimentCategories),
+            datasets: [{
+                data: Object.values(sentimentCategories),
+                backgroundColor: [
+                    '#27ae60', '#2ecc71', '#a8e6cf',
+                    '#95a5a6',
+                    '#ffd3b6', '#e74c3c', '#c0392b'
+                ]
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                legend: {
+                    position: 'bottom'
+                }
+            }
+        }
+    });
+
+    // Sentiment vs Mentions Scatter Plot
+    const scatterCtx = document.getElementById('sentimentScatterChart').getContext('2d');
+    if (sentimentScatterChart) {
+        sentimentScatterChart.destroy();
+    }
+
+    const scatterData = tickers.map(ticker => ({
+        x: ticker.mentions,
+        y: ticker.avg_sentiment,
+        label: ticker.ticker
+    }));
+
+    sentimentScatterChart = new Chart(scatterCtx, {
+        type: 'scatter',
+        data: {
+            datasets: [{
+                label: 'Tickers',
+                data: scatterData,
+                backgroundColor: scatterData.map(d =>
+                    d.y >= 0.3 ? 'rgba(39, 174, 96, 0.6)' :
+                    d.y >= 0 ? 'rgba(241, 196, 15, 0.6)' :
+                    'rgba(231, 76, 60, 0.6)'
+                ),
+                borderColor: scatterData.map(d =>
+                    d.y >= 0.3 ? 'rgba(39, 174, 96, 1)' :
+                    d.y >= 0 ? 'rgba(241, 196, 15, 1)' :
+                    'rgba(231, 76, 60, 1)'
+                ),
+                pointRadius: 8,
+                pointHoverRadius: 12
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: true,
+            plugins: {
+                tooltip: {
+                    callbacks: {
+                        label: function(context) {
+                            const point = scatterData[context.dataIndex];
+                            return `${point.label}: ${point.x} mentions, sentiment ${point.y.toFixed(3)}`;
+                        }
+                    }
+                },
+                legend: {
+                    display: false
+                }
+            },
+            scales: {
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Number of Mentions'
+                    }
+                },
+                y: {
+                    title: {
+                        display: true,
+                        text: 'Sentiment Score'
+                    }
+                }
+            }
+        }
+    });
+}
+
+function selectTicker(ticker) {
+    // Update the ticker selector dropdown
+    document.getElementById('tickerSelector').value = ticker;
+
+    // Update posts and debug info
+    updateTopPosts();
+    updateDebugInfo(ticker);
+
+    // Scroll to the posts/debug section
+    document.getElementById('topPostsContainer').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function updateTopPosts() {
+    const selectedTicker = document.getElementById('tickerSelector').value;
+    const container = document.getElementById('topPostsContainer');
+
+    if (!selectedTicker || !sentimentData) {
+        container.innerHTML = '<p class="text-muted">Click a ticker or select one to view top posts</p>';
+        return;
+    }
+
+    const tickerData = sentimentData.results.find(r => r.ticker === selectedTicker);
+    if (!tickerData || !tickerData.top_posts || tickerData.top_posts.length === 0) {
+        container.innerHTML = '<p class="text-muted">No posts found for this ticker</p>';
+        return;
+    }
+
+    let html = '<div class="list-group">';
+    tickerData.top_posts.forEach(post => {
+        const sentimentBadge = post.sentiment >= 0.05 ? 'bg-success' :
+                               post.sentiment <= -0.05 ? 'bg-danger' : 'bg-warning';
+
+        html += `
+            <a href="${post.url}" target="_blank" class="list-group-item list-group-item-action">
+                <div class="d-flex w-100 justify-content-between">
+                    <h6 class="mb-1">${post.title}</h6>
+                    <small>
+                        <span class="badge ${sentimentBadge}">Sentiment: ${post.sentiment.toFixed(3)}</span>
+                    </small>
+                </div>
+                <div class="d-flex w-100 justify-content-between">
+                    <small class="text-muted">r/${post.subreddit} • ${post.created}</small>
+                    <small><i class="fas fa-arrow-up"></i> ${post.score}</small>
+                </div>
+            </a>
+        `;
+    });
+    html += '</div>';
+
+    container.innerHTML = html;
+}
+
+function updateDebugInfo(ticker) {
+    const container = document.getElementById('debugContainer');
+    const tickerNameSpan = document.getElementById('debugTickerName');
+
+    if (!ticker || !sentimentData) {
+        container.innerHTML = '<p class="text-muted">Click a ticker to view sentiment analysis debug information</p>';
+        tickerNameSpan.textContent = '';
+        return;
+    }
+
+    tickerNameSpan.textContent = `for ${ticker}`;
+
+    const tickerData = sentimentData.results.find(r => r.ticker === ticker);
+    if (!tickerData || !tickerData.top_posts || tickerData.top_posts.length === 0) {
+        container.innerHTML = '<p class="text-muted">No debug information available for this ticker</p>';
+        return;
+    }
+
+    // Filter posts with debug info
+    const postsWithDebug = tickerData.top_posts.filter(post => post.debug);
+
+    if (postsWithDebug.length === 0) {
+        container.innerHTML = '<div class="alert alert-info">No debug information available. Enable Debug Mode and run analysis again to see detailed sentiment breakdown.</div>';
+        return;
+    }
+
+    let html = '';
+    postsWithDebug.forEach((post, idx) => {
+        const debug = post.debug;
+
+        html += `
+            <div class="card mb-3">
+                <div class="card-header" style="background-color: #f8f9fa;">
+                    <strong>Post ${idx + 1}:</strong> ${post.title}
+                    <br><small class="text-muted">Score: ${post.score} | Created: ${post.created}</small>
+                </div>
+                <div class="card-body" style="font-size: 0.9em;">
+                    <h6>🎯 Ticker: ${debug.ticker}</h6>
+                    <p><strong>Contexts Found:</strong> ${debug.contexts_found}</p>
+                    <p><strong>Final Sentiment Score:</strong> <span class="badge bg-${debug.final_score >= 0.05 ? 'success' : debug.final_score <= -0.05 ? 'danger' : 'warning'}">${debug.final_score}</span></p>
+                    <p><strong>Context Multiplier:</strong> ${debug.context_multiplier}x</p>
+
+                    ${debug.positive_outcome_count > 0 ? `<p class="text-success">✅ Positive Outcomes: ${debug.positive_outcome_count}</p>` : ''}
+                    ${debug.negative_outcome_count > 0 ? `<p class="text-danger">❌ Negative Outcomes: ${debug.negative_outcome_count}</p>` : ''}
+
+                    <hr>
+                    <h6>📊 Sentiment Context Details:</h6>
+        `;
+
+        if (debug.context_details && debug.context_details.length > 0) {
+            debug.context_details.forEach((ctx, ctxIdx) => {
+                html += `
+                    <div class="mb-3 p-2" style="background-color: #f8f9fa; border-left: 3px solid #007bff;">
+                        <strong>Context ${ctxIdx + 1}:</strong>
+                        <p class="mb-1"><em>"${ctx.text_preview}"</em></p>
+                        <div class="row">
+                            <div class="col-6">
+                                <small><strong>Base Score:</strong> ${ctx.base_score}</small><br>
+                                <small><strong>Boost:</strong> ${ctx.boost > 0 ? '+' : ''}${ctx.boost}</small><br>
+                                <small><strong>Final:</strong> ${ctx.final_score}</small>
+                            </div>
+                            <div class="col-6">
+                                ${ctx.high_confidence ? `<span class="badge bg-warning">High Confidence: ${ctx.high_confidence}</span>` : ''}
+                            </div>
+                        </div>
+
+                        ${ctx.positive_words && ctx.positive_words.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-success">Positive Words:</strong>
+                                <div>${ctx.positive_words.join(', ')}</div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.negative_words && ctx.negative_words.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-danger">Negative Words:</strong>
+                                <div>${ctx.negative_words.join(', ')}</div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.positive_patterns && ctx.positive_patterns.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-success">Positive Patterns:</strong>
+                                <div><small>${ctx.positive_patterns.join(', ')}</small></div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.negative_patterns && ctx.negative_patterns.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-danger">Negative Patterns:</strong>
+                                <div><small>${ctx.negative_patterns.join(', ')}</small></div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.negations && ctx.negations.length > 0 ? `
+                            <div class="mt-2">
+                                <strong class="text-warning">Negations Detected:</strong>
+                                <div><small>${ctx.negations.join(', ')}</small></div>
+                            </div>
+                        ` : ''}
+
+                        ${ctx.emphasis && Object.keys(ctx.emphasis).length > 0 ? `
+                            <div class="mt-2">
+                                <strong>Emphasis Indicators:</strong>
+                                <div><small>${Object.entries(ctx.emphasis).map(([k,v]) => `${k}: ${v}`).join(', ')}</small></div>
+                            </div>
+                        ` : ''}
+                    </div>
+                `;
+            });
+        }
+
+        html += `
+                </div>
+            </div>
+        `;
+    });
+
+    container.innerHTML = html;
+}
+
+function updateSignalsTable(results) {
+    const tbody = document.getElementById('signalsBody');
+    tbody.innerHTML = '';
+
+    // Generate simple trading signals
+    const signals = results
+        .filter(r => Math.abs(r.avg_sentiment) > 0.1 || r.mentions > 20)
+        .slice(0, 20);
+
+    signals.forEach(ticker => {
+        const row = document.createElement('tr');
+
+        let signal, confidence, signalClass;
+        const sentiment = ticker.avg_sentiment;
+        const negativeRatio = ticker.negative_mentions / ticker.mentions;
+
+        if (sentiment > 0.3 && ticker.avg_post_score > 20 && negativeRatio < 0.3) {
+            signal = '🟢 BUY';
+            confidence = sentiment > 0.5 ? 'HIGH' : 'MEDIUM';
+            signalClass = 'table-success';
+        } else if (sentiment > 0.1) {
+            signal = '🟡 HOLD';
+            confidence = 'LOW';
+            signalClass = 'table-warning';
+        } else {
+            signal = '🔴 SELL/AVOID';
+            confidence = sentiment < -0.3 ? 'HIGH' : 'MEDIUM';
+            signalClass = 'table-danger';
+        }
+
+        const reasons = [];
+        if (sentiment > 0.3) reasons.push('Bullish sentiment');
+        if (ticker.mentions > 50) reasons.push(`High volume (${ticker.mentions})`);
+        if (ticker.avg_post_score > 100) reasons.push('Quality posts');
+        if (negativeRatio < 0.1) reasons.push('Low negativity');
+        if (sentiment < 0) reasons.push('Negative sentiment');
+
+        row.className = signalClass;
+        row.innerHTML = `
+            <td><strong>${ticker.ticker}</strong></td>
+            <td>${signal}</td>
+            <td><span class="badge bg-secondary">${confidence}</span></td>
+            <td>${sentiment.toFixed(3)}</td>
+            <td>${ticker.mentions}</td>
+            <td><small>${reasons.join(', ') || 'N/A'}</small></td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+// Auto-run on page load with default settings
+window.onload = function() {
+    // Optionally auto-run analysis
+    // analyzeSentiment();
+};
+</script>
+{% endblock %}

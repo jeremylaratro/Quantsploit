@@ -24,7 +24,9 @@ app.config['TEMPLATES_AUTO_RELOAD'] = True
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
 
 # Path to backtest results
-RESULTS_DIR = Path(__file__).parent.parent / 'backtest_results'
+RESULTS_DIR = Path(__file__).resolve().parent.parent / 'backtest_results'
+print(f"[STARTUP] RESULTS_DIR set to: {RESULTS_DIR}")
+print(f"[STARTUP] Directory exists: {RESULTS_DIR.exists()}")
 
 
 def convert_numpy_types(obj):
@@ -73,9 +75,22 @@ class DashboardDataLoader:
             if timestamp in seen_timestamps:
                 continue
 
-            # Parse timestamp
+            # Parse timestamp (handle both YYYYmmdd_HHMMSS and YYYYmmdd_HHMMSS_counter formats)
             try:
-                dt = datetime.strptime(timestamp, '%Y%m%d_%H%M%S')
+                # Split timestamp parts (e.g., ['20231115', '101530'] or ['20231115', '101530', '1'])
+                timestamp_parts = timestamp.split('_')
+                if len(timestamp_parts) >= 2:
+                    # Extract base timestamp (YYYYmmdd_HHMMSS)
+                    base_timestamp = '_'.join(timestamp_parts[:2])  # YYYYmmdd_HHMMSS
+                    dt = datetime.strptime(base_timestamp, '%Y%m%d_%H%M%S')
+
+                    # If there's a counter suffix, append it to the display
+                    if len(timestamp_parts) > 2:
+                        display_time = f"{dt.strftime('%Y-%m-%d %H:%M:%S')} (#{timestamp_parts[2]})"
+                    else:
+                        display_time = dt.strftime('%Y-%m-%d %H:%M:%S')
+                else:
+                    continue
 
                 # Check if JSON summary exists
                 json_file = self.results_dir / f'summary_{timestamp}.json'
@@ -83,14 +98,14 @@ class DashboardDataLoader:
 
                 runs.append({
                     'timestamp': timestamp,
-                    'datetime': dt.strftime('%Y-%m-%d %H:%M:%S'),
+                    'datetime': display_time,
                     'has_json': has_json,
                     'summary_file': str(json_file) if has_json else None,
                     'csv_file': str(csv_file),
                     'report_file': str(self.results_dir / f'report_{timestamp}.md')
                 })
                 seen_timestamps.add(timestamp)
-            except ValueError:
+            except (ValueError, IndexError):
                 continue
 
         return runs
@@ -657,11 +672,13 @@ def debug_runs():
     runs = data_loader.get_available_runs()
     return f"<h1>Found {len(runs)} runs:</h1><pre>{json.dumps(runs, indent=2)}</pre>"
 
-@app.route('/docs')  # or whatever route you want
+@app.route('/docs')
 def docs():
-    with open('tickers.md', 'r') as f:
+    """Display the ticker reference documentation"""
+    tickers_file = Path(__file__).parent / 'tickers.md'
+    with open(tickers_file, 'r') as f:
         md_content = f.read()
-    html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code', 'codehilite'])
+    html_content = markdown.markdown(md_content, extensions=['tables', 'fenced_code'])
     return render_template('docs.html', content=html_content)
 
 @app.route('/api/runs')
@@ -883,11 +900,14 @@ def api_sectors():
     return jsonify({'sectors': get_all_sectors()})
 
 
-@app.route('/api/sector-tickers/<sector>')
+@app.route('/api/sector-tickers/<path:sector>')
 def api_sector_tickers(sector):
     """API: Get tickers in a specific sector"""
-    tickers = get_sector_tickers(sector)
-    return jsonify({'sector': sector, 'tickers': tickers, 'count': len(tickers)})
+    from urllib.parse import unquote
+    # Explicitly URL-decode the sector name to handle special characters
+    sector_decoded = unquote(sector)
+    tickers = get_sector_tickers(sector_decoded)
+    return jsonify({'sector': sector_decoded, 'tickers': tickers, 'count': len(tickers)})
 
 
 @app.route('/api/strategies/available')
@@ -914,7 +934,9 @@ def api_strategies_available():
 def backtest_launcher():
     """Backtest Launcher Page"""
     universes = get_all_universes()
-    sectors = get_all_sectors()
+    # Return sectors as a dict with display name as key and sector name as value
+    sectors_list = get_all_sectors()
+    sectors = {sector: sector for sector in sectors_list}
     return render_template('backtest_launcher.html',
                          universes=universes,
                          sectors=sectors)
@@ -942,14 +964,6 @@ def api_launch_backtest():
     def run_backtest():
         """Run backtest in background thread"""
         try:
-            # Store job status
-            backtest_jobs[job_id] = {
-                'status': 'running',
-                'progress': 0,
-                'log': 'Starting backtest...\n',
-                'start_time': datetime.now().isoformat()
-            }
-
             # Build comprehensive command
             from pathlib import Path
             import sys
@@ -965,11 +979,21 @@ def api_launch_backtest():
             symbols = data['tickers']
             strategies = data.get('strategies', [])  # Get selected strategies
             period_config = data.get('period_config', {})
+            initial_capital = data.get('initial_capital', 1000)  # Default to $1000
+
+            # Log the received initial capital
+            backtest_jobs[job_id] = {
+                'status': 'running',
+                'progress': 0,
+                'log': f'Starting backtest with initial capital: ${initial_capital:,.2f}\n',
+                'start_time': datetime.now().isoformat()
+            }
 
             # Prepare keyword arguments (only parameters that run_comprehensive_analysis accepts)
             kwargs = {
                 'symbols': symbols,
-                'output_dir': str(RESULTS_DIR)
+                'output_dir': str(RESULTS_DIR),
+                'initial_capital': initial_capital
             }
 
             # Add strategies filter if specified
@@ -991,8 +1015,7 @@ def api_launch_backtest():
                 if 'years_back' in period_config:
                     kwargs['num_periods'] = period_config.get('years_back', 2)
 
-            # Note: initial_capital is hardcoded to $100k in run_comprehensive_analysis
-            # commission and quick_mode are not supported by the function
+            # Note: commission and quick_mode are not yet supported by the comprehensive backtest function
 
             backtest_jobs[job_id]['log'] += f'Testing {len(symbols)} symbols...\n'
             backtest_jobs[job_id]['progress'] = 10
@@ -1028,6 +1051,78 @@ def api_backtest_status(job_id):
 # ============================================================================
 # STOCK ANALYSIS ROUTES (Granular Stock-Level Analysis)
 # ============================================================================
+@app.route('/reddit-sentiment')
+def reddit_sentiment():
+    """Reddit Sentiment Analysis Dashboard"""
+    return render_template('reddit_sentiment.html')
+
+
+@app.route('/api/reddit-sentiment')
+def api_reddit_sentiment():
+    """API: Analyze Reddit sentiment for stock tickers"""
+    import sys
+    from pathlib import Path
+
+    # Add quantsploit to path
+    quantsploit_path = Path(__file__).parent.parent
+    sys.path.insert(0, str(quantsploit_path))
+
+    try:
+        from quantsploit.core.framework import Framework
+        from quantsploit.modules.analysis.reddit_sentiment import RedditSentiment
+
+        # Get parameters from query string
+        subreddits = request.args.get('subreddits', 'wallstreetbets,stocks,investing,StockMarket,options')
+        time_filter = request.args.get('time_filter', 'day')
+        post_limit = request.args.get('post_limit', '100', type=int)
+        min_mentions = request.args.get('min_mentions', '3', type=int)
+        sort = request.args.get('sort', 'top')
+        debug_mode = request.args.get('debug_mode', 'false').lower() == 'true'
+
+        # Initialize framework and module
+        framework = Framework()
+        sentiment_module = RedditSentiment(framework)
+
+        # Set options
+        sentiment_module.set_option('SUBREDDITS', subreddits)
+        sentiment_module.set_option('TIME_FILTER', time_filter)
+        sentiment_module.set_option('POST_LIMIT', post_limit)
+        sentiment_module.set_option('MIN_MENTIONS', min_mentions)
+        sentiment_module.set_option('SORT', sort)
+        sentiment_module.set_option('DEBUG_MODE', debug_mode)
+
+        # Force scrape mode for the dashboard by default to avoid API credential requirements
+        sentiment_module.set_option('ACCESS_MODE', 'scrape')
+        # Comment analysis is not available in scrape mode; keep explicit to avoid surprises
+        sentiment_module.set_option('ANALYZE_COMMENTS', False)
+
+        # Run analysis
+        results = sentiment_module.run()
+
+        return jsonify(convert_numpy_types(results))
+
+    except ImportError as e:
+        return jsonify({
+            'success': False,
+            'error': f'Reddit sentiment module not available: {str(e)}. Please install dependencies: pip install praw vaderSentiment'
+        }), 500
+    except Exception as e:
+        import traceback
+        print(f"Error in Reddit sentiment API: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({
+            'success': False,
+            'error': str(e)
+        }), 500
+
+
+@app.route('/candlestick/<timestamp>/<strategy_name>/<symbol>')
+def candlestick_view(timestamp, strategy_name, symbol):
+    """Candlestick chart view for a specific strategy and symbol"""
+    return render_template('candlestick.html',
+                         timestamp=timestamp,
+                         strategy_name=strategy_name,
+                         symbol=symbol)
 
 @app.route('/stocks/<timestamp>')
 def stocks_page(timestamp):

@@ -99,8 +99,8 @@
                     <div id="sector-section" style="display: none;">
                         <label class="form-label">Select Sectors (multi-select)</label>
                         <select class="form-select" id="sector-select" multiple size="6" onchange="updateTickerPreview()">
-                            {% for sector in sectors %}
-                            <option value="{{ sector }}">{{ sector }}</option>
+                            {% for display, value in sectors.items() %}
+                            <option value="{{ value }}">{{ display }}</option>
                             {% endfor %}
                         </select>
                         <small class="text-muted">Hold Ctrl/Cmd to select multiple</small>
@@ -234,7 +234,7 @@
                         <label class="form-label">Initial Capital</label>
                         <div class="input-group">
                             <span class="input-group-text">$</span>
-                            <input type="number" class="form-control" id="initial-capital" value="100000" step="1000">
+                            <input type="number" class="form-control" id="initial-capital" value="1000" step="100">
                         </div>
                     </div>
                     <div class="mb-3">
@@ -369,7 +369,9 @@ async function updateTickerPreview() {
     } else if (currentTickerMode === 'sector') {
         const sectors = Array.from(document.getElementById('sector-select').selectedOptions).map(o => o.value);
         for (const sector of sectors) {
-            const response = await fetch(`/api/sector-tickers/${sector}`);
+            // Explicitly encode the sector name to handle special characters
+            const encodedSector = encodeURIComponent(sector);
+            const response = await fetch(`/api/sector-tickers/${encodedSector}`);
             const data = await response.json();
             tickers = tickers.concat(data.tickers);
         }

@@ -21,7 +21,7 @@ from quantsploit.modules.strategies.sma_crossover import SMACrossover
 from quantsploit.modules.strategies.mean_reversion import MeanReversion
 from quantsploit.modules.strategies.momentum_signals import MomentumSignals
 from quantsploit.modules.strategies.multifactor_scoring import MultiFactorScoring
-from quantsploit.utils.ta_compat import rsi, atr, adx, bbands
+from quantsploit.utils.ta_compat import rsi, atr, adx, bbands, macd
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -612,6 +612,144 @@ class StrategyAdapter:
             elif current_rsi > 70 and current_position is not None:
                 backtester.exit_position(symbol, date, row['Close'])
 
+    def ml_swing_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                         row: pd.Series, symbol: str, data: pd.DataFrame,
+                         confidence_threshold: float = 0.55, holding_period: int = 5):
+        """
+        ML Swing Trading Strategy Adapter (Simplified)
+
+        This is a rule-based approximation of the ML strategy using the same
+        technical indicators that would be fed into the ML model. Instead of
+        training a model, it uses a composite scoring system.
+        """
+        history = data.loc[:date]
+
+        if len(history) < 50:
+            return
+
+        # Calculate features similar to ML model
+        close = history['Close']
+
+        # Momentum features
+        roc_5 = ((close.iloc[-1] / close.iloc[-6]) - 1) if len(close) >= 6 else 0
+        roc_10 = ((close.iloc[-1] / close.iloc[-11]) - 1) if len(close) >= 11 else 0
+
+        # Volatility
+        volatility = close.pct_change().rolling(10).std().iloc[-1]
+        if pd.isna(volatility):
+            volatility = 0.02  # Default moderate volatility
+
+        # RSI
+        rsi_val = rsi(close, 14)
+        current_rsi = rsi_val.iloc[-1] if len(rsi_val) > 0 and not pd.isna(rsi_val.iloc[-1]) else 50
+
+        # MACD
+        macd_data = macd(close)
+        if len(macd_data) > 0:
+            macd_hist = macd_data['MACDh_12_26_9'].iloc[-1]
+            macd_signal = 1 if not pd.isna(macd_hist) and macd_hist > 0 else -1
+        else:
+            macd_signal = 0
+
+        # Moving average trends
+        sma_20 = close.rolling(20).mean().iloc[-1] if len(close) >= 20 else close.iloc[-1]
+        sma_50 = close.rolling(50).mean().iloc[-1] if len(close) >= 50 else close.iloc[-1]
+        ma_trend = 1 if sma_20 > sma_50 else -1
+
+        # Calculate composite "confidence" score (0-1 scale)
+        # Bullish signals add to score, bearish signals subtract
+        score = 0.5  # Neutral starting point
+
+        # RSI contribution (stronger signal)
+        if current_rsi < 45:
+            score += 0.25  # Oversold = bullish
+        elif current_rsi > 55:
+            score -= 0.25  # Overbought = bearish
+
+        # Momentum contribution
+        if roc_5 > 0.01:
+            score += 0.15
+        elif roc_5 < -0.01:
+            score -= 0.15
+
+        # MACD contribution
+        score += macd_signal * 0.1
+
+        # MA trend contribution (stronger signal)
+        score += ma_trend * 0.15
+
+        # Volatility penalty (high vol reduces confidence)
+        if volatility > 0.03:
+            score -= 0.1
+
+        # Clip to 0-1 range
+        score = np.clip(score, 0, 1)
+
+        current_position = backtester.positions.get(symbol)
+
+        # Check exit conditions first (if we have a position)
+        if current_position is not None:
+            days_held = (date - current_position.entry_date).days
+
+            # Exit if: low confidence OR holding period exceeded OR strong bearish signal
+            if score < 0.45 or days_held >= holding_period or score < 0.35:
+                backtester.exit_position(symbol, date, row['Close'])
+                return  # Don't try to re-enter on same bar
+
+        # Entry logic: high confidence for upward move (only if no position)
+        if current_position is None and score > confidence_threshold:
+            backtester.enter_long(symbol, date, row['Close'])
+
+    def pairs_trading_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                              row: pd.Series, symbol: str, data: pd.DataFrame,
+                              lookback: int = 20, entry_threshold: float = 2.0,
+                              exit_threshold: float = 0.5):
+        """
+        Pairs Trading Strategy Adapter (Simplified Single-Symbol Version)
+
+        Note: Traditional pairs trading requires two symbols. This is a simplified
+        version that trades mean reversion of a single symbol against its own moving average,
+        using similar z-score logic as pairs trading.
+        """
+        history = data.loc[:date]
+
+        if len(history) < lookback + 20:
+            return
+
+        # Calculate "synthetic pair" using price vs moving average
+        close = history['Close']
+        ma = close.rolling(lookback).mean()
+
+        # Calculate spread (difference from MA)
+        spread = close - ma
+
+        # Calculate z-score of spread
+        spread_recent = spread.iloc[-lookback:]
+        spread_mean = spread_recent.mean()
+        spread_std = spread_recent.std()
+
+        if pd.isna(spread_std) or spread_std == 0:
+            return
+
+        z_score = (spread.iloc[-1] - spread_mean) / spread_std
+
+        current_position = backtester.positions.get(symbol)
+
+        # Entry: Price significantly below MA (oversold)
+        if z_score < -entry_threshold:
+            if current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+
+        # Exit: Z-score normalizes
+        elif abs(z_score) < exit_threshold:
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+        # Stop loss: Spread diverging further (z-score > 3)
+        elif abs(z_score) > 3.0:
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
 
 class ComprehensiveBacktester:
     """
@@ -619,7 +757,7 @@ class ComprehensiveBacktester:
     and time periods
     """
 
-    def __init__(self, symbols: List[str], initial_capital: float = 100000,
+    def __init__(self, symbols: List[str], initial_capital: float = 1000,
                  commission_pct: float = 0.001, slippage_pct: float = 0.001,
                  strategy_keys: Optional[List[str]] = None):
         """
@@ -695,6 +833,16 @@ class ComprehensiveBacktester:
                 'name': 'HMM Regime (Long-term)',
                 'function': self.adapter.hmm_regime_strategy,
                 'params': {'lookback': 50}
+            },
+            'ml_swing_trading': {
+                'name': 'ML Swing Trading',
+                'function': self.adapter.ml_swing_strategy,
+                'params': {'confidence_threshold': 0.55, 'holding_period': 5}
+            },
+            'pairs_trading': {
+                'name': 'Pairs Trading',
+                'function': self.adapter.pairs_trading_strategy,
+                'params': {'lookback': 20, 'entry_threshold': 2.0, 'exit_threshold': 0.5}
             }
         }
 
@@ -1142,7 +1290,15 @@ class ComprehensiveBacktester:
         import os
         os.makedirs(output_dir, exist_ok=True)
 
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        # Generate timestamp with collision avoidance
+        base_timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = base_timestamp
+        counter = 1
+
+        # Check if file exists, if so append counter to avoid overwriting
+        while os.path.exists(f'{output_dir}/detailed_results_{timestamp}.csv'):
+            timestamp = f'{base_timestamp}_{counter}'
+            counter += 1
 
         try:
             # Save detailed results
@@ -1240,6 +1396,7 @@ class ComprehensiveBacktester:
 
 def run_comprehensive_analysis(symbols: List[str],
                               output_dir: str = './backtest_results',
+                              initial_capital: float = 1000,
                               tspan: Optional[str] = None,
                               bspan: Optional[str] = None,
                               num_periods: Optional[int] = None,
@@ -1251,6 +1408,7 @@ def run_comprehensive_analysis(symbols: List[str],
     Args:
         symbols: List of stock symbols to analyze
         output_dir: Directory to save results
+        initial_capital: Starting capital for each backtest (default: 1000)
         tspan: Total time span (e.g., '2y', '18m')
         bspan: Backtest span for each period (e.g., '6m', '180d')
         num_periods: Number of separate backtest periods to run
@@ -1260,7 +1418,7 @@ def run_comprehensive_analysis(symbols: List[str],
     # Create backtester
     backtester = ComprehensiveBacktester(
         symbols=symbols,
-        initial_capital=100000,
+        initial_capital=initial_capital,
         commission_pct=0.001,
         slippage_pct=0.001,
         strategy_keys=strategy_keys

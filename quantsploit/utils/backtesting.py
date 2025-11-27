@@ -103,7 +103,7 @@ class Position:
 @dataclass
 class BacktestConfig:
     """Configuration for backtesting"""
-    initial_capital: float = 100000.0
+    initial_capital: float = 1000.0
     commission_pct: float = 0.001  # 0.1% per trade
     commission_min: float = 1.0  # Minimum $1 commission
     slippage_pct: float = 0.001  # 0.1% slippage

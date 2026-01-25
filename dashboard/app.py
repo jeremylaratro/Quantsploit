@@ -1048,6 +1048,9 @@ def api_backtest_status(job_id):
         return jsonify({'status': 'not_found'}), 404
 
 
+# ============================================================================
+# STOCK ANALYSIS ROUTES (Granular Stock-Level Analysis)
+# ============================================================================
 @app.route('/reddit-sentiment')
 def reddit_sentiment():
     """Reddit Sentiment Analysis Dashboard"""
@@ -1121,92 +1124,325 @@ def candlestick_view(timestamp, strategy_name, symbol):
                          strategy_name=strategy_name,
                          symbol=symbol)
 
+@app.route('/stocks/<timestamp>')
+def stocks_page(timestamp):
+    """Page: Stock analysis overview"""
+    return render_template('stocks_analysis.html', timestamp=timestamp)
 
-@app.route('/api/candlestick/<timestamp>/<strategy_name>/<symbol>')
-def api_candlestick(timestamp, strategy_name, symbol):
-    """API: Get candlestick data with trade signals overlaid"""
-    from quantsploit.utils.data_fetcher import DataFetcher
 
+@app.route('/api/stocks/<timestamp>')
+def api_stocks(timestamp):
+    """API: Get all stocks with their performance metrics"""
     try:
-        # Load trade details
-        trades_file = RESULTS_DIR / f'trades_{timestamp}.csv'
-        if not trades_file.exists():
-            return jsonify({'error': 'Trade data not found. Please run a new backtest to generate trade details.'}), 404
+        import sys
+        from pathlib import Path
+        sys.path.append(str(Path(__file__).parent.parent))
+        from quantsploit.modules.analysis.stock_analyzer import StockAnalyzer
 
-        trades_df = pd.read_csv(trades_file)
+        csv_path = RESULTS_DIR / f'detailed_results_{timestamp}.csv'
+        if not csv_path.exists():
+            return jsonify({'error': 'Results not found'}), 404
 
-        # Filter trades for this strategy and symbol
-        strategy_trades = trades_df[
-            (trades_df['strategy_name'] == strategy_name) &
-            (trades_df['symbol'] == symbol)
-        ]
+        analyzer = StockAnalyzer.from_csv(str(csv_path))
 
-        if len(strategy_trades) == 0:
-            return jsonify({'error': 'No trades found for this strategy/symbol combination'}), 404
+        # Get all unique symbols
+        symbols = analyzer.df['symbol'].unique().tolist()
 
-        # Get the date range from trades
-        strategy_trades['entry_date'] = pd.to_datetime(strategy_trades['entry_date'])
-        strategy_trades['exit_date'] = pd.to_datetime(strategy_trades['exit_date'])
+        # Analyze each stock
+        stocks_data = []
+        for symbol in symbols:
+            analysis = analyzer.analyze_stock(symbol, min_trades=3)
+            if analysis:
+                stocks_data.append({
+                    'symbol': symbol,
+                    'avg_return': analysis.overall_avg_return,
+                    'median_return': analysis.overall_median_return,
+                    'best_return': analysis.overall_best_return,
+                    'worst_return': analysis.overall_worst_return,
+                    'best_strategy': analysis.best_strategy,
+                    'best_period': analysis.best_period,
+                    'best_combination_return': analysis.best_combination_return,
+                    'best_combination_sharpe': analysis.best_combination_sharpe,
+                    'most_consistent_strategy': analysis.most_consistent_strategy,
+                    'avg_sharpe': analysis.avg_sharpe,
+                    'avg_volatility': analysis.avg_volatility,
+                    'avg_max_drawdown': analysis.avg_max_drawdown,
+                    'total_backtests': analysis.total_backtests,
+                    'total_strategies': analysis.total_strategies,
+                    'total_periods': analysis.total_periods,
+                    'reliability': analysis.reliability_rating,
+                    'quality_score': analysis.data_quality_score
+                })
 
-        start_date = strategy_trades['entry_date'].min()
-        end_date = strategy_trades['exit_date'].max()
+        # Sort by average return
+        stocks_data.sort(key=lambda x: x['avg_return'], reverse=True)
 
-        # Add buffer around dates
-        from datetime import timedelta
-        start_date = start_date - timedelta(days=30)
-        end_date = end_date + timedelta(days=30)
+        return jsonify(convert_numpy_types({'stocks': stocks_data, 'count': len(stocks_data)}))
 
-        # Fetch OHLC data
-        data_fetcher = DataFetcher()
-        ohlc_data = data_fetcher.get_stock_data(
-            symbol=symbol,
-            period='3y',  # Get enough data
-            interval='1d'
-        )
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
 
-        if ohlc_data is None or len(ohlc_data) == 0:
-            return jsonify({'error': 'Failed to fetch stock data'}), 500
 
-        # Filter to date range
-        ohlc_data = ohlc_data.loc[start_date.strftime('%Y-%m-%d'):end_date.strftime('%Y-%m-%d')]
+@app.route('/stock/<timestamp>/<symbol>')
+def stock_detail_page(timestamp, symbol):
+    """Page: Individual stock detail"""
+    return render_template('stock_detail.html', timestamp=timestamp, symbol=symbol)
 
-        # Prepare OHLC data for Plotly
-        ohlc_data_dict = {
-            'dates': ohlc_data.index.strftime('%Y-%m-%d').tolist(),
-            'open': ohlc_data['Open'].tolist(),
-            'high': ohlc_data['High'].tolist(),
-            'low': ohlc_data['Low'].tolist(),
-            'close': ohlc_data['Close'].tolist(),
-            'volume': ohlc_data['Volume'].tolist() if 'Volume' in ohlc_data.columns else []
-        }
 
-        # Prepare trade data
-        trades_list = []
-        for _, trade in strategy_trades.iterrows():
-            trades_list.append({
-                'entry_date': trade['entry_date'].strftime('%Y-%m-%d'),
-                'exit_date': trade['exit_date'].strftime('%Y-%m-%d'),
-                'entry_price': float(trade['entry_price']),
-                'exit_price': float(trade['exit_price']),
-                'shares': int(trade['shares']),
-                'side': trade['side'],
-                'pnl': float(trade['pnl']),
-                'pnl_pct': float(trade['pnl_pct']),
-                'mae': float(trade['mae']),
-                'mfe': float(trade['mfe'])
+@app.route('/api/stock/<timestamp>/<symbol>')
+def api_stock_detail(timestamp, symbol):
+    """API: Get detailed analysis for a single stock"""
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.append(str(Path(__file__).parent.parent))
+        from quantsploit.modules.analysis.stock_analyzer import StockAnalyzer
+
+        csv_path = RESULTS_DIR / f'detailed_results_{timestamp}.csv'
+        if not csv_path.exists():
+            return jsonify({'error': 'Results not found'}), 404
+
+        analyzer = StockAnalyzer.from_csv(str(csv_path))
+        analysis = analyzer.analyze_stock(symbol.upper(), min_trades=3)
+
+        if not analysis:
+            return jsonify({'error': f'No data for {symbol}'}), 404
+
+        # Convert strategy rankings to dict
+        strategy_rankings = []
+        for strat in analysis.strategy_rankings:
+            strategy_rankings.append({
+                'strategy_name': strat.strategy_name,
+                'risk_class': strat.risk_class.value,
+                'avg_return': strat.avg_return,
+                'median_return': strat.median_return,
+                'best_return': strat.best_return,
+                'worst_return': strat.worst_return,
+                'return_consistency': strat.return_consistency,
+                'avg_sharpe': strat.avg_sharpe,
+                'avg_win_rate': strat.avg_win_rate,
+                'avg_volatility': strat.avg_volatility,
+                'avg_max_drawdown': strat.avg_max_drawdown,
+                'total_periods': strat.total_periods,
+                'profitable_periods': strat.profitable_periods,
+                'success_rate': strat.success_rate,
+                'best_period': strat.best_period,
+                'best_period_return': strat.best_period_return,
+                'best_period_sharpe': strat.best_period_sharpe,
+                'ci_lower': strat.ci_lower,
+                'ci_upper': strat.ci_upper,
+                'reliability': strat.reliability
             })
 
+        # Convert period analysis
+        period_analysis = []
+        for period in analysis.period_analysis:
+            period_analysis.append({
+                'period_name': period.period_name,
+                'best_strategy': period.best_strategy,
+                'best_return': period.best_return,
+                'best_sharpe': period.best_sharpe,
+                'avg_return': period.avg_return,
+                'median_return': period.median_return,
+                'return_range': period.return_range,
+                'total_strategies': period.total_strategies,
+                'profitable_strategies': period.profitable_strategies
+            })
+
+        result = {
+            'symbol': analysis.symbol,
+            'total_backtests': analysis.total_backtests,
+            'total_strategies': analysis.total_strategies,
+            'total_periods': analysis.total_periods,
+            'overall_avg_return': analysis.overall_avg_return,
+            'overall_median_return': analysis.overall_median_return,
+            'overall_best_return': analysis.overall_best_return,
+            'overall_worst_return': analysis.overall_worst_return,
+            'best_strategy': analysis.best_strategy,
+            'best_period': analysis.best_period,
+            'best_combination_return': analysis.best_combination_return,
+            'best_combination_sharpe': analysis.best_combination_sharpe,
+            'most_consistent_strategy': analysis.most_consistent_strategy,
+            'most_consistent_cv': analysis.most_consistent_cv,
+            'avg_volatility': analysis.avg_volatility,
+            'avg_sharpe': analysis.avg_sharpe,
+            'avg_max_drawdown': analysis.avg_max_drawdown,
+            'data_quality_score': analysis.data_quality_score,
+            'reliability_rating': analysis.reliability_rating,
+            'strategy_rankings': strategy_rankings,
+            'period_analysis': period_analysis
+        }
+
+        return jsonify(convert_numpy_types(result))
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+# ============================================================================
+# ENHANCED SECTOR ANALYSIS ROUTES (Granular Sector-Level with Stock Details)
+# ============================================================================
+
+@app.route('/sectors/<timestamp>')
+def sectors_page(timestamp):
+    """Page: Sector analysis overview"""
+    return render_template('sectors_analysis.html', timestamp=timestamp)
+
+
+@app.route('/api/sectors/<timestamp>')
+def api_sectors_list(timestamp):
+    """API: Get all sectors with their performance metrics"""
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.append(str(Path(__file__).parent.parent))
+        from quantsploit.modules.analysis.sector_deep_dive import SectorAnalyzer
+
+        csv_path = RESULTS_DIR / f'detailed_results_{timestamp}.csv'
+        if not csv_path.exists():
+            return jsonify({'error': 'Results not found'}), 404
+
+        analyzer = SectorAnalyzer.from_csv(str(csv_path))
+        comparison = analyzer.compare_all_sectors(min_trades=3, min_stocks_per_sector=1)
+
+        # Build sectors list
+        sectors_data = []
+        for sector_name, sector_perf in comparison.sector_details.items():
+            sectors_data.append({
+                'sector_name': sector_name,
+                'num_stocks': sector_perf.num_stocks,
+                'num_strategies': sector_perf.num_strategies,
+                'total_tests': sector_perf.total_tests,
+                'median_return': sector_perf.stratified_stats.overall.median,
+                'mean_return': sector_perf.stratified_stats.overall.mean,
+                'std_return': sector_perf.stratified_stats.overall.std,
+                'ci_lower': sector_perf.stratified_stats.overall.ci_lower,
+                'ci_upper': sector_perf.stratified_stats.overall.ci_upper,
+                'best_stock': sector_perf.best_stock,
+                'best_stock_return': sector_perf.best_stock_return,
+                'best_strategy': sector_perf.best_strategy,
+                'best_strategy_return': sector_perf.best_strategy_return,
+                'avg_volatility': sector_perf.avg_volatility,
+                'avg_sharpe': sector_perf.avg_sharpe,
+                'avg_win_rate': sector_perf.avg_win_rate,
+                'data_quality_score': sector_perf.data_quality_score,
+                'reliability_rating': sector_perf.reliability_rating
+            })
+
+        # Sort by median return
+        sectors_data.sort(key=lambda x: x['median_return'], reverse=True)
+
         return jsonify(convert_numpy_types({
-            'ohlc': ohlc_data_dict,
-            'trades': trades_list,
-            'symbol': symbol,
-            'strategy': strategy_name
+            'sectors': sectors_data,
+            'count': len(sectors_data),
+            'best_sector': comparison.best_sector,
+            'best_sector_return': comparison.best_sector_return
         }))
 
     except Exception as e:
         import traceback
-        print(f"Error in candlestick API: {str(e)}")
-        print(traceback.format_exc())
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/sector/<timestamp>/<sector_name>')
+def sector_detail_page(timestamp, sector_name):
+    """Page: Individual sector detail with stock breakdown"""
+    return render_template('sector_detail.html', timestamp=timestamp, sector_name=sector_name)
+
+
+@app.route('/api/sector-detail/<timestamp>/<path:sector_name>')
+def api_sector_detail(timestamp, sector_name):
+    """API: Get detailed analysis for a single sector including all stocks"""
+    try:
+        import sys
+        from pathlib import Path
+        sys.path.append(str(Path(__file__).parent.parent))
+        from quantsploit.modules.analysis.sector_deep_dive import SectorAnalyzer
+
+        csv_path = RESULTS_DIR / f'detailed_results_{timestamp}.csv'
+        if not csv_path.exists():
+            return jsonify({'error': 'Results not found'}), 404
+
+        analyzer = SectorAnalyzer.from_csv(str(csv_path))
+        sector_perf = analyzer.analyze_sector(sector_name, min_trades=3, top_n_stocks=50)
+
+        if not sector_perf:
+            return jsonify({'error': f'No data for sector {sector_name}'}), 404
+
+        # Convert stratified stats
+        stratified_by_risk = {}
+        for risk_class, stats in sector_perf.stratified_stats.by_risk_class.items():
+            stratified_by_risk[risk_class.value] = {
+                'mean': stats.mean,
+                'median': stats.median,
+                'std': stats.std,
+                'mad': stats.mad,
+                'iqr': stats.iqr,
+                'q25': stats.q25,
+                'q75': stats.q75,
+                'min': stats.min,
+                'max': stats.max,
+                'count': stats.count,
+                'ci_lower': stats.ci_lower,
+                'ci_upper': stats.ci_upper
+            }
+
+        # Convert top stocks
+        top_stocks = []
+        for stock_ranking in sector_perf.top_stocks:
+            top_stocks.append({
+                'symbol': stock_ranking.symbol,
+                'rank': stock_ranking.rank,
+                'total_in_sector': stock_ranking.total_in_sector,
+                'mean_return': stock_ranking.mean_return,
+                'median_return': stock_ranking.median_return,
+                'best_strategy': stock_ranking.best_strategy,
+                'best_strategy_return': stock_ranking.best_strategy_return,
+                'consistency_score': stock_ranking.consistency_score,
+                'num_tests': stock_ranking.num_tests,
+                'reliability': stock_ranking.reliability
+            })
+
+        result = {
+            'sector_name': sector_perf.sector_name,
+            'num_stocks': sector_perf.num_stocks,
+            'num_strategies': sector_perf.num_strategies,
+            'total_tests': sector_perf.total_tests,
+            'overall_stats': {
+                'mean': sector_perf.overall_return.mean,
+                'median': sector_perf.overall_return.median,
+                'std': sector_perf.overall_return.std,
+                'mad': sector_perf.overall_return.mad,
+                'iqr': sector_perf.overall_return.iqr,
+                'min': sector_perf.overall_return.min,
+                'max': sector_perf.overall_return.max,
+                'ci_lower': sector_perf.overall_return.ci_lower,
+                'ci_upper': sector_perf.overall_return.ci_upper
+            },
+            'stratified_stats': stratified_by_risk,
+            'top_stocks': top_stocks,
+            'best_stock': sector_perf.best_stock,
+            'best_stock_return': sector_perf.best_stock_return,
+            'best_strategy': sector_perf.best_strategy,
+            'best_strategy_return': sector_perf.best_strategy_return,
+            'best_strategy_consistency': sector_perf.best_strategy_consistency,
+            'avg_volatility': sector_perf.avg_volatility,
+            'avg_sharpe': sector_perf.avg_sharpe,
+            'avg_win_rate': sector_perf.avg_win_rate,
+            'data_quality_score': sector_perf.data_quality_score,
+            'reliability_rating': sector_perf.reliability_rating
+        }
+
+        return jsonify(convert_numpy_types(result))
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
         return jsonify({'error': str(e)}), 500
 
 

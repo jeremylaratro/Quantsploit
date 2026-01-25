@@ -1,0 +1,325 @@
+{% extends "base.html" %}
+
+{% block title %}{{ sector_name }} Sector - Quantsploit{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h1>
+            <i class="fas fa-layer-group"></i> <span id="sector-title">{{ sector_name }}</span>
+        </h1>
+        <a href="/sectors/{{ timestamp }}" class="btn btn-secondary">
+            <i class="fas fa-arrow-left"></i> Back to All Sectors
+        </a>
+    </div>
+
+    <!-- Overview Stats -->
+    <div class="row mb-4">
+        <div class="col-md-3">
+            <div class="stat-card green">
+                <i class="fas fa-chart-bar metric-icon"></i>
+                <div class="stat-label">Median Return</div>
+                <div class="stat-value" id="median-return">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card blue">
+                <i class="fas fa-coins metric-icon"></i>
+                <div class="stat-label">Stocks in Sector</div>
+                <div class="stat-value" id="num-stocks">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card orange">
+                <i class="fas fa-balance-scale metric-icon"></i>
+                <div class="stat-label">Sharpe Ratio</div>
+                <div class="stat-value" id="sharpe-ratio">-</div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="stat-card">
+                <i class="fas fa-check-circle metric-icon"></i>
+                <div class="stat-label">Reliability</div>
+                <div class="stat-value" id="reliability" style="font-size: 1.5rem;">-</div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Best Performers -->
+    <div class="chart-container mb-4">
+        <h3 class="chart-title">Sector Best Performers</h3>
+        <div class="row">
+            <div class="col-md-6">
+                <table class="table">
+                    <tr>
+                        <th>Best Stock:</th>
+                        <td>
+                            <a href="#" id="best-stock-link">
+                                <strong id="best-stock">-</strong>
+                            </a>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th>Return:</th>
+                        <td><span id="best-stock-return" class="badge-return positive">-</span></td>
+                    </tr>
+                    <tr>
+                        <th>Best Strategy:</th>
+                        <td id="best-strategy">-</td>
+                    </tr>
+                    <tr>
+                        <th>Strategy Return:</th>
+                        <td><span id="best-strategy-return" class="badge-return positive">-</span></td>
+                    </tr>
+                </table>
+            </div>
+            <div class="col-md-6">
+                <table class="table">
+                    <tr>
+                        <th>Total Tests:</th>
+                        <td id="total-tests">-</td>
+                    </tr>
+                    <tr>
+                        <th>Strategies Tested:</th>
+                        <td id="num-strategies">-</td>
+                    </tr>
+                    <tr>
+                        <th>Win Rate:</th>
+                        <td id="win-rate">-</td>
+                    </tr>
+                    <tr>
+                        <th>Volatility:</th>
+                        <td id="volatility">-</td>
+                    </tr>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Stratified Statistics -->
+    <div class="chart-container mb-4">
+        <h3 class="chart-title">Stratified Statistics by Risk Class</h3>
+        <p class="text-muted"><small>Stratified analysis fixes the "large standard deviation" problem by separating conservative, moderate, and aggressive strategies.</small></p>
+
+        <div class="row" id="stratifiedStats">
+            <div class="col-12">
+                <div class="loading-spinner"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Top Stocks in Sector -->
+    <div class="chart-container mb-4">
+        <h3 class="chart-title">Top Stocks in {{ sector_name }}</h3>
+        <div class="table-responsive">
+            <table class="table table-striped table-hover">
+                <thead>
+                    <tr>
+                        <th>Rank</th>
+                        <th>Symbol</th>
+                        <th>Mean Return</th>
+                        <th>Median Return</th>
+                        <th>Best Strategy</th>
+                        <th>Best Strategy Return</th>
+                        <th>Consistency</th>
+                        <th>Tests</th>
+                        <th>Reliability</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody id="stocksTable">
+                    <tr>
+                        <td colspan="10" class="text-center">
+                            <div class="loading-spinner"></div>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Stock Performance Chart -->
+    <div class="chart-container">
+        <h3 class="chart-title">Stock Returns Comparison</h3>
+        <canvas id="stocksChart" height="100"></canvas>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    const timestamp = '{{ timestamp }}';
+    const sectorName = '{{ sector_name }}';
+
+    // Load sector detail data
+    fetch(`/api/sector-detail/${timestamp}/${encodeURIComponent(sectorName)}`)
+        .then(response => response.json())
+        .then(data => {
+            if (data.error) {
+                alert('Error loading data: ' + data.error);
+                return;
+            }
+
+            // Update sector title
+            document.getElementById('sector-title').textContent = data.sector_name;
+
+            // Update overview stats
+            document.getElementById('median-return').textContent = `${data.overall_stats.median.toFixed(2)}%`;
+            document.getElementById('num-stocks').textContent = data.num_stocks;
+            document.getElementById('sharpe-ratio').textContent = data.avg_sharpe.toFixed(2);
+            document.getElementById('reliability').textContent = data.reliability_rating;
+
+            // Update best performers
+            document.getElementById('best-stock').textContent = data.best_stock;
+            document.getElementById('best-stock-link').href = `/stock/${timestamp}/${data.best_stock}`;
+            document.getElementById('best-stock-return').textContent = `${data.best_stock_return.toFixed(2)}%`;
+            document.getElementById('best-strategy').textContent = data.best_strategy;
+            document.getElementById('best-strategy-return').textContent = `${data.best_strategy_return.toFixed(2)}%`;
+            document.getElementById('total-tests').textContent = data.total_tests;
+            document.getElementById('num-strategies').textContent = data.num_strategies;
+            document.getElementById('win-rate').textContent = `${data.avg_win_rate.toFixed(1)}%`;
+            document.getElementById('volatility').textContent = `${data.avg_volatility.toFixed(2)}%`;
+
+            // Render stratified statistics
+            renderStratifiedStats(data.stratified_stats);
+
+            // Populate stocks table
+            const stocksTable = document.getElementById('stocksTable');
+            stocksTable.innerHTML = '';
+
+            data.top_stocks.forEach((stock, index) => {
+                const row = document.createElement('tr');
+                row.style.cursor = 'pointer';
+                row.onclick = () => window.location.href = `/stock/${timestamp}/${stock.symbol}`;
+
+                const returnClass = stock.mean_return >= 0 ? 'positive' : 'negative';
+                const reliabilityClass = stock.reliability === 'High' ? 'success' : stock.reliability === 'Medium' ? 'warning' : 'secondary';
+
+                row.innerHTML = `
+                    <td><strong>#${stock.rank}</strong></td>
+                    <td><strong>${stock.symbol}</strong></td>
+                    <td><span class="badge-return ${returnClass}">${stock.mean_return.toFixed(2)}%</span></td>
+                    <td>${stock.median_return.toFixed(2)}%</td>
+                    <td><small>${stock.best_strategy}</small></td>
+                    <td class="text-success"><strong>${stock.best_strategy_return.toFixed(2)}%</strong></td>
+                    <td>${stock.consistency_score.toFixed(3)}</td>
+                    <td><span class="badge bg-info">${stock.num_tests}</span></td>
+                    <td><span class="badge bg-${reliabilityClass}">${stock.reliability}</span></td>
+                    <td><a href="/stock/${timestamp}/${stock.symbol}" class="btn btn-sm btn-primary">Details</a></td>
+                `;
+
+                stocksTable.appendChild(row);
+            });
+
+            // Create stock comparison chart
+            createStocksChart(data.top_stocks);
+        })
+        .catch(error => {
+            console.error('Error:', error);
+            alert('Error loading sector data');
+        });
+
+    function renderStratifiedStats(stratified) {
+        const container = document.getElementById('stratifiedStats');
+        container.innerHTML = '';
+
+        const riskClasses = ['conservative', 'moderate', 'aggressive'];
+        const colors = {
+            'conservative': 'blue',
+            'moderate': 'orange',
+            'aggressive': 'red'
+        };
+
+        riskClasses.forEach(riskClass => {
+            if (stratified[riskClass]) {
+                const stats = stratified[riskClass];
+                const col = document.createElement('div');
+                col.className = 'col-md-4 mb-3';
+
+                col.innerHTML = `
+                    <div class="stat-card ${colors[riskClass]}">
+                        <h5 class="text-uppercase">${riskClass} Strategies</h5>
+                        <hr style="border-color: rgba(255,255,255,0.3);">
+                        <table class="table table-sm text-white" style="margin-bottom: 0;">
+                            <tr>
+                                <td>Median:</td>
+                                <td><strong>${stats.median.toFixed(2)}%</strong></td>
+                            </tr>
+                            <tr>
+                                <td>Mean:</td>
+                                <td>${stats.mean.toFixed(2)}%</td>
+                            </tr>
+                            <tr>
+                                <td>Std Dev:</td>
+                                <td>${stats.std.toFixed(2)}%</td>
+                            </tr>
+                            <tr>
+                                <td>MAD:</td>
+                                <td>${stats.mad.toFixed(2)}%</td>
+                            </tr>
+                            <tr>
+                                <td>95% CI:</td>
+                                <td><small>[${stats.ci_lower.toFixed(2)}%, ${stats.ci_upper.toFixed(2)}%]</small></td>
+                            </tr>
+                            <tr>
+                                <td>Tests:</td>
+                                <td><strong>${stats.count}</strong></td>
+                            </tr>
+                        </table>
+                    </div>
+                `;
+
+                container.appendChild(col);
+            }
+        });
+    }
+
+    function createStocksChart(stocks) {
+        const ctx = document.getElementById('stocksChart').getContext('2d');
+
+        // Show top 15 stocks
+        const topStocks = stocks.slice(0, 15);
+
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: topStocks.map(s => s.symbol),
+                datasets: [{
+                    label: 'Mean Return (%)',
+                    data: topStocks.map(s => s.mean_return),
+                    backgroundColor: topStocks.map(s => s.mean_return >= 0 ? 'rgba(39, 174, 96, 0.7)' : 'rgba(231, 76, 60, 0.7)'),
+                    borderColor: topStocks.map(s => s.mean_return >= 0 ? 'rgba(39, 174, 96, 1)' : 'rgba(231, 76, 60, 1)'),
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        title: {
+                            display: true,
+                            text: 'Return (%)'
+                        }
+                    },
+                    x: {
+                        ticks: {
+                            maxRotation: 45,
+                            minRotation: 45
+                        }
+                    }
+                },
+                plugins: {
+                    title: {
+                        display: false
+                    },
+                    legend: {
+                        display: false
+                    }
+                }
+            }
+        });
+    }
+</script>
+{% endblock %}

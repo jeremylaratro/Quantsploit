@@ -5,9 +5,41 @@ All notable changes to Quantsploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-01-23
+## [0.2.0] - 2026-01-28
 
-### Added - Risk Parity Enhancements
+### Added - Advanced Strategy Implementations
+
+Three new strategy modules implementing Quantsploit Assessment Report recommendations:
+
+- **`adaptive_allocation.py`** - Adaptive Asset Allocation Strategy
+  - Dynamic weight adjustment based on market conditions
+  - Volatility-based position sizing
+  - Multi-factor allocation optimization
+  - Regime-aware rebalancing
+
+- **`options_vol_arb.py`** - Options Volatility Arbitrage Strategy
+  - Implied vs realized volatility spreads
+  - Delta-neutral options strategies
+  - IV surface analysis and mispricing detection
+  - Greeks-based risk management
+
+- **`vwap_execution.py`** - VWAP Execution Strategy
+  - Volume-weighted average price execution
+  - Time-sliced order scheduling
+  - Participation rate optimization
+  - Market impact minimization
+
+### Changed
+
+- Updated `quantsploit/modules/strategies/__init__.py` to export all new strategies (7 total: Adaptive Allocation, Earnings Momentum, Fama-French, Options Vol Arb, Risk Parity, Volatility Breakout, VWAP Execution)
+- Enhanced existing strategy modules with improved documentation and type hints
+- Extended utility modules with comprehensive analytics capabilities
+
+### Fixed
+
+- Added missing pandas import in `quantsploit/utils/options_greeks.py` to resolve NameError
+
+### Added - Risk Parity Enhancements (2026-01-23)
 
 New advanced risk parity methods in `quantsploit/utils/portfolio_optimizer.py`:
 

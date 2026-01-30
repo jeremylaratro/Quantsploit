@@ -4,11 +4,23 @@ Comprehensive Backtesting Dashboard for Quantsploit
 Real-time visualization and analysis of backtesting results
 """
 
+import sys
+from pathlib import Path
+
+# Add both dashboard and parent directories to path
+# - Dashboard dir: allows importing helper modules (strategy_api, scanner_engine, options_helpers)
+# - Quantsploit root: allows importing quantsploit modules
+_DASHBOARD_DIR = Path(__file__).resolve().parent
+_QUANTSPLOIT_ROOT = _DASHBOARD_DIR.parent
+if str(_DASHBOARD_DIR) not in sys.path:
+    sys.path.insert(0, str(_DASHBOARD_DIR))
+if str(_QUANTSPLOIT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_QUANTSPLOIT_ROOT))
+
 from flask import Flask, render_template, jsonify, request
 import json
 import markdown
 import pandas as pd
-from pathlib import Path
 from datetime import datetime
 import numpy as np
 from typing import Dict, List, Optional
@@ -914,20 +926,118 @@ def api_sector_tickers(sector):
 def api_strategies_available():
     """API: Get list of available trading strategies"""
     strategies = [
-        {'id': 'sma_crossover', 'name': 'SMA Crossover', 'description': 'Moving average crossover (20/50)'},
-        {'id': 'mean_reversion', 'name': 'Mean Reversion', 'description': '20-day mean reversion with z-score'},
-        {'id': 'momentum_signals', 'name': 'Momentum', 'description': 'Multi-period momentum (10/20/50)'},
-        {'id': 'multifactor_scoring', 'name': 'Multi-Factor Scoring', 'description': 'Composite factor scoring'},
-        {'id': 'kalman_adaptive', 'name': 'Kalman Adaptive', 'description': 'Kalman filter-based adaptive strategy'},
-        {'id': 'kalman_adaptive_sensitive', 'name': 'Kalman Adaptive (Sensitive)', 'description': 'More responsive Kalman variant'},
-        {'id': 'volume_profile_swing', 'name': 'Volume Profile Swing', 'description': 'Volume profile analysis'},
-        {'id': 'volume_profile_fast', 'name': 'Volume Profile (Fast)', 'description': 'Faster volume profile variant'},
-        {'id': 'hmm_regime_detection', 'name': 'HMM Regime Detection', 'description': 'Hidden Markov Model regime detection'},
-        {'id': 'hmm_regime_longterm', 'name': 'HMM Regime (Long-term)', 'description': 'Long-term HMM variant'},
-        {'id': 'ml_swing_trading', 'name': 'ML Swing Trading', 'description': 'Machine learning swing strategy'},
-        {'id': 'pairs_trading', 'name': 'Pairs Trading', 'description': 'Statistical arbitrage pairs trading'}
+        # Core strategies
+        {'id': 'sma_crossover', 'name': 'SMA Crossover', 'description': 'Moving average crossover (20/50)', 'category': 'core'},
+        {'id': 'mean_reversion', 'name': 'Mean Reversion', 'description': '20-day mean reversion with z-score', 'category': 'core'},
+        {'id': 'momentum_signals', 'name': 'Momentum', 'description': 'Multi-period momentum (10/20/50)', 'category': 'core'},
+        {'id': 'multifactor_scoring', 'name': 'Multi-Factor Scoring', 'description': 'Composite factor scoring', 'category': 'core'},
+        # Advanced strategies
+        {'id': 'kalman_adaptive', 'name': 'Kalman Adaptive', 'description': 'Kalman filter-based adaptive strategy', 'category': 'advanced'},
+        {'id': 'kalman_adaptive_sensitive', 'name': 'Kalman Adaptive (Sensitive)', 'description': 'More responsive Kalman variant', 'category': 'advanced'},
+        {'id': 'volume_profile_swing', 'name': 'Volume Profile Swing', 'description': 'Volume profile analysis', 'category': 'advanced'},
+        {'id': 'volume_profile_fast', 'name': 'Volume Profile (Fast)', 'description': 'Faster volume profile variant', 'category': 'advanced'},
+        {'id': 'hmm_regime_detection', 'name': 'HMM Regime Detection', 'description': 'Hidden Markov Model regime detection', 'category': 'advanced'},
+        {'id': 'hmm_regime_longterm', 'name': 'HMM Regime (Long-term)', 'description': 'Long-term HMM variant', 'category': 'advanced'},
+        {'id': 'ml_swing_trading', 'name': 'ML Swing Trading', 'description': 'Machine learning swing strategy', 'category': 'advanced'},
+        {'id': 'pairs_trading', 'name': 'Pairs Trading', 'description': 'Statistical arbitrage pairs trading', 'category': 'advanced'},
+        # v0.2.0 strategies
+        {'id': 'risk_parity', 'name': 'Risk Parity', 'description': 'Risk parity portfolio allocation with equal risk contribution', 'category': 'v0.2.0'},
+        {'id': 'volatility_breakout', 'name': 'Volatility Breakout', 'description': 'ATR-based volatility breakout detection with trend confirmation', 'category': 'v0.2.0'},
+        {'id': 'fama_french', 'name': 'Fama-French', 'description': 'Fama-French 3-factor model with factor exposure analysis', 'category': 'v0.2.0'},
+        {'id': 'earnings_momentum', 'name': 'Earnings Momentum', 'description': 'Post-earnings announcement drift momentum strategy', 'category': 'v0.2.0'},
+        {'id': 'adaptive_allocation', 'name': 'Adaptive Allocation', 'description': 'Dynamic allocation based on market regime detection', 'category': 'v0.2.0'},
+        {'id': 'options_vol_arb', 'name': 'Options Vol Arbitrage', 'description': 'Options volatility arbitrage with variance swap replication', 'category': 'v0.2.0'},
+        {'id': 'vwap_execution', 'name': 'VWAP Execution', 'description': 'Volume-weighted average price execution optimization', 'category': 'v0.2.0'},
     ]
     return jsonify({'strategies': strategies})
+
+
+# =============================================================================
+# STRATEGY RUNNER ROUTES
+# =============================================================================
+
+@app.route('/strategy-runner')
+def strategy_runner():
+    """Strategy Runner Page - Full parameter control for individual strategies"""
+    return render_template('strategy_runner.html')
+
+
+@app.route('/api/strategies/details')
+def api_strategies_details():
+    """API: Get all strategies with full options schema"""
+    try:
+        from strategy_api import get_all_strategies
+        strategies = get_all_strategies()
+        return jsonify({'success': True, 'strategies': strategies})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e), 'strategies': []})
+
+
+@app.route('/api/strategies/<strategy_id>/options')
+def api_strategy_options(strategy_id):
+    """API: Get options schema for a specific strategy"""
+    try:
+        from strategy_api import get_strategy_options
+        options = get_strategy_options(strategy_id)
+        if options is None:
+            return jsonify({'success': False, 'error': f'Strategy {strategy_id} not found'}), 404
+        return jsonify({'success': True, **options})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# Strategy execution jobs
+strategy_jobs = {}
+
+
+@app.route('/api/strategies/run', methods=['POST'])
+def api_run_strategy():
+    """API: Execute a strategy with given parameters"""
+    import threading
+    import uuid
+
+    data = request.json
+    strategy_id = data.get('strategy_id')
+    options = data.get('options', {})
+
+    if not strategy_id:
+        return jsonify({'success': False, 'error': 'strategy_id is required'}), 400
+
+    job_id = str(uuid.uuid4())[:8]
+
+    def run_strategy_job():
+        try:
+            from strategy_api import execute_strategy
+            result = execute_strategy(strategy_id, options)
+            strategy_jobs[job_id] = {
+                'status': 'completed' if result.get('success') else 'failed',
+                **result
+            }
+        except Exception as e:
+            strategy_jobs[job_id] = {
+                'status': 'failed',
+                'success': False,
+                'error': str(e)
+            }
+
+    # For simple strategies, run synchronously for faster response
+    # (Background execution can be enabled for long-running strategies)
+    strategy_jobs[job_id] = {'status': 'running'}
+
+    try:
+        from strategy_api import execute_strategy
+        result = execute_strategy(strategy_id, options)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/strategies/status/<job_id>')
+def api_strategy_status(job_id):
+    """API: Get status of a strategy execution job"""
+    if job_id not in strategy_jobs:
+        return jsonify({'success': False, 'error': 'Job not found'}), 404
+    return jsonify(strategy_jobs[job_id])
 
 
 @app.route('/backtest-launcher')
@@ -998,8 +1108,31 @@ def api_launch_backtest():
 
             # Add strategies filter if specified
             if strategies:
-                kwargs['strategy_keys'] = strategies
-                backtest_jobs[job_id]['log'] += f'Using {len(strategies)} selected strategies\n'
+                # Import to check which strategies are actually available
+                from quantsploit.utils.comprehensive_backtest import ComprehensiveBacktester
+                temp_bt = ComprehensiveBacktester.__new__(ComprehensiveBacktester)
+                temp_bt.data_fetcher = None
+                temp_bt.adapter = None
+                temp_bt.strategy_keys_filter = None
+                # Manually get available strategy keys
+                available_keys = ['sma_crossover', 'mean_reversion', 'momentum_signals',
+                                 'multifactor_scoring', 'kalman_adaptive', 'volume_profile_swing',
+                                 'hmm_regime_detection', 'ml_swing_trading', 'pairs_trading',
+                                 'options_volatility', 'options_spreads', 'reddit_sentiment_strategy']
+
+                # Filter to only valid strategies
+                valid_strategies = [s for s in strategies if s in available_keys]
+                invalid_strategies = [s for s in strategies if s not in available_keys]
+
+                if invalid_strategies:
+                    backtest_jobs[job_id]['log'] += f'Warning: {len(invalid_strategies)} strategies not available for backtest: {", ".join(invalid_strategies)}\n'
+                    backtest_jobs[job_id]['log'] += f'(v0.2.0 strategies require specialized data and are not yet integrated into batch backtest)\n'
+
+                if valid_strategies:
+                    kwargs['strategy_keys'] = valid_strategies
+                    backtest_jobs[job_id]['log'] += f'Using {len(valid_strategies)} strategies: {", ".join(valid_strategies)}\n'
+                else:
+                    backtest_jobs[job_id]['log'] += f'No valid strategies selected. Using all available strategies.\n'
             else:
                 backtest_jobs[job_id]['log'] += 'Using all available strategies\n'
 
@@ -1214,6 +1347,310 @@ def api_candlestick(timestamp, strategy_name, symbol):
 backtest_jobs = {}
 
 
+# =============================================================================
+# SCANNER ROUTES
+# =============================================================================
+
+# Global scanner cache - initialized on startup
+scanner_cache = {}
+
+
+@app.route('/scanners')
+def scanners_dashboard():
+    """Scanners Dashboard Page"""
+    return render_template('scanners_dashboard.html')
+
+
+@app.route('/api/scanners/info')
+def api_scanner_info():
+    """API: Get metadata about all available scanners"""
+    try:
+        from scanner_engine import get_scanner_info
+        info = get_scanner_info()
+        return jsonify({'success': True, 'scanners': info})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/scanners/status')
+def api_scanner_status():
+    """API: Get status of all scanners"""
+    return jsonify(scanner_cache)
+
+
+@app.route('/api/scanners/<scanner_id>/run', methods=['POST'])
+def api_run_scanner(scanner_id):
+    """API: Run/refresh a specific scanner"""
+    try:
+        from scanner_engine import refresh_scanner
+        options = request.json if request.is_json else None
+        refresh_scanner(scanner_id, scanner_cache, options)
+        return jsonify({'success': True, 'message': f'Scanner {scanner_id} started'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/scanners/<scanner_id>/results')
+def api_scanner_results(scanner_id):
+    """API: Get results for a specific scanner"""
+    if scanner_id not in scanner_cache:
+        return jsonify({'success': False, 'error': 'Scanner not found'}), 404
+    return jsonify(scanner_cache[scanner_id])
+
+
+# Initialize scanners on startup
+def init_scanner_cache():
+    """Initialize scanner cache on app startup"""
+    try:
+        from scanner_engine import init_scanners
+        init_scanners(scanner_cache)
+        print("[STARTUP] Scanner initialization started in background")
+    except Exception as e:
+        print(f"[STARTUP] Warning: Failed to initialize scanners: {e}")
+
+
+# Only initialize scanners when running as main (not when imported)
+# This avoids initialization during module import
+_scanner_init_done = False
+
+
+# =============================================================================
+# OPTIONS ANALYZER ROUTES
+# =============================================================================
+
+@app.route('/options-analyzer')
+def options_analyzer():
+    """Options Analyzer Page"""
+    return render_template('options_analyzer.html')
+
+
+@app.route('/api/options/chain/<symbol>')
+def api_options_chain(symbol):
+    """API: Get full options chain with Greeks"""
+    try:
+        from options_helpers import get_options_chain
+        expiration = request.args.get('expiration')
+        result = get_options_chain(symbol, expiration)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/options/greeks/<symbol>')
+def api_options_greeks(symbol):
+    """API: Calculate detailed Greeks for a specific contract"""
+    try:
+        from options_helpers import calculate_single_greeks
+        strike = float(request.args.get('strike', 0))
+        expiration = request.args.get('expiration')
+        option_type = request.args.get('type', 'call')
+
+        if not strike or not expiration:
+            return jsonify({'success': False, 'error': 'strike and expiration required'}), 400
+
+        result = calculate_single_greeks(symbol, strike, expiration, option_type)
+        return jsonify(result)
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/options/strategies/<symbol>')
+def api_options_strategies(symbol):
+    """API: Get suggested options strategies"""
+    try:
+        from options_helpers import suggest_strategies, get_options_chain
+
+        # Get current price
+        chain = get_options_chain(symbol)
+        current_price = chain.get('current_price', 0)
+
+        # Get parameters
+        iv_rank = float(request.args.get('iv_rank', 50))
+        outlook = request.args.get('outlook', 'neutral')
+
+        strategies = suggest_strategies(symbol, current_price, iv_rank, outlook)
+        return jsonify({'success': True, 'strategies': strategies})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+# =============================================================================
+# ANALYSIS MODULE ROUTES
+# =============================================================================
+
+@app.route('/analysis')
+def analysis_hub():
+    """Analysis Hub Page"""
+    return render_template('analysis_hub.html')
+
+
+@app.route('/analysis/stock')
+@app.route('/analysis/stock/<symbol>')
+def stock_analyzer(symbol=None):
+    """Stock Analyzer Page"""
+    return render_template('stock_analyzer.html', symbol=symbol)
+
+
+@app.route('/analysis/indicators')
+@app.route('/analysis/indicators/<symbol>')
+def technical_indicators(symbol=None):
+    """Technical Indicators Page - redirect to stock analyzer"""
+    if symbol:
+        return render_template('stock_analyzer.html', symbol=symbol)
+    return render_template('stock_analyzer.html')
+
+
+@app.route('/analysis/patterns')
+@app.route('/analysis/patterns/<symbol>')
+def pattern_recognition(symbol=None):
+    """Pattern Recognition Page - redirect to stock analyzer"""
+    if symbol:
+        return render_template('stock_analyzer.html', symbol=symbol)
+    return render_template('stock_analyzer.html')
+
+
+@app.route('/api/analysis/stock/<symbol>')
+def api_stock_analysis(symbol):
+    """API: Get stock analysis data"""
+    try:
+        from quantsploit.utils.data_fetcher import DataFetcher
+
+        period = request.args.get('period', '1y')
+
+        fetcher = DataFetcher(database=None)
+
+        # Get stock info
+        info = fetcher.get_stock_info(symbol)
+        if not info:
+            return jsonify({'success': False, 'error': f'Failed to fetch data for {symbol}'}), 404
+
+        # Get price data
+        df = fetcher.get_stock_data(symbol, period, '1d')
+        if df is None or df.empty:
+            return jsonify({'success': False, 'error': f'No price data for {symbol}'}), 404
+
+        # Calculate technical indicators
+        from quantsploit.utils.ta_compat import ta
+
+        close = df['Close']
+        high = df['High']
+        low = df['Low']
+        volume = df['Volume']
+
+        # SMAs
+        sma20 = ta.sma(close, length=20)
+        sma50 = ta.sma(close, length=50)
+        sma200 = ta.sma(close, length=200)
+
+        # RSI
+        rsi = ta.rsi(close, length=14)
+
+        # ADX
+        adx = ta.adx(high, low, close, length=14)
+
+        # MACD
+        macd = ta.macd(close)
+
+        # Stochastic
+        stoch = ta.stoch(high, low, close)
+
+        result = {
+            'success': True,
+            'symbol': symbol,
+            'current_price': float(close.iloc[-1]),
+            'change_pct': float(((close.iloc[-1] / close.iloc[-2]) - 1) * 100) if len(close) > 1 else 0,
+            'market_cap': info.get('marketCap'),
+            'volume': float(volume.iloc[-1]) if len(volume) > 0 else 0,
+            'avg_volume': float(volume.mean()),
+            'high_52w': float(close.max()),
+            'low_52w': float(close.min()),
+            'rsi': float(rsi.iloc[-1]) if rsi is not None and len(rsi) > 0 else 50,
+            'above_sma20': float(close.iloc[-1]) > float(sma20.iloc[-1]) if sma20 is not None and len(sma20) > 0 else False,
+            'above_sma50': float(close.iloc[-1]) > float(sma50.iloc[-1]) if sma50 is not None and len(sma50) > 0 else False,
+            'above_sma200': float(close.iloc[-1]) > float(sma200.iloc[-1]) if sma200 is not None and len(sma200) > 0 else False,
+            'adx': float(adx['ADX_14'].iloc[-1]) if adx is not None and 'ADX_14' in adx.columns else 0,
+            'macd_signal': 'Bullish' if macd is not None and macd['MACD_12_26_9'].iloc[-1] > macd['MACDs_12_26_9'].iloc[-1] else 'Bearish',
+            'stoch_k': float(stoch['STOCHk_14_3_3'].iloc[-1]) if stoch is not None and 'STOCHk_14_3_3' in stoch.columns else 50,
+            'volume_ratio': float(volume.iloc[-1] / volume.mean()) if len(volume) > 0 else 1,
+            'sector': info.get('sector', '-'),
+            'industry': info.get('industry', '-'),
+            'exchange': info.get('exchange', '-'),
+            'currency': info.get('currency', 'USD'),
+            'pe_ratio': info.get('trailingPE'),
+            'eps': info.get('trailingEps'),
+            'dividend_yield': info.get('dividendYield'),
+            'beta': info.get('beta'),
+            'strategy_performance': []  # Would be populated from backtest results
+        }
+
+        return jsonify(convert_numpy_types(result))
+
+    except Exception as e:
+        import traceback
+        print(f"Error in stock analysis: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
+@app.route('/api/analysis/indicators/<symbol>')
+def api_technical_indicators(symbol):
+    """API: Get technical indicators data"""
+    try:
+        from quantsploit.utils.data_fetcher import DataFetcher
+        from quantsploit.utils.ta_compat import ta
+
+        period = request.args.get('period', '1y')
+
+        fetcher = DataFetcher(database=None)
+        df = fetcher.get_stock_data(symbol, period, '1d')
+
+        if df is None or df.empty:
+            return jsonify({'success': False, 'error': f'No data for {symbol}'}), 404
+
+        close = df['Close']
+        high = df['High']
+        low = df['Low']
+
+        # Calculate indicators
+        sma20 = ta.sma(close, length=20)
+        sma50 = ta.sma(close, length=50)
+        bb = ta.bbands(close, length=20)
+
+        # Build price data with indicators
+        price_data = []
+        for i, (idx, row) in enumerate(df.iterrows()):
+            entry = {
+                'date': idx.strftime('%Y-%m-%d') if hasattr(idx, 'strftime') else str(idx),
+                'close': float(row['Close']),
+                'open': float(row['Open']),
+                'high': float(row['High']),
+                'low': float(row['Low']),
+                'volume': float(row['Volume'])
+            }
+
+            if sma20 is not None and i < len(sma20):
+                entry['sma20'] = float(sma20.iloc[i]) if not pd.isna(sma20.iloc[i]) else None
+            if sma50 is not None and i < len(sma50):
+                entry['sma50'] = float(sma50.iloc[i]) if not pd.isna(sma50.iloc[i]) else None
+            if bb is not None and i < len(bb):
+                entry['bb_upper'] = float(bb['BBU_20_2.0'].iloc[i]) if not pd.isna(bb['BBU_20_2.0'].iloc[i]) else None
+                entry['bb_lower'] = float(bb['BBL_20_2.0'].iloc[i]) if not pd.isna(bb['BBL_20_2.0'].iloc[i]) else None
+
+            price_data.append(entry)
+
+        return jsonify({
+            'success': True,
+            'symbol': symbol,
+            'price_data': price_data
+        })
+
+    except Exception as e:
+        import traceback
+        print(f"Error in indicators: {str(e)}")
+        print(traceback.format_exc())
+        return jsonify({'success': False, 'error': str(e)}), 500
+
+
 if __name__ == '__main__':
     import argparse
     import logging
@@ -1222,7 +1659,12 @@ if __name__ == '__main__':
     parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
     parser.add_argument('--port', type=int, default=5000, help='Port to bind to')
     parser.add_argument('--production', action='store_true', help='Run in production mode (suppresses request logging)')
+    parser.add_argument('--no-scanners', action='store_true', help='Disable scanner initialization on startup')
     args = parser.parse_args()
+
+    # Initialize scanners on startup (unless disabled)
+    if not args.no_scanners:
+        init_scanner_cache()
 
     # Configure logging based on mode
     if args.production:

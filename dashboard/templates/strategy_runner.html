@@ -1,0 +1,699 @@
+{% extends "base.html" %}
+
+{% block title %}Strategy Runner - Quantsploit{% endblock %}
+
+{% block extra_css %}
+<style>
+    .strategy-card {
+        cursor: pointer;
+        transition: all 0.3s ease;
+        border: 2px solid transparent;
+    }
+    .strategy-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    .strategy-card.selected {
+        border-color: #667eea;
+        background: linear-gradient(135deg, rgba(102, 126, 234, 0.1) 0%, rgba(118, 75, 162, 0.1) 100%);
+    }
+    .category-badge {
+        font-size: 0.7rem;
+        padding: 0.25rem 0.5rem;
+    }
+    .option-input {
+        max-width: 200px;
+    }
+    .results-panel {
+        display: none;
+    }
+    .results-panel.active {
+        display: block;
+    }
+    .metric-tile {
+        text-align: center;
+        padding: 1rem;
+        border-radius: 10px;
+        background: #f8f9fa;
+        margin-bottom: 1rem;
+    }
+    .metric-tile.positive {
+        background: linear-gradient(135deg, rgba(39, 174, 96, 0.1) 0%, rgba(39, 174, 96, 0.2) 100%);
+        border: 1px solid rgba(39, 174, 96, 0.3);
+    }
+    .metric-tile.negative {
+        background: linear-gradient(135deg, rgba(231, 76, 60, 0.1) 0%, rgba(231, 76, 60, 0.2) 100%);
+        border: 1px solid rgba(231, 76, 60, 0.3);
+    }
+    .metric-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+    .metric-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: #666;
+    }
+    .trading-guide {
+        font-family: monospace;
+        font-size: 0.85rem;
+        white-space: pre-wrap;
+        background: #f8f9fa;
+        padding: 1rem;
+        border-radius: 8px;
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .trades-table {
+        font-size: 0.9rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-play-circle"></i> Strategy Runner</h2>
+    <span class="badge bg-info">Full Parameter Control</span>
+</div>
+
+<div class="row">
+    <!-- Strategy Selection Panel -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chess"></i> Select Strategy</h5>
+            </div>
+            <div class="card-body" style="max-height: 600px; overflow-y: auto;">
+                <div id="strategy-grid">
+                    <div class="text-center text-muted py-4">
+                        <div class="spinner-border" role="status"></div>
+                        <p class="mt-2">Loading strategies...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Configuration Panel -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-cog"></i> Configuration</h5>
+            </div>
+            <div class="card-body">
+                <div id="config-panel">
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-arrow-left fa-2x mb-3"></i>
+                        <p>Select a strategy to configure parameters</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Trading Guide -->
+        <div class="card mb-4" id="guide-card" style="display: none;">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-book"></i> Trading Guide</h5>
+            </div>
+            <div class="card-body">
+                <div id="trading-guide" class="trading-guide"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Results Panel -->
+    <div class="col-lg-4">
+        <div class="card mb-4">
+            <div class="card-header">
+                <h5 class="mb-0"><i class="fas fa-chart-line"></i> Results</h5>
+            </div>
+            <div class="card-body">
+                <div id="results-placeholder">
+                    <div class="text-center text-muted py-4">
+                        <i class="fas fa-rocket fa-2x mb-3"></i>
+                        <p>Configure and run a strategy to see results</p>
+                    </div>
+                </div>
+                <div id="results-loading" style="display: none;">
+                    <div class="text-center py-4">
+                        <div class="spinner-border text-primary" role="status"></div>
+                        <p class="mt-2">Running strategy...</p>
+                    </div>
+                </div>
+                <div id="results-content" style="display: none;"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Full Results Modal -->
+<div class="modal fade" id="resultsModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i class="fas fa-chart-bar"></i> Detailed Results</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <ul class="nav nav-tabs" id="resultsTabs">
+                    <li class="nav-item">
+                        <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#metricsTab">Metrics</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#tradesTab">Trades</button>
+                    </li>
+                    <li class="nav-item">
+                        <button class="nav-link" data-bs-toggle="tab" data-bs-target="#chartTab">Chart</button>
+                    </li>
+                </ul>
+                <div class="tab-content mt-3">
+                    <div class="tab-pane fade show active" id="metricsTab"></div>
+                    <div class="tab-pane fade" id="tradesTab"></div>
+                    <div class="tab-pane fade" id="chartTab">
+                        <div id="price-chart" style="height: 400px;"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let strategies = [];
+let selectedStrategy = null;
+let currentOptions = {};
+
+// Category colors and icons
+const categoryStyles = {
+    'core': { color: 'primary', icon: 'fa-cubes' },
+    'advanced': { color: 'warning', icon: 'fa-brain' },
+    'v0.2.0': { color: 'success', icon: 'fa-sparkles' }
+};
+
+// Load strategies on page load
+document.addEventListener('DOMContentLoaded', loadStrategies);
+
+async function loadStrategies() {
+    try {
+        const response = await fetch('/api/strategies/details');
+        const data = await response.json();
+        strategies = data.strategies;
+        renderStrategyGrid();
+    } catch (error) {
+        console.error('Failed to load strategies:', error);
+        const grid = document.getElementById('strategy-grid');
+        grid.replaceChildren();
+        const errorDiv = document.createElement('div');
+        errorDiv.className = 'alert alert-danger';
+        errorDiv.textContent = 'Failed to load strategies. Please refresh the page.';
+        grid.appendChild(errorDiv);
+    }
+}
+
+function renderStrategyGrid() {
+    const grid = document.getElementById('strategy-grid');
+    grid.replaceChildren();
+
+    // Group by category
+    const categories = { 'core': [], 'advanced': [], 'v0.2.0': [] };
+    strategies.forEach(s => {
+        const cat = s.category || 'core';
+        if (categories[cat]) categories[cat].push(s);
+    });
+
+    const categoryNames = {
+        'core': 'Core Strategies',
+        'advanced': 'Advanced',
+        'v0.2.0': 'New in v0.2.0'
+    };
+
+    for (const [cat, items] of Object.entries(categories)) {
+        if (items.length === 0) continue;
+
+        const style = categoryStyles[cat];
+
+        // Category header
+        const header = document.createElement('h6');
+        header.className = `text-${style.color} mt-3 mb-2`;
+        const icon = document.createElement('i');
+        icon.className = `fas ${style.icon} me-1`;
+        header.appendChild(icon);
+        header.appendChild(document.createTextNode(categoryNames[cat]));
+        grid.appendChild(header);
+
+        // Strategy cards
+        items.forEach(strat => {
+            const card = document.createElement('div');
+            card.className = 'card strategy-card mb-2';
+            card.dataset.strategyId = strat.id;
+            card.addEventListener('click', () => selectStrategy(strat.id));
+
+            const body = document.createElement('div');
+            body.className = 'card-body py-2 px-3';
+
+            const title = document.createElement('div');
+            title.className = 'd-flex justify-content-between align-items-center';
+
+            const name = document.createElement('strong');
+            name.className = 'small';
+            name.textContent = strat.name;
+
+            const badge = document.createElement('span');
+            badge.className = `badge bg-${style.color} category-badge`;
+            badge.textContent = cat;
+
+            title.appendChild(name);
+            title.appendChild(badge);
+            body.appendChild(title);
+
+            const desc = document.createElement('small');
+            desc.className = 'text-muted d-block';
+            desc.style.fontSize = '0.75rem';
+            desc.textContent = strat.description;
+            body.appendChild(desc);
+
+            card.appendChild(body);
+            grid.appendChild(card);
+        });
+    }
+}
+
+function selectStrategy(strategyId) {
+    selectedStrategy = strategies.find(s => s.id === strategyId);
+    if (!selectedStrategy) return;
+
+    // Update card selection visual
+    document.querySelectorAll('.strategy-card').forEach(card => {
+        card.classList.toggle('selected', card.dataset.strategyId === strategyId);
+    });
+
+    // Render configuration
+    renderConfigPanel();
+
+    // Show trading guide
+    const guideCard = document.getElementById('guide-card');
+    const guideContent = document.getElementById('trading-guide');
+    if (selectedStrategy.trading_guide) {
+        guideContent.textContent = selectedStrategy.trading_guide;
+        guideCard.style.display = 'block';
+    } else {
+        guideCard.style.display = 'none';
+    }
+}
+
+function renderConfigPanel() {
+    const panel = document.getElementById('config-panel');
+    panel.replaceChildren();
+
+    if (!selectedStrategy) return;
+
+    // Strategy name header
+    const header = document.createElement('h6');
+    header.className = 'mb-3';
+    header.textContent = selectedStrategy.name;
+    panel.appendChild(header);
+
+    // Build options form
+    const form = document.createElement('form');
+    form.id = 'options-form';
+
+    const options = selectedStrategy.options || {};
+    currentOptions = {};
+
+    for (const [key, opt] of Object.entries(options)) {
+        currentOptions[key] = opt.value;
+
+        const group = document.createElement('div');
+        group.className = 'mb-3';
+
+        const label = document.createElement('label');
+        label.className = 'form-label small';
+        label.setAttribute('for', `opt-${key}`);
+
+        const labelText = document.createTextNode(key);
+        label.appendChild(labelText);
+
+        if (opt.required) {
+            const required = document.createElement('span');
+            required.className = 'text-danger';
+            required.textContent = ' *';
+            label.appendChild(required);
+        }
+
+        const input = document.createElement('input');
+        input.type = getInputType(opt.value);
+        input.className = 'form-control form-control-sm';
+        input.id = `opt-${key}`;
+        input.name = key;
+        input.value = opt.value !== null ? opt.value : '';
+        input.placeholder = opt.description;
+        input.addEventListener('change', (e) => {
+            currentOptions[key] = e.target.value;
+        });
+
+        const help = document.createElement('small');
+        help.className = 'text-muted';
+        help.textContent = opt.description;
+
+        group.appendChild(label);
+        group.appendChild(input);
+        group.appendChild(help);
+        form.appendChild(group);
+    }
+
+    // Run button
+    const btnGroup = document.createElement('div');
+    btnGroup.className = 'd-grid gap-2 mt-4';
+
+    const runBtn = document.createElement('button');
+    runBtn.type = 'button';
+    runBtn.className = 'btn btn-primary';
+    runBtn.addEventListener('click', runStrategy);
+
+    const runIcon = document.createElement('i');
+    runIcon.className = 'fas fa-play me-2';
+    runBtn.appendChild(runIcon);
+    runBtn.appendChild(document.createTextNode('Run Strategy'));
+
+    btnGroup.appendChild(runBtn);
+    form.appendChild(btnGroup);
+
+    panel.appendChild(form);
+}
+
+function getInputType(value) {
+    if (typeof value === 'number') return 'number';
+    if (typeof value === 'boolean') return 'checkbox';
+    return 'text';
+}
+
+async function runStrategy() {
+    if (!selectedStrategy) return;
+
+    // Show loading
+    document.getElementById('results-placeholder').style.display = 'none';
+    document.getElementById('results-loading').style.display = 'block';
+    document.getElementById('results-content').style.display = 'none';
+
+    try {
+        const response = await fetch('/api/strategies/run', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                strategy_id: selectedStrategy.id,
+                options: currentOptions
+            })
+        });
+
+        const data = await response.json();
+
+        document.getElementById('results-loading').style.display = 'none';
+
+        if (data.success) {
+            displayResults(data);
+        } else {
+            displayError(data.error || 'Strategy execution failed');
+        }
+
+    } catch (error) {
+        console.error('Strategy execution failed:', error);
+        document.getElementById('results-loading').style.display = 'none';
+        displayError('Network error: ' + error.message);
+    }
+}
+
+function displayResults(data) {
+    const content = document.getElementById('results-content');
+    content.replaceChildren();
+    content.style.display = 'block';
+
+    const results = data.results || {};
+
+    // Key metrics
+    const metricsDiv = document.createElement('div');
+    metricsDiv.className = 'row g-2 mb-3';
+
+    // Total Return
+    if (results.total_return_pct !== undefined) {
+        const returnTile = createMetricTile(
+            'Total Return',
+            formatPercent(results.total_return_pct),
+            results.total_return_pct >= 0
+        );
+        metricsDiv.appendChild(returnTile);
+    }
+
+    // Final Value
+    if (results.final_value !== undefined) {
+        const valueTile = createMetricTile(
+            'Final Value',
+            formatCurrency(results.final_value),
+            true
+        );
+        metricsDiv.appendChild(valueTile);
+    }
+
+    // Total Trades
+    if (results.total_trades !== undefined) {
+        const tradesTile = createMetricTile(
+            'Trades',
+            results.total_trades,
+            true
+        );
+        metricsDiv.appendChild(tradesTile);
+    }
+
+    // Strategy vs Buy & Hold
+    if (results.strategy_vs_buy_hold !== undefined) {
+        const vsBhTile = createMetricTile(
+            'vs B&H',
+            formatPercent(results.strategy_vs_buy_hold),
+            results.strategy_vs_buy_hold >= 0
+        );
+        metricsDiv.appendChild(vsBhTile);
+    }
+
+    content.appendChild(metricsDiv);
+
+    // View details button
+    const detailsBtn = document.createElement('button');
+    detailsBtn.className = 'btn btn-outline-primary btn-sm w-100';
+    detailsBtn.setAttribute('data-bs-toggle', 'modal');
+    detailsBtn.setAttribute('data-bs-target', '#resultsModal');
+    detailsBtn.addEventListener('click', () => showDetailedResults(data));
+
+    const detailsIcon = document.createElement('i');
+    detailsIcon.className = 'fas fa-expand me-1';
+    detailsBtn.appendChild(detailsIcon);
+    detailsBtn.appendChild(document.createTextNode('View Full Results'));
+
+    content.appendChild(detailsBtn);
+}
+
+function createMetricTile(label, value, isPositive) {
+    const col = document.createElement('div');
+    col.className = 'col-6';
+
+    const tile = document.createElement('div');
+    tile.className = `metric-tile ${isPositive ? 'positive' : 'negative'}`;
+
+    const valueEl = document.createElement('div');
+    valueEl.className = 'metric-value';
+    valueEl.textContent = value;
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'metric-label';
+    labelEl.textContent = label;
+
+    tile.appendChild(valueEl);
+    tile.appendChild(labelEl);
+    col.appendChild(tile);
+
+    return col;
+}
+
+function displayError(message) {
+    const content = document.getElementById('results-content');
+    content.replaceChildren();
+    content.style.display = 'block';
+
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger';
+
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-exclamation-triangle me-2';
+    alert.appendChild(icon);
+    alert.appendChild(document.createTextNode(message));
+
+    content.appendChild(alert);
+}
+
+function showDetailedResults(data) {
+    const results = data.results || {};
+
+    // Metrics tab
+    const metricsTab = document.getElementById('metricsTab');
+    metricsTab.replaceChildren();
+
+    const metricsTable = document.createElement('table');
+    metricsTable.className = 'table table-sm';
+
+    const metricsBody = document.createElement('tbody');
+    const metricKeys = ['symbol', 'period', 'initial_capital', 'final_value',
+                       'total_return', 'total_return_pct', 'buy_hold_return_pct',
+                       'strategy_vs_buy_hold', 'total_trades'];
+
+    metricKeys.forEach(key => {
+        if (results[key] !== undefined) {
+            const row = document.createElement('tr');
+            const keyCell = document.createElement('td');
+            keyCell.className = 'fw-bold';
+            keyCell.textContent = formatKey(key);
+
+            const valueCell = document.createElement('td');
+            valueCell.textContent = formatValue(key, results[key]);
+
+            row.appendChild(keyCell);
+            row.appendChild(valueCell);
+            metricsBody.appendChild(row);
+        }
+    });
+
+    metricsTable.appendChild(metricsBody);
+    metricsTab.appendChild(metricsTable);
+
+    // Trades tab
+    const tradesTab = document.getElementById('tradesTab');
+    tradesTab.replaceChildren();
+
+    if (results.trades && results.trades.length > 0) {
+        const tradesTable = document.createElement('table');
+        tradesTable.className = 'table table-sm trades-table';
+
+        const thead = document.createElement('thead');
+        thead.className = 'table-dark';
+        const headerRow = document.createElement('tr');
+        ['Date', 'Action', 'Price', 'Shares', 'Value'].forEach(h => {
+            const th = document.createElement('th');
+            th.textContent = h;
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        tradesTable.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        results.trades.forEach(trade => {
+            const row = document.createElement('tr');
+
+            const dateCell = document.createElement('td');
+            dateCell.textContent = trade.date ? new Date(trade.date).toLocaleDateString() : '-';
+
+            const actionCell = document.createElement('td');
+            const actionBadge = document.createElement('span');
+            actionBadge.className = `badge ${trade.action === 'BUY' ? 'bg-success' : 'bg-danger'}`;
+            actionBadge.textContent = trade.action;
+            actionCell.appendChild(actionBadge);
+
+            const priceCell = document.createElement('td');
+            priceCell.textContent = formatCurrency(trade.price);
+
+            const sharesCell = document.createElement('td');
+            sharesCell.textContent = trade.shares ? trade.shares.toFixed(2) : '-';
+
+            const valueCell = document.createElement('td');
+            valueCell.textContent = formatCurrency(trade.value);
+
+            row.appendChild(dateCell);
+            row.appendChild(actionCell);
+            row.appendChild(priceCell);
+            row.appendChild(sharesCell);
+            row.appendChild(valueCell);
+            tbody.appendChild(row);
+        });
+        tradesTable.appendChild(tbody);
+        tradesTab.appendChild(tradesTable);
+    } else {
+        const noTrades = document.createElement('p');
+        noTrades.className = 'text-muted';
+        noTrades.textContent = 'No trades executed';
+        tradesTab.appendChild(noTrades);
+    }
+
+    // Chart tab
+    if (results.price_chart_data && results.price_chart_data.length > 0) {
+        const chartData = results.price_chart_data;
+        const dates = chartData.map(d => d.index || d.Date || Object.keys(d)[0]);
+
+        const traces = [
+            {
+                x: dates,
+                y: chartData.map(d => d.Close),
+                name: 'Price',
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#2c3e50' }
+            }
+        ];
+
+        if (chartData[0].SMA_fast !== undefined) {
+            traces.push({
+                x: dates,
+                y: chartData.map(d => d.SMA_fast),
+                name: 'Fast SMA',
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#3498db', dash: 'dash' }
+            });
+        }
+
+        if (chartData[0].SMA_slow !== undefined) {
+            traces.push({
+                x: dates,
+                y: chartData.map(d => d.SMA_slow),
+                name: 'Slow SMA',
+                type: 'scatter',
+                mode: 'lines',
+                line: { color: '#e74c3c', dash: 'dash' }
+            });
+        }
+
+        const layout = {
+            title: `${results.symbol || 'Price'} Chart`,
+            showlegend: true,
+            xaxis: { title: 'Date' },
+            yaxis: { title: 'Price' }
+        };
+
+        Plotly.newPlot('price-chart', traces, layout);
+    }
+}
+
+// Utility functions
+function formatPercent(value) {
+    if (value === null || value === undefined) return '-';
+    return (value >= 0 ? '+' : '') + value.toFixed(2) + '%';
+}
+
+function formatCurrency(value) {
+    if (value === null || value === undefined) return '-';
+    return '$' + value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function formatKey(key) {
+    return key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+function formatValue(key, value) {
+    if (key.includes('pct') || key.includes('return') && typeof value === 'number') {
+        return formatPercent(value);
+    }
+    if (key.includes('capital') || key.includes('value') && typeof value === 'number') {
+        return formatCurrency(value);
+    }
+    return value;
+}
+</script>
+{% endblock %}

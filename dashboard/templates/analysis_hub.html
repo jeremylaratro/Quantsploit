@@ -1,0 +1,157 @@
+{% extends "base.html" %}
+
+{% block title %}Analysis Hub - Quantsploit{% endblock %}
+
+{% block extra_css %}
+<style>
+    .analysis-card {
+        transition: all 0.3s ease;
+        height: 100%;
+        cursor: pointer;
+    }
+    .analysis-card:hover {
+        transform: translateY(-5px);
+        box-shadow: 0 10px 30px rgba(0,0,0,0.15);
+    }
+    .analysis-icon {
+        font-size: 3rem;
+        margin-bottom: 1rem;
+    }
+    .quick-analyze {
+        max-width: 500px;
+        margin: 0 auto;
+    }
+    .recent-item {
+        border-left: 3px solid #667eea;
+        padding-left: 1rem;
+        margin-bottom: 0.5rem;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-microscope"></i> Analysis Hub</h2>
+</div>
+
+<!-- Quick Analyze -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="quick-analyze">
+            <h5 class="text-center mb-3">Quick Analysis</h5>
+            <div class="input-group input-group-lg">
+                <input type="text" class="form-control" id="quick-symbol"
+                       placeholder="Enter symbol (e.g., AAPL)" onkeypress="if(event.key==='Enter') quickAnalyze()">
+                <button class="btn btn-primary" onclick="quickAnalyze()">
+                    <i class="fas fa-search"></i> Analyze
+                </button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Analysis Modules -->
+<div class="row">
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card analysis-card" onclick="window.location='/analysis/stock'">
+            <div class="card-body text-center">
+                <div class="analysis-icon text-primary">
+                    <i class="fas fa-chart-bar"></i>
+                </div>
+                <h5>Stock Analyzer</h5>
+                <p class="text-muted">Deep dive analysis on individual stocks with strategy performance comparison and risk metrics</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card analysis-card" onclick="window.location='/analysis/indicators'">
+            <div class="card-body text-center">
+                <div class="analysis-icon text-success">
+                    <i class="fas fa-wave-square"></i>
+                </div>
+                <h5>Technical Indicators</h5>
+                <p class="text-muted">50+ technical indicators including RSI, MACD, Bollinger Bands, and custom signals</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card analysis-card" onclick="window.location='/analysis/patterns'">
+            <div class="card-body text-center">
+                <div class="analysis-icon text-warning">
+                    <i class="fas fa-shapes"></i>
+                </div>
+                <h5>Pattern Recognition</h5>
+                <p class="text-muted">Candlestick patterns, chart patterns, and statistical pattern detection</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Existing Analysis Pages -->
+<h4 class="mt-4 mb-3"><i class="fas fa-chart-line"></i> Portfolio Analysis</h4>
+<div class="row">
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card analysis-card" onclick="goToLatestRun('/risk-analytics')">
+            <div class="card-body text-center">
+                <div class="analysis-icon text-danger">
+                    <i class="fas fa-shield-alt"></i>
+                </div>
+                <h5>Risk Analytics</h5>
+                <p class="text-muted">VaR, CVaR, drawdown analysis, and comprehensive risk metrics</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card analysis-card" onclick="goToLatestRun('/correlation')">
+            <div class="card-body text-center">
+                <div class="analysis-icon text-info">
+                    <i class="fas fa-project-diagram"></i>
+                </div>
+                <h5>Correlation Analysis</h5>
+                <p class="text-muted">Strategy correlation matrix, clustering, and diversification metrics</p>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-lg-4 col-md-6 mb-4">
+        <div class="card analysis-card" onclick="goToLatestRun('/time-analysis')">
+            <div class="card-body text-center">
+                <div class="analysis-icon text-secondary">
+                    <i class="fas fa-clock"></i>
+                </div>
+                <h5>Time Analysis</h5>
+                <p class="text-muted">Performance by day of week, month, and seasonal patterns</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function quickAnalyze() {
+    const symbol = document.getElementById('quick-symbol').value.trim().toUpperCase();
+    if (symbol) {
+        window.location = `/analysis/stock/${symbol}`;
+    }
+}
+
+async function goToLatestRun(basePath) {
+    try {
+        const response = await fetch('/api/runs');
+        const runs = await response.json();
+        if (runs && runs.length > 0) {
+            window.location = `${basePath}/${runs[0]}`;
+        } else {
+            alert('No backtest runs available. Run a backtest first.');
+        }
+    } catch (error) {
+        alert('Error loading runs: ' + error.message);
+    }
+}
+</script>
+{% endblock %}

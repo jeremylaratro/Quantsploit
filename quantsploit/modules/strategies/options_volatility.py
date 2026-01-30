@@ -27,6 +27,7 @@ import pandas as pd
 import numpy as np
 from datetime import datetime, timedelta
 from typing import Dict, List, Tuple, Optional
+from scipy.stats import norm
 import warnings
 warnings.filterwarnings('ignore')
 
@@ -250,12 +251,13 @@ RISK MANAGEMENT:
         max_loss = total_premium  # If stock stays at strike
         max_profit = "Unlimited"  # Large moves in either direction
 
-        # Probability of profit (simplified - need to move beyond breakeven)
-        prob_above_upper = 1 - norm.cdf((np.log(upper_breakeven / S)) / (sigma * np.sqrt(T)))
-        prob_below_lower = norm.cdf((np.log(lower_breakeven / S)) / (sigma * np.sqrt(T)))
+        # Probability of profit (with drift term for accuracy)
+        # Using risk-neutral measure: d = (ln(K/S) - (r - q - 0.5*σ²)*T) / (σ*√T)
+        d_upper = (np.log(upper_breakeven / S) - (r - q - 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d_lower = (np.log(lower_breakeven / S) - (r - q - 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        prob_above_upper = 1 - norm.cdf(d_upper)
+        prob_below_lower = norm.cdf(d_lower)
         prob_profit = (prob_above_upper + prob_below_lower) * 100
-
-        from scipy.stats import norm
 
         return {
             "strategy": "Long Straddle",
@@ -356,11 +358,11 @@ RISK MANAGEMENT:
         max_loss = total_premium
         max_profit = "Unlimited"
 
-        from scipy.stats import norm
-
-        # Probability of profit
-        prob_above_upper = 1 - norm.cdf((np.log(upper_breakeven / S)) / (sigma * np.sqrt(T)))
-        prob_below_lower = norm.cdf((np.log(lower_breakeven / S)) / (sigma * np.sqrt(T)))
+        # Probability of profit (with drift term for accuracy)
+        d_upper = (np.log(upper_breakeven / S) - (r - q - 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        d_lower = (np.log(lower_breakeven / S) - (r - q - 0.5 * sigma**2) * T) / (sigma * np.sqrt(T))
+        prob_above_upper = 1 - norm.cdf(d_upper)
+        prob_below_lower = norm.cdf(d_lower)
         prob_profit = (prob_above_upper + prob_below_lower) * 100
 
         return {

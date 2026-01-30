@@ -1,0 +1,572 @@
+{% extends "base.html" %}
+
+{% block title %}Scanners - Quantsploit{% endblock %}
+
+{% block extra_css %}
+<style>
+    .scanner-card {
+        transition: all 0.3s ease;
+        height: 100%;
+    }
+    .scanner-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
+    }
+    .scanner-icon {
+        font-size: 2.5rem;
+        opacity: 0.8;
+    }
+    .status-badge {
+        position: absolute;
+        top: 1rem;
+        right: 1rem;
+    }
+    .results-preview {
+        max-height: 300px;
+        overflow-y: auto;
+    }
+    .results-table {
+        font-size: 0.85rem;
+    }
+    .results-table th {
+        position: sticky;
+        top: 0;
+        background: #f8f9fa;
+        z-index: 1;
+    }
+    .ticker-link {
+        color: #2c3e50;
+        text-decoration: none;
+        font-weight: 600;
+    }
+    .ticker-link:hover {
+        color: #667eea;
+        text-decoration: underline;
+    }
+    .positive { color: #27ae60; }
+    .negative { color: #e74c3c; }
+    .summary-stat {
+        text-align: center;
+        padding: 0.5rem;
+    }
+    .summary-value {
+        font-size: 1.5rem;
+        font-weight: 700;
+    }
+    .refresh-btn {
+        border-radius: 50%;
+        width: 40px;
+        height: 40px;
+        padding: 0;
+    }
+    .refresh-btn.spinning i {
+        animation: spin 1s linear infinite;
+    }
+    @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-search-dollar"></i> Market Scanners</h2>
+    <div>
+        <button class="btn btn-outline-primary me-2" onclick="refreshAllScanners()">
+            <i class="fas fa-sync-alt"></i> Refresh All
+        </button>
+        <span id="last-updated" class="text-muted small"></span>
+    </div>
+</div>
+
+<!-- Scanner Cards -->
+<div class="row" id="scanner-grid">
+    <!-- Cards will be populated dynamically -->
+</div>
+
+<!-- Detail Modal -->
+<div class="modal fade" id="scannerModal" tabindex="-1">
+    <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title"><i id="modal-icon" class="fas fa-search"></i> <span id="modal-title">Scanner Results</span></h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+            </div>
+            <div class="modal-body">
+                <div id="modal-content"></div>
+            </div>
+        </div>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let scannerInfo = {};
+let scannerCache = {};
+
+document.addEventListener('DOMContentLoaded', async () => {
+    await loadScannerInfo();
+    await loadScannerStatus();
+
+    // Poll for status updates every 10 seconds
+    setInterval(loadScannerStatus, 10000);
+});
+
+async function loadScannerInfo() {
+    try {
+        const response = await fetch('/api/scanners/info');
+        const data = await response.json();
+        scannerInfo = data.scanners || {};
+        renderScannerGrid();
+    } catch (error) {
+        console.error('Failed to load scanner info:', error);
+    }
+}
+
+async function loadScannerStatus() {
+    try {
+        const response = await fetch('/api/scanners/status');
+        const data = await response.json();
+        scannerCache = data;
+        updateScannerCards();
+        updateLastUpdated();
+    } catch (error) {
+        console.error('Failed to load scanner status:', error);
+    }
+}
+
+function renderScannerGrid() {
+    const grid = document.getElementById('scanner-grid');
+    grid.replaceChildren();
+
+    for (const [scannerId, info] of Object.entries(scannerInfo)) {
+        const col = document.createElement('div');
+        col.className = 'col-lg-4 col-md-6 mb-4';
+        col.id = `scanner-col-${scannerId}`;
+
+        const card = document.createElement('div');
+        card.className = 'card scanner-card';
+        card.id = `scanner-card-${scannerId}`;
+
+        // Card header
+        const header = document.createElement('div');
+        header.className = 'card-header d-flex justify-content-between align-items-center';
+
+        const titleDiv = document.createElement('div');
+        const icon = document.createElement('i');
+        icon.className = `fas ${info.icon} me-2`;
+        titleDiv.appendChild(icon);
+        titleDiv.appendChild(document.createTextNode(info.name));
+
+        const refreshBtn = document.createElement('button');
+        refreshBtn.className = 'btn btn-sm btn-outline-secondary refresh-btn';
+        refreshBtn.id = `refresh-${scannerId}`;
+        refreshBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            refreshScanner(scannerId);
+        });
+        const refreshIcon = document.createElement('i');
+        refreshIcon.className = 'fas fa-sync-alt';
+        refreshBtn.appendChild(refreshIcon);
+
+        header.appendChild(titleDiv);
+        header.appendChild(refreshBtn);
+
+        // Card body
+        const body = document.createElement('div');
+        body.className = 'card-body';
+
+        const desc = document.createElement('p');
+        desc.className = 'text-muted small';
+        desc.textContent = info.description;
+        body.appendChild(desc);
+
+        // Status indicator
+        const statusDiv = document.createElement('div');
+        statusDiv.className = 'mb-3';
+        statusDiv.id = `status-${scannerId}`;
+        statusDiv.appendChild(createStatusBadge('pending'));
+        body.appendChild(statusDiv);
+
+        // Results preview
+        const preview = document.createElement('div');
+        preview.className = 'results-preview';
+        preview.id = `preview-${scannerId}`;
+        const loadingText = document.createElement('div');
+        loadingText.className = 'text-center text-muted py-3';
+        loadingText.textContent = 'Waiting for scan results...';
+        preview.appendChild(loadingText);
+        body.appendChild(preview);
+
+        // View details button
+        const viewBtn = document.createElement('button');
+        viewBtn.className = 'btn btn-primary btn-sm w-100 mt-3';
+        viewBtn.id = `view-${scannerId}`;
+        viewBtn.disabled = true;
+        viewBtn.addEventListener('click', () => showScannerDetails(scannerId));
+        const viewIcon = document.createElement('i');
+        viewIcon.className = 'fas fa-expand me-1';
+        viewBtn.appendChild(viewIcon);
+        viewBtn.appendChild(document.createTextNode('View Full Results'));
+        body.appendChild(viewBtn);
+
+        card.appendChild(header);
+        card.appendChild(body);
+        col.appendChild(card);
+        grid.appendChild(col);
+    }
+}
+
+function createStatusBadge(status) {
+    const badge = document.createElement('span');
+    badge.className = 'badge';
+
+    switch (status) {
+        case 'completed':
+            badge.className += ' bg-success';
+            badge.textContent = 'Completed';
+            break;
+        case 'running':
+            badge.className += ' bg-warning';
+            const spinner = document.createElement('span');
+            spinner.className = 'spinner-border spinner-border-sm me-1';
+            badge.appendChild(spinner);
+            badge.appendChild(document.createTextNode('Running...'));
+            break;
+        case 'failed':
+            badge.className += ' bg-danger';
+            badge.textContent = 'Failed';
+            break;
+        default:
+            badge.className += ' bg-secondary';
+            badge.textContent = 'Pending';
+    }
+
+    return badge;
+}
+
+function updateScannerCards() {
+    for (const [scannerId, cache] of Object.entries(scannerCache)) {
+        // Update status badge
+        const statusDiv = document.getElementById(`status-${scannerId}`);
+        if (statusDiv) {
+            statusDiv.replaceChildren();
+            statusDiv.appendChild(createStatusBadge(cache.status));
+
+            if (cache.timestamp) {
+                const timeSpan = document.createElement('small');
+                timeSpan.className = 'text-muted ms-2';
+                timeSpan.textContent = new Date(cache.timestamp).toLocaleTimeString();
+                statusDiv.appendChild(timeSpan);
+            }
+        }
+
+        // Update refresh button
+        const refreshBtn = document.getElementById(`refresh-${scannerId}`);
+        if (refreshBtn) {
+            refreshBtn.classList.toggle('spinning', cache.status === 'running');
+            refreshBtn.disabled = cache.status === 'running';
+        }
+
+        // Update preview
+        const preview = document.getElementById(`preview-${scannerId}`);
+        if (preview && cache.data) {
+            renderPreview(preview, scannerId, cache.data);
+        }
+
+        // Update view button
+        const viewBtn = document.getElementById(`view-${scannerId}`);
+        if (viewBtn) {
+            viewBtn.disabled = !cache.data;
+        }
+    }
+}
+
+function renderPreview(container, scannerId, data) {
+    container.replaceChildren();
+
+    // Show summary if available
+    if (data.summary) {
+        const summaryRow = document.createElement('div');
+        summaryRow.className = 'row mb-2';
+
+        const stats = [
+            { label: 'Analyzed', value: data.total_analyzed || data.successful_analysis || '-' },
+            { label: 'Positive', value: data.summary.positive_stocks || '-', class: 'positive' },
+            { label: 'Negative', value: data.summary.negative_stocks || '-', class: 'negative' }
+        ];
+
+        stats.forEach(stat => {
+            const col = document.createElement('div');
+            col.className = 'col-4 summary-stat';
+
+            const value = document.createElement('div');
+            value.className = `summary-value ${stat.class || ''}`;
+            value.textContent = stat.value;
+
+            const label = document.createElement('div');
+            label.className = 'small text-muted';
+            label.textContent = stat.label;
+
+            col.appendChild(value);
+            col.appendChild(label);
+            summaryRow.appendChild(col);
+        });
+
+        container.appendChild(summaryRow);
+    }
+
+    // Show top results preview
+    const topResults = data.top_gainers || data.momentum_stocks || data.screened_stocks || [];
+    if (topResults.length > 0) {
+        const table = document.createElement('table');
+        table.className = 'table table-sm results-table mb-0';
+
+        const tbody = document.createElement('tbody');
+        topResults.slice(0, 5).forEach(row => {
+            const tr = document.createElement('tr');
+
+            const symbolTd = document.createElement('td');
+            const symbolLink = document.createElement('span');
+            symbolLink.className = 'ticker-link';
+            symbolLink.textContent = row.Symbol || row.symbol;
+            symbolTd.appendChild(symbolLink);
+
+            const returnTd = document.createElement('td');
+            returnTd.className = 'text-end';
+            const returnVal = row.Return || row.return_pct || row.momentum || 0;
+            returnTd.className += returnVal >= 0 ? ' positive' : ' negative';
+            returnTd.textContent = (returnVal >= 0 ? '+' : '') + returnVal.toFixed(2) + '%';
+
+            tr.appendChild(symbolTd);
+            tr.appendChild(returnTd);
+            tbody.appendChild(tr);
+        });
+
+        table.appendChild(tbody);
+        container.appendChild(table);
+
+        if (topResults.length > 5) {
+            const more = document.createElement('div');
+            more.className = 'text-center text-muted small';
+            more.textContent = `+ ${topResults.length - 5} more`;
+            container.appendChild(more);
+        }
+    }
+}
+
+async function refreshScanner(scannerId) {
+    const refreshBtn = document.getElementById(`refresh-${scannerId}`);
+    if (refreshBtn) {
+        refreshBtn.classList.add('spinning');
+        refreshBtn.disabled = true;
+    }
+
+    try {
+        await fetch(`/api/scanners/${scannerId}/run`, { method: 'POST' });
+        // Status will be updated by the polling
+    } catch (error) {
+        console.error(`Failed to refresh scanner ${scannerId}:`, error);
+    }
+}
+
+async function refreshAllScanners() {
+    for (const scannerId of Object.keys(scannerInfo)) {
+        await refreshScanner(scannerId);
+    }
+}
+
+function showScannerDetails(scannerId) {
+    const cache = scannerCache[scannerId];
+    const info = scannerInfo[scannerId];
+    if (!cache || !cache.data) return;
+
+    document.getElementById('modal-title').textContent = info.name + ' Results';
+    const iconEl = document.getElementById('modal-icon');
+    iconEl.className = `fas ${info.icon} me-2`;
+
+    const content = document.getElementById('modal-content');
+    content.replaceChildren();
+
+    const data = cache.data;
+
+    // Summary section
+    if (data.summary) {
+        const summaryCard = document.createElement('div');
+        summaryCard.className = 'card mb-3';
+
+        const summaryHeader = document.createElement('div');
+        summaryHeader.className = 'card-header';
+        summaryHeader.textContent = 'Summary';
+        summaryCard.appendChild(summaryHeader);
+
+        const summaryBody = document.createElement('div');
+        summaryBody.className = 'card-body';
+
+        const row = document.createElement('div');
+        row.className = 'row';
+
+        const summaryStats = [
+            { label: 'Avg Return', value: (data.summary.avg_return || 0).toFixed(2) + '%' },
+            { label: 'Avg Momentum', value: (data.summary.avg_momentum || 0).toFixed(2) },
+            { label: 'Avg RSI', value: (data.summary.avg_rsi || 0).toFixed(1) },
+            { label: 'High Quality', value: data.summary.high_quality_count || 0 }
+        ];
+
+        summaryStats.forEach(stat => {
+            const col = document.createElement('div');
+            col.className = 'col-md-3 col-6 text-center';
+
+            const value = document.createElement('div');
+            value.className = 'h4 mb-0';
+            value.textContent = stat.value;
+
+            const label = document.createElement('div');
+            label.className = 'small text-muted';
+            label.textContent = stat.label;
+
+            col.appendChild(value);
+            col.appendChild(label);
+            row.appendChild(col);
+        });
+
+        summaryBody.appendChild(row);
+        summaryCard.appendChild(summaryBody);
+        content.appendChild(summaryCard);
+    }
+
+    // Results tables
+    const resultSections = [
+        { key: 'top_gainers', title: 'Top Gainers', icon: 'fa-arrow-up' },
+        { key: 'top_losers', title: 'Top Losers', icon: 'fa-arrow-down' },
+        { key: 'top_momentum', title: 'Top Momentum', icon: 'fa-chart-line' },
+        { key: 'near_breakout', title: 'Near Breakout', icon: 'fa-bolt' },
+        { key: 'oversold_opportunities', title: 'Oversold Opportunities', icon: 'fa-tags' },
+        { key: 'high_quality_stocks', title: 'High Quality Stocks', icon: 'fa-star' },
+        { key: 'high_volume', title: 'High Volume', icon: 'fa-volume-up' }
+    ];
+
+    const tabNav = document.createElement('ul');
+    tabNav.className = 'nav nav-tabs';
+    tabNav.setAttribute('role', 'tablist');
+
+    const tabContent = document.createElement('div');
+    tabContent.className = 'tab-content mt-3';
+
+    let firstTab = true;
+    resultSections.forEach((section, idx) => {
+        const results = data[section.key];
+        if (!results || results.length === 0) return;
+
+        // Tab nav item
+        const navItem = document.createElement('li');
+        navItem.className = 'nav-item';
+
+        const navLink = document.createElement('button');
+        navLink.className = `nav-link ${firstTab ? 'active' : ''}`;
+        navLink.setAttribute('data-bs-toggle', 'tab');
+        navLink.setAttribute('data-bs-target', `#tab-${section.key}`);
+
+        const tabIcon = document.createElement('i');
+        tabIcon.className = `fas ${section.icon} me-1`;
+        navLink.appendChild(tabIcon);
+        navLink.appendChild(document.createTextNode(section.title));
+
+        const badge = document.createElement('span');
+        badge.className = 'badge bg-secondary ms-1';
+        badge.textContent = results.length;
+        navLink.appendChild(badge);
+
+        navItem.appendChild(navLink);
+        tabNav.appendChild(navItem);
+
+        // Tab pane
+        const pane = document.createElement('div');
+        pane.className = `tab-pane fade ${firstTab ? 'show active' : ''}`;
+        pane.id = `tab-${section.key}`;
+
+        // Create table
+        const tableWrapper = document.createElement('div');
+        tableWrapper.className = 'table-responsive';
+        tableWrapper.style.maxHeight = '400px';
+
+        const table = document.createElement('table');
+        table.className = 'table table-sm table-hover';
+
+        // Get columns from first result
+        const columns = Object.keys(results[0]);
+
+        const thead = document.createElement('thead');
+        thead.className = 'table-dark';
+        const headerRow = document.createElement('tr');
+        columns.forEach(col => {
+            const th = document.createElement('th');
+            th.textContent = col.replace(/_/g, ' ');
+            headerRow.appendChild(th);
+        });
+        thead.appendChild(headerRow);
+        table.appendChild(thead);
+
+        const tbody = document.createElement('tbody');
+        results.forEach(row => {
+            const tr = document.createElement('tr');
+            columns.forEach(col => {
+                const td = document.createElement('td');
+                let value = row[col];
+
+                if (col === 'Symbol') {
+                    const link = document.createElement('a');
+                    link.href = `/analysis/stock/${value}`;
+                    link.className = 'ticker-link';
+                    link.textContent = value;
+                    td.appendChild(link);
+                } else if (typeof value === 'number') {
+                    td.textContent = value.toFixed(2);
+                    if (col.includes('Return') || col.includes('Momentum') || col.includes('Breakout')) {
+                        td.className = value >= 0 ? 'positive' : 'negative';
+                    }
+                } else if (typeof value === 'boolean') {
+                    const icon = document.createElement('i');
+                    icon.className = value ? 'fas fa-check text-success' : 'fas fa-times text-danger';
+                    td.appendChild(icon);
+                } else {
+                    td.textContent = value;
+                }
+
+                tr.appendChild(td);
+            });
+            tbody.appendChild(tr);
+        });
+        table.appendChild(tbody);
+
+        tableWrapper.appendChild(table);
+        pane.appendChild(tableWrapper);
+        tabContent.appendChild(pane);
+
+        firstTab = false;
+    });
+
+    content.appendChild(tabNav);
+    content.appendChild(tabContent);
+
+    // Show modal
+    const modal = new bootstrap.Modal(document.getElementById('scannerModal'));
+    modal.show();
+}
+
+function updateLastUpdated() {
+    const timestamps = Object.values(scannerCache)
+        .filter(c => c.timestamp)
+        .map(c => new Date(c.timestamp));
+
+    if (timestamps.length > 0) {
+        const latest = new Date(Math.max(...timestamps));
+        const el = document.getElementById('last-updated');
+        el.textContent = 'Last scan: ' + latest.toLocaleTimeString();
+    }
+}
+</script>
+{% endblock %}

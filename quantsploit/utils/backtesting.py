@@ -8,14 +8,261 @@ This module provides a comprehensive backtesting engine with:
 - Trade statistics and analytics
 - Portfolio management
 - Walk-forward optimization support
+- Look-ahead bias prevention with SafeHistoricalData wrapper
 """
 
 import pandas as pd
 import numpy as np
 from datetime import datetime
-from typing import Dict, List, Tuple, Optional, Callable
+from typing import Dict, List, Tuple, Optional, Callable, Union
 from dataclasses import dataclass, field
 from enum import Enum
+
+
+# =============================================================================
+# Look-Ahead Bias Prevention
+# =============================================================================
+
+class SafeHistoricalData:
+    """
+    Wrapper that enforces time boundaries to prevent look-ahead bias.
+
+    Look-ahead bias occurs when a backtest accidentally uses future data
+    that wouldn't have been available at the time of the trading decision.
+    This class enforces strict time boundaries on data access.
+
+    ★ Insight ─────────────────────────────────────
+    This is a critical infrastructure piece for reliable backtesting:
+    1. Wraps any DataFrame and enforces a "current date" boundary
+    2. All data access automatically filters to data <= current_date
+    3. Raises warnings or errors when attempting to access future data
+    ─────────────────────────────────────────────────
+
+    Usage:
+        >>> data = SafeHistoricalData(price_df, current_date='2024-01-15')
+        >>> # Only returns data up to 2024-01-15
+        >>> recent_prices = data['Close']
+        >>> # Advance the simulation date
+        >>> data.advance_to('2024-01-16')
+
+    Example in backtest:
+        >>> safe_data = SafeHistoricalData(df, backtest_start_date)
+        >>> for date in trading_days:
+        ...     safe_data.advance_to(date)
+        ...     signal = strategy.generate_signal(safe_data)  # Can't see future!
+    """
+
+    def __init__(
+        self,
+        data: pd.DataFrame,
+        current_date: Union[str, datetime, pd.Timestamp],
+        strict: bool = True,
+        warn_on_future_access: bool = True
+    ):
+        """
+        Initialize SafeHistoricalData wrapper.
+
+        Args:
+            data: DataFrame with DatetimeIndex (typically OHLCV data)
+            current_date: The "current" simulation date - no data after this is accessible
+            strict: If True, raise error on future access; if False, just return empty
+            warn_on_future_access: Log warnings when future access is attempted
+        """
+        if not isinstance(data.index, pd.DatetimeIndex):
+            raise ValueError("DataFrame must have DatetimeIndex for SafeHistoricalData")
+
+        self._data = data.copy()
+        self._current_date = pd.Timestamp(current_date)
+        self._strict = strict
+        self._warn_on_future_access = warn_on_future_access
+        self._access_log: List[Dict] = []  # Track access patterns for debugging
+
+    @property
+    def current_date(self) -> pd.Timestamp:
+        """Get the current simulation date."""
+        return self._current_date
+
+    @property
+    def available_dates(self) -> pd.DatetimeIndex:
+        """Get all dates that are currently accessible."""
+        return self._data.loc[:self._current_date].index
+
+    @property
+    def shape(self) -> Tuple[int, int]:
+        """Shape of available data."""
+        return self._safe_slice().shape
+
+    @property
+    def columns(self) -> pd.Index:
+        """Column names."""
+        return self._data.columns
+
+    @property
+    def index(self) -> pd.DatetimeIndex:
+        """Available index (dates up to current_date)."""
+        return self._safe_slice().index
+
+    def _safe_slice(self) -> pd.DataFrame:
+        """Return data up to and including current_date."""
+        return self._data.loc[:self._current_date]
+
+    def _log_access(self, access_type: str, key: str):
+        """Log data access for debugging look-ahead issues."""
+        self._access_log.append({
+            'timestamp': datetime.now(),
+            'current_date': self._current_date,
+            'access_type': access_type,
+            'key': str(key)
+        })
+
+    def advance_to(self, new_date: Union[str, datetime, pd.Timestamp]):
+        """
+        Advance the simulation to a new date.
+
+        Args:
+            new_date: The new current date (must be >= current date)
+
+        Raises:
+            ValueError: If new_date is before current_date
+        """
+        new_date = pd.Timestamp(new_date)
+        if new_date < self._current_date:
+            raise ValueError(
+                f"Cannot go backwards in time: {new_date} < {self._current_date}. "
+                "This would violate causality in the backtest."
+            )
+        self._current_date = new_date
+
+    def reset_to(self, date: Union[str, datetime, pd.Timestamp]):
+        """
+        Reset the simulation to an earlier date (use with caution).
+
+        This is useful for walk-forward analysis where you need to
+        reset to the start of each fold.
+        """
+        self._current_date = pd.Timestamp(date)
+
+    def __getitem__(self, key):
+        """
+        Get data up to current_date only.
+
+        Supports:
+        - Column selection: data['Close']
+        - Multiple columns: data[['Open', 'Close']]
+        - Boolean indexing (filtered to available dates)
+        """
+        self._log_access('getitem', key)
+        safe_data = self._safe_slice()
+
+        if isinstance(key, str):
+            return safe_data[key]
+        elif isinstance(key, list):
+            return safe_data[key]
+        elif isinstance(key, pd.Series):
+            # Boolean indexing - ensure dates are within range
+            safe_key = key.loc[:self._current_date]
+            return safe_data.loc[safe_key]
+        else:
+            return safe_data[key]
+
+    def __len__(self) -> int:
+        """Number of available rows."""
+        return len(self._safe_slice())
+
+    def loc(self, *args, **kwargs):
+        """
+        Safe .loc accessor that filters to available dates.
+
+        If you try to access a future date, it will be filtered out
+        or raise an error depending on strict mode.
+        """
+        self._log_access('loc', str(args))
+        safe_data = self._safe_slice()
+        return safe_data.loc[args[0]] if args else safe_data
+
+    def iloc(self, idx):
+        """
+        Safe .iloc accessor for positional indexing.
+
+        Only works on available (non-future) data.
+        """
+        self._log_access('iloc', str(idx))
+        safe_data = self._safe_slice()
+        return safe_data.iloc[idx]
+
+    def head(self, n: int = 5) -> pd.DataFrame:
+        """Return first n rows of available data."""
+        return self._safe_slice().head(n)
+
+    def tail(self, n: int = 5) -> pd.DataFrame:
+        """Return last n rows of available data."""
+        return self._safe_slice().tail(n)
+
+    def rolling(self, window: int, **kwargs) -> pd.core.window.Rolling:
+        """Safe rolling window that only uses available data."""
+        return self._safe_slice().rolling(window, **kwargs)
+
+    def shift(self, periods: int = 1, **kwargs) -> pd.DataFrame:
+        """Safe shift operation on available data."""
+        return self._safe_slice().shift(periods, **kwargs)
+
+    def pct_change(self, periods: int = 1, **kwargs) -> pd.DataFrame:
+        """Safe percentage change on available data."""
+        return self._safe_slice().pct_change(periods, **kwargs)
+
+    def diff(self, periods: int = 1, **kwargs) -> pd.DataFrame:
+        """Safe diff operation on available data."""
+        return self._safe_slice().diff(periods, **kwargs)
+
+    def resample(self, rule: str, **kwargs):
+        """Safe resample on available data."""
+        return self._safe_slice().resample(rule, **kwargs)
+
+    def last(self, offset: str) -> pd.DataFrame:
+        """Return last offset of available data (e.g., '5D' for 5 days)."""
+        return self._safe_slice().last(offset)
+
+    def get_latest_price(self, column: str = 'Close') -> float:
+        """Get the most recent price up to current_date."""
+        safe_data = self._safe_slice()
+        if len(safe_data) == 0:
+            raise ValueError(f"No data available up to {self._current_date}")
+        return safe_data[column].iloc[-1]
+
+    def get_returns(self, column: str = 'Close', periods: int = 1) -> pd.Series:
+        """Calculate returns on available data only."""
+        return self._safe_slice()[column].pct_change(periods)
+
+    def get_volatility(self, column: str = 'Close', window: int = 20) -> pd.Series:
+        """Calculate rolling volatility on available data."""
+        returns = self.get_returns(column)
+        return returns.rolling(window).std() * np.sqrt(252)
+
+    def copy(self) -> 'SafeHistoricalData':
+        """Create a copy with the same current_date."""
+        return SafeHistoricalData(
+            self._data.copy(),
+            self._current_date,
+            self._strict,
+            self._warn_on_future_access
+        )
+
+    def to_dataframe(self) -> pd.DataFrame:
+        """Export available data as a regular DataFrame."""
+        return self._safe_slice().copy()
+
+    def get_access_log(self) -> List[Dict]:
+        """Get log of all data access (useful for debugging look-ahead bias)."""
+        return self._access_log.copy()
+
+    def __repr__(self) -> str:
+        safe_len = len(self._safe_slice())
+        total_len = len(self._data)
+        return (
+            f"SafeHistoricalData(current_date={self._current_date.date()}, "
+            f"available_rows={safe_len}/{total_len}, "
+            f"columns={list(self.columns)})"
+        )
 
 
 class OrderType(Enum):

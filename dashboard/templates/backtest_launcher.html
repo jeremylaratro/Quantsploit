@@ -311,21 +311,81 @@ async function loadStrategies() {
         const data = await response.json();
         availableStrategies = data.strategies;
 
-        const listHtml = availableStrategies.map((strat, idx) => `
-            <div class="form-check mb-2">
-                <input class="form-check-input strategy-checkbox"
-                       type="checkbox"
-                       value="${strat.id}"
-                       id="strat-${idx}"
-                       onchange="updateStrategyCount()">
-                <label class="form-check-label" for="strat-${idx}">
-                    <strong>${strat.name}</strong>
-                    <small class="text-muted d-block">${strat.description}</small>
-                </label>
-            </div>
-        `).join('');
+        // Group strategies by category
+        const categoryNames = {
+            'core': 'Core Strategies',
+            'advanced': 'Advanced Strategies',
+            'v0.2.0': 'New in v0.2.0'
+        };
+        const categoryIcons = {
+            'core': 'fa-cubes',
+            'advanced': 'fa-brain',
+            'v0.2.0': 'fa-sparkles'
+        };
+        const categories = {};
+        availableStrategies.forEach((strat, idx) => {
+            const cat = strat.category || 'core';
+            if (!categories[cat]) categories[cat] = [];
+            categories[cat].push({...strat, idx});
+        });
 
-        document.getElementById('strategy-list').innerHTML = listHtml;
+        // Build DOM safely
+        const container = document.getElementById('strategy-list');
+        container.replaceChildren(); // Clear existing content safely
+
+        for (const [cat, strategies] of Object.entries(categories)) {
+            const catName = categoryNames[cat] || cat;
+            const catIcon = categoryIcons[cat] || 'fa-chess';
+
+            // Create category container
+            const categoryDiv = document.createElement('div');
+            categoryDiv.className = 'strategy-category mb-3';
+
+            // Create category header
+            const header = document.createElement('h6');
+            header.className = 'text-primary mb-2 border-bottom pb-1';
+            const icon = document.createElement('i');
+            icon.className = `fas ${catIcon}`;
+            header.appendChild(icon);
+            header.appendChild(document.createTextNode(` ${catName} `));
+            const badge = document.createElement('span');
+            badge.className = 'badge bg-secondary float-end';
+            badge.textContent = strategies.length;
+            header.appendChild(badge);
+            categoryDiv.appendChild(header);
+
+            // Create strategy checkboxes
+            strategies.forEach(strat => {
+                const formCheck = document.createElement('div');
+                formCheck.className = 'form-check mb-2';
+
+                const input = document.createElement('input');
+                input.className = 'form-check-input strategy-checkbox';
+                input.type = 'checkbox';
+                input.value = strat.id;
+                input.id = `strat-${strat.idx}`;
+                input.addEventListener('change', updateStrategyCount);
+
+                const label = document.createElement('label');
+                label.className = 'form-check-label';
+                label.setAttribute('for', `strat-${strat.idx}`);
+
+                const strong = document.createElement('strong');
+                strong.textContent = strat.name;
+                label.appendChild(strong);
+
+                const small = document.createElement('small');
+                small.className = 'text-muted d-block';
+                small.textContent = strat.description;
+                label.appendChild(small);
+
+                formCheck.appendChild(input);
+                formCheck.appendChild(label);
+                categoryDiv.appendChild(formCheck);
+            });
+
+            container.appendChild(categoryDiv);
+        }
 
         // Select all by default
         selectAllStrategies();

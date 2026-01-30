@@ -1,0 +1,665 @@
+{% extends "base.html" %}
+
+{% block title %}Options Analyzer - Quantsploit{% endblock %}
+
+{% block extra_css %}
+<style>
+    .symbol-input-group {
+        max-width: 400px;
+    }
+    .options-table {
+        font-size: 0.85rem;
+    }
+    .options-table th {
+        position: sticky;
+        top: 0;
+        background: #2c3e50;
+        color: white;
+        z-index: 10;
+    }
+    .table-container {
+        max-height: 500px;
+        overflow-y: auto;
+    }
+    .itm { background-color: rgba(39, 174, 96, 0.1); }
+    .atm { background-color: rgba(241, 196, 15, 0.15); font-weight: 600; }
+    .otm { background-color: rgba(231, 76, 60, 0.05); }
+    .positive { color: #27ae60; }
+    .negative { color: #e74c3c; }
+    .greek-value {
+        font-family: monospace;
+        font-weight: 500;
+    }
+    .summary-card {
+        transition: all 0.3s ease;
+    }
+    .summary-card:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+    }
+    .exp-badge {
+        cursor: pointer;
+        margin: 2px;
+    }
+    .exp-badge.active {
+        background-color: #667eea !important;
+    }
+    .strategy-card {
+        border-left: 4px solid #667eea;
+    }
+    .greeks-chart {
+        height: 300px;
+    }
+    .pcr-indicator {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+    .pcr-bullish { color: #27ae60; }
+    .pcr-bearish { color: #e74c3c; }
+    .pcr-neutral { color: #f39c12; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-coins"></i> Options Analyzer</h2>
+    <span class="badge bg-info">Full Chain Explorer with Greeks</span>
+</div>
+
+<!-- Symbol Input -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Symbol</label>
+                <div class="input-group symbol-input-group">
+                    <input type="text" class="form-control form-control-lg"
+                           id="symbol-input" placeholder="AAPL"
+                           onkeypress="if(event.key==='Enter') loadOptionsChain()">
+                    <button class="btn btn-primary" onclick="loadOptionsChain()">
+                        <i class="fas fa-search"></i> Analyze
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-5" id="expiration-selector" style="display: none;">
+                <label class="form-label">Expiration</label>
+                <div id="expiration-badges"></div>
+            </div>
+            <div class="col-md-3 text-end" id="current-price-display" style="display: none;">
+                <span class="text-muted">Current Price</span>
+                <div class="h3 mb-0" id="spot-price">-</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading State -->
+<div id="loading-state" style="display: none;">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status" style="width: 3rem; height: 3rem;"></div>
+        <p class="mt-3 text-muted">Loading options chain...</p>
+    </div>
+</div>
+
+<!-- Results Container -->
+<div id="results-container" style="display: none;">
+    <!-- Summary Row -->
+    <div class="row mb-4" id="summary-row">
+        <div class="col-md-3">
+            <div class="card summary-card h-100">
+                <div class="card-body text-center">
+                    <div class="h4 mb-0" id="total-calls">-</div>
+                    <small class="text-muted">Calls</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card summary-card h-100">
+                <div class="card-body text-center">
+                    <div class="h4 mb-0" id="total-puts">-</div>
+                    <small class="text-muted">Puts</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card summary-card h-100">
+                <div class="card-body text-center">
+                    <div class="pcr-indicator" id="pcr-value">-</div>
+                    <small class="text-muted">Put/Call Ratio</small>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="card summary-card h-100">
+                <div class="card-body text-center">
+                    <div class="h5 mb-0" id="pcr-interpretation">-</div>
+                    <small class="text-muted">Market Sentiment</small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs" id="optionsTabs">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#calls-tab">
+                <i class="fas fa-arrow-up"></i> Calls
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#puts-tab">
+                <i class="fas fa-arrow-down"></i> Puts
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#greeks-tab">
+                <i class="fas fa-calculator"></i> Greeks Analysis
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#strategies-tab">
+                <i class="fas fa-lightbulb"></i> Strategy Suggestions
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+        <!-- Calls Tab -->
+        <div class="tab-pane fade show active" id="calls-tab">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Call Options</h5>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" onclick="filterOptions('calls', 'all')">All</button>
+                            <button class="btn btn-outline-success" onclick="filterOptions('calls', 'ITM')">ITM</button>
+                            <button class="btn btn-outline-warning" onclick="filterOptions('calls', 'ATM')">ATM</button>
+                            <button class="btn btn-outline-danger" onclick="filterOptions('calls', 'OTM')">OTM</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="table table-sm table-hover options-table">
+                            <thead>
+                                <tr>
+                                    <th>Strike</th>
+                                    <th>Last</th>
+                                    <th>Bid</th>
+                                    <th>Ask</th>
+                                    <th>Volume</th>
+                                    <th>OI</th>
+                                    <th>IV%</th>
+                                    <th>Delta</th>
+                                    <th>Gamma</th>
+                                    <th>Theta</th>
+                                    <th>Vega</th>
+                                </tr>
+                            </thead>
+                            <tbody id="calls-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Puts Tab -->
+        <div class="tab-pane fade" id="puts-tab">
+            <div class="card">
+                <div class="card-body">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Put Options</h5>
+                        <div class="btn-group btn-group-sm">
+                            <button class="btn btn-outline-secondary" onclick="filterOptions('puts', 'all')">All</button>
+                            <button class="btn btn-outline-success" onclick="filterOptions('puts', 'ITM')">ITM</button>
+                            <button class="btn btn-outline-warning" onclick="filterOptions('puts', 'ATM')">ATM</button>
+                            <button class="btn btn-outline-danger" onclick="filterOptions('puts', 'OTM')">OTM</button>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="table table-sm table-hover options-table">
+                            <thead>
+                                <tr>
+                                    <th>Strike</th>
+                                    <th>Last</th>
+                                    <th>Bid</th>
+                                    <th>Ask</th>
+                                    <th>Volume</th>
+                                    <th>OI</th>
+                                    <th>IV%</th>
+                                    <th>Delta</th>
+                                    <th>Gamma</th>
+                                    <th>Theta</th>
+                                    <th>Vega</th>
+                                </tr>
+                            </thead>
+                            <tbody id="puts-table"></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Greeks Tab -->
+        <div class="tab-pane fade" id="greeks-tab">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Delta by Strike</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="delta-chart" class="greeks-chart"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card mb-4">
+                        <div class="card-header">
+                            <h5 class="mb-0">Implied Volatility Smile</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="iv-chart" class="greeks-chart"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Gamma by Strike</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="gamma-chart" class="greeks-chart"></div>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Open Interest Distribution</h5>
+                        </div>
+                        <div class="card-body">
+                            <div id="oi-chart" class="greeks-chart"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategies Tab -->
+        <div class="tab-pane fade" id="strategies-tab">
+            <div class="row" id="strategies-container"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Empty State -->
+<div id="empty-state">
+    <div class="text-center py-5">
+        <i class="fas fa-coins fa-4x text-muted mb-4"></i>
+        <h4 class="text-muted">Enter a symbol to analyze options</h4>
+        <p class="text-muted">View full options chain, Greeks, and strategy suggestions</p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let optionsData = null;
+let currentFilter = { calls: 'all', puts: 'all' };
+
+async function loadOptionsChain() {
+    const symbol = document.getElementById('symbol-input').value.trim().toUpperCase();
+    if (!symbol) return;
+
+    // Show loading
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('results-container').style.display = 'none';
+    document.getElementById('loading-state').style.display = 'block';
+
+    try {
+        const response = await fetch(`/api/options/chain/${symbol}`);
+        const data = await response.json();
+
+        document.getElementById('loading-state').style.display = 'none';
+
+        if (data.success) {
+            optionsData = data;
+            displayResults();
+        } else {
+            showError(data.error || 'Failed to load options data');
+        }
+
+    } catch (error) {
+        document.getElementById('loading-state').style.display = 'none';
+        showError('Network error: ' + error.message);
+    }
+}
+
+function displayResults() {
+    document.getElementById('results-container').style.display = 'block';
+
+    // Update header info
+    document.getElementById('spot-price').textContent = '$' + optionsData.current_price.toFixed(2);
+    document.getElementById('current-price-display').style.display = 'block';
+
+    // Update summary
+    const summary = optionsData.summary;
+    document.getElementById('total-calls').textContent = summary.total_calls;
+    document.getElementById('total-puts').textContent = summary.total_puts;
+
+    const pcrValue = document.getElementById('pcr-value');
+    pcrValue.textContent = summary.put_call_ratio.toFixed(2);
+    pcrValue.className = 'pcr-indicator ' +
+        (summary.put_call_ratio > 1 ? 'pcr-bearish' :
+         summary.put_call_ratio < 0.7 ? 'pcr-bullish' : 'pcr-neutral');
+
+    document.getElementById('pcr-interpretation').textContent = summary.pcr_interpretation;
+
+    // Display expirations
+    displayExpirations();
+
+    // Render tables
+    renderOptionsTable('calls', optionsData.calls);
+    renderOptionsTable('puts', optionsData.puts);
+
+    // Render charts
+    renderGreeksCharts();
+
+    // Load strategies
+    loadStrategies();
+}
+
+function displayExpirations() {
+    const container = document.getElementById('expiration-badges');
+    container.replaceChildren();
+
+    const expirations = optionsData.available_expirations || [];
+    const currentExp = optionsData.expiration;
+
+    expirations.slice(0, 8).forEach(exp => {
+        const badge = document.createElement('span');
+        badge.className = `badge bg-secondary exp-badge ${exp === currentExp ? 'active' : ''}`;
+        badge.textContent = formatDate(exp);
+        badge.addEventListener('click', () => changeExpiration(exp));
+        container.appendChild(badge);
+    });
+
+    document.getElementById('expiration-selector').style.display = 'block';
+}
+
+async function changeExpiration(expiration) {
+    const symbol = document.getElementById('symbol-input').value.trim().toUpperCase();
+    document.getElementById('loading-state').style.display = 'block';
+    document.getElementById('results-container').style.display = 'none';
+
+    try {
+        const response = await fetch(`/api/options/chain/${symbol}?expiration=${expiration}`);
+        const data = await response.json();
+
+        document.getElementById('loading-state').style.display = 'none';
+
+        if (data.success) {
+            optionsData = data;
+            displayResults();
+        }
+    } catch (error) {
+        document.getElementById('loading-state').style.display = 'none';
+    }
+}
+
+function renderOptionsTable(type, options) {
+    const tbody = document.getElementById(`${type}-table`);
+    tbody.replaceChildren();
+
+    if (!options || options.length === 0) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 11;
+        cell.className = 'text-center text-muted';
+        cell.textContent = 'No options available';
+        row.appendChild(cell);
+        tbody.appendChild(row);
+        return;
+    }
+
+    // Sort by strike
+    options.sort((a, b) => a.strike - b.strike);
+
+    options.forEach(opt => {
+        const row = document.createElement('tr');
+        row.className = opt.moneyness.toLowerCase();
+        row.dataset.moneyness = opt.moneyness;
+
+        // Strike
+        addCell(row, opt.strike.toFixed(2));
+
+        // Last price
+        addCell(row, formatPrice(opt.lastPrice));
+
+        // Bid
+        addCell(row, formatPrice(opt.bid));
+
+        // Ask
+        addCell(row, formatPrice(opt.ask));
+
+        // Volume
+        addCell(row, formatNumber(opt.volume));
+
+        // Open Interest
+        addCell(row, formatNumber(opt.openInterest));
+
+        // IV
+        const iv = (opt.impliedVolatility || 0) * 100;
+        addCell(row, iv.toFixed(1) + '%');
+
+        // Greeks
+        addGreekCell(row, opt.delta);
+        addGreekCell(row, opt.gamma);
+        addGreekCell(row, opt.theta);
+        addGreekCell(row, opt.vega);
+
+        tbody.appendChild(row);
+    });
+}
+
+function addCell(row, content) {
+    const cell = document.createElement('td');
+    cell.textContent = content;
+    row.appendChild(cell);
+}
+
+function addGreekCell(row, value) {
+    const cell = document.createElement('td');
+    cell.className = 'greek-value';
+    if (value !== undefined && value !== null) {
+        cell.textContent = value.toFixed(4);
+        cell.className += value >= 0 ? ' positive' : ' negative';
+    } else {
+        cell.textContent = '-';
+    }
+    row.appendChild(cell);
+}
+
+function filterOptions(type, moneyness) {
+    currentFilter[type] = moneyness;
+    const tbody = document.getElementById(`${type}-table`);
+    const rows = tbody.querySelectorAll('tr');
+
+    rows.forEach(row => {
+        if (moneyness === 'all' || row.dataset.moneyness === moneyness) {
+            row.style.display = '';
+        } else {
+            row.style.display = 'none';
+        }
+    });
+}
+
+function renderGreeksCharts() {
+    const calls = optionsData.calls || [];
+    const puts = optionsData.puts || [];
+    const spotPrice = optionsData.current_price;
+
+    // Delta chart
+    if (calls.length > 0) {
+        const callStrikes = calls.map(c => c.strike);
+        const callDeltas = calls.map(c => c.delta || 0);
+        const putStrikes = puts.map(p => p.strike);
+        const putDeltas = puts.map(p => p.delta || 0);
+
+        Plotly.newPlot('delta-chart', [
+            { x: callStrikes, y: callDeltas, name: 'Call Delta', type: 'scatter', mode: 'lines', line: { color: '#27ae60' } },
+            { x: putStrikes, y: putDeltas, name: 'Put Delta', type: 'scatter', mode: 'lines', line: { color: '#e74c3c' } }
+        ], {
+            shapes: [{ type: 'line', x0: spotPrice, x1: spotPrice, y0: -1, y1: 1, line: { dash: 'dash', color: '#999' } }],
+            showlegend: true,
+            margin: { t: 20 }
+        });
+    }
+
+    // IV Smile chart
+    const allOptions = [...calls, ...puts].filter(o => o.impliedVolatility);
+    if (allOptions.length > 0) {
+        const strikes = allOptions.map(o => o.strike);
+        const ivs = allOptions.map(o => (o.impliedVolatility || 0) * 100);
+
+        Plotly.newPlot('iv-chart', [{
+            x: strikes, y: ivs, type: 'scatter', mode: 'markers+lines',
+            marker: { color: '#667eea' }, line: { color: '#667eea' }
+        }], {
+            shapes: [{ type: 'line', x0: spotPrice, x1: spotPrice, y0: Math.min(...ivs), y1: Math.max(...ivs), line: { dash: 'dash', color: '#999' } }],
+            yaxis: { title: 'IV (%)' },
+            margin: { t: 20 }
+        });
+    }
+
+    // Gamma chart
+    if (calls.length > 0) {
+        const callStrikes = calls.map(c => c.strike);
+        const callGammas = calls.map(c => c.gamma || 0);
+
+        Plotly.newPlot('gamma-chart', [{
+            x: callStrikes, y: callGammas, type: 'bar', marker: { color: '#3498db' }
+        }], {
+            shapes: [{ type: 'line', x0: spotPrice, x1: spotPrice, y0: 0, y1: Math.max(...callGammas) * 1.1, line: { dash: 'dash', color: '#999' } }],
+            margin: { t: 20 }
+        });
+    }
+
+    // Open Interest chart
+    if (calls.length > 0 && puts.length > 0) {
+        const callStrikes = calls.map(c => c.strike);
+        const callOI = calls.map(c => c.openInterest || 0);
+        const putStrikes = puts.map(p => p.strike);
+        const putOI = puts.map(p => -(p.openInterest || 0)); // Negative for puts
+
+        Plotly.newPlot('oi-chart', [
+            { x: callStrikes, y: callOI, name: 'Call OI', type: 'bar', marker: { color: '#27ae60' } },
+            { x: putStrikes, y: putOI, name: 'Put OI', type: 'bar', marker: { color: '#e74c3c' } }
+        ], {
+            barmode: 'relative',
+            showlegend: true,
+            margin: { t: 20 }
+        });
+    }
+}
+
+async function loadStrategies() {
+    const container = document.getElementById('strategies-container');
+    container.replaceChildren();
+
+    try {
+        const response = await fetch(`/api/options/strategies/${optionsData.symbol}`);
+        const data = await response.json();
+
+        if (data.success && data.strategies) {
+            data.strategies.forEach(strategy => {
+                const col = document.createElement('div');
+                col.className = 'col-md-6 mb-3';
+
+                const card = document.createElement('div');
+                card.className = 'card strategy-card h-100';
+
+                const body = document.createElement('div');
+                body.className = 'card-body';
+
+                const title = document.createElement('h5');
+                title.className = 'card-title';
+                title.textContent = strategy.name;
+
+                const desc = document.createElement('p');
+                desc.className = 'card-text';
+                desc.textContent = strategy.description;
+
+                const list = document.createElement('ul');
+                list.className = 'list-unstyled small';
+
+                const profit = document.createElement('li');
+                const profitLabel = document.createElement('strong');
+                profitLabel.textContent = 'Max Profit: ';
+                profit.appendChild(profitLabel);
+                profit.appendChild(document.createTextNode(strategy.max_profit));
+
+                const loss = document.createElement('li');
+                const lossLabel = document.createElement('strong');
+                lossLabel.textContent = 'Max Loss: ';
+                loss.appendChild(lossLabel);
+                loss.appendChild(document.createTextNode(strategy.max_loss));
+
+                const bestFor = document.createElement('li');
+                bestFor.className = 'text-muted mt-2';
+                const bestForIcon = document.createElement('i');
+                bestForIcon.className = 'fas fa-info-circle me-1';
+                bestFor.appendChild(bestForIcon);
+                bestFor.appendChild(document.createTextNode(strategy.best_for));
+
+                list.appendChild(profit);
+                list.appendChild(loss);
+                list.appendChild(bestFor);
+
+                body.appendChild(title);
+                body.appendChild(desc);
+                body.appendChild(list);
+                card.appendChild(body);
+                col.appendChild(card);
+                container.appendChild(col);
+            });
+        }
+    } catch (error) {
+        console.error('Failed to load strategies:', error);
+    }
+}
+
+function showError(message) {
+    document.getElementById('empty-state').style.display = 'block';
+    const emptyState = document.getElementById('empty-state');
+    emptyState.replaceChildren();
+
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger text-center';
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-exclamation-triangle me-2';
+    alert.appendChild(icon);
+    alert.appendChild(document.createTextNode(message));
+    emptyState.appendChild(alert);
+}
+
+// Utility functions
+function formatPrice(value) {
+    if (value === undefined || value === null) return '-';
+    return '$' + value.toFixed(2);
+}
+
+function formatNumber(value) {
+    if (value === undefined || value === null) return '-';
+    return value.toLocaleString();
+}
+
+function formatDate(dateStr) {
+    if (!dateStr) return '-';
+    const date = new Date(dateStr);
+    return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+</script>
+{% endblock %}

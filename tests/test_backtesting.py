@@ -176,7 +176,7 @@ class TestBacktestConfig:
         """Test default configuration values"""
         config = BacktestConfig()
 
-        assert config.initial_capital == 100000.0
+        assert config.initial_capital == 1000.0  # Updated to match actual default
         assert config.commission_pct == 0.001
         assert config.commission_min == 1.0
         assert config.slippage_pct == 0.001

@@ -1519,6 +1519,625 @@ class StressTestFramework:
 
 
 # =============================================================================
+# VaR Backtesting Module
+# =============================================================================
+
+@dataclass
+class VaRBacktestResult:
+    """Results from VaR backtesting"""
+    # Configuration
+    confidence_level: float
+    lookback_window: int
+    var_method: str  # 'historical', 'parametric', 'ewma', 'cornish_fisher'
+
+    # Basic statistics
+    n_observations: int
+    n_violations: int
+    violation_rate: float
+    expected_violation_rate: float
+
+    # Kupiec POF Test
+    kupiec_statistic: float
+    kupiec_pvalue: float
+    kupiec_passed: bool
+
+    # Christoffersen Independence Test
+    christoffersen_ind_statistic: float
+    christoffersen_ind_pvalue: float
+    christoffersen_ind_passed: bool
+
+    # Christoffersen Conditional Coverage Test
+    christoffersen_cc_statistic: float
+    christoffersen_cc_pvalue: float
+    christoffersen_cc_passed: bool
+
+    # Basel Traffic Light Zone
+    basel_zone: str  # 'green', 'yellow', 'red'
+    basel_exceptions: int
+    basel_multiplier: float
+
+    # Additional metrics
+    average_var: float
+    average_violation_size: float  # How much worse than VaR on violation days
+    max_violation_size: float
+    longest_violation_streak: int
+
+    def to_dict(self) -> Dict:
+        return asdict(self)
+
+
+class VaRBacktester:
+    """
+    VaR Backtesting Framework
+
+    Tests the accuracy of Value-at-Risk models using:
+    1. Kupiec Proportion of Failures (POF) Test - tests unconditional coverage
+    2. Christoffersen Independence Test - tests for clustered violations
+    3. Christoffersen Conditional Coverage Test - combines POF + independence
+    4. Basel Traffic Light System - regulatory framework for model validation
+
+    ★ Insight ─────────────────────────────────────
+    VaR backtesting is critical for model validation because:
+    - If VaR is too conservative, you're leaving money on the table
+    - If VaR is too aggressive, you're underestimating risk
+    - Clustered violations suggest the model misses regime changes
+    ─────────────────────────────────────────────────
+    """
+
+    # Basel Traffic Light Zone thresholds (for 250 trading days at 99% confidence)
+    BASEL_THRESHOLDS = {
+        99: {  # 99% confidence level
+            'green_max': 4,    # 0-4 exceptions
+            'yellow_max': 9,   # 5-9 exceptions
+            # 10+ exceptions = red zone
+        },
+        95: {  # 95% confidence level
+            'green_max': 16,   # scaled approximately
+            'yellow_max': 22,
+        }
+    }
+
+    # Basel capital multipliers based on zone
+    BASEL_MULTIPLIERS = {
+        'green': 3.0,
+        'yellow': 3.4,  # Average of yellow zone (3.0 to 3.85)
+        'red': 4.0
+    }
+
+    def __init__(self, significance_level: float = 0.05):
+        """
+        Initialize VaR Backtester.
+
+        Args:
+            significance_level: Significance level for hypothesis tests (default 5%)
+        """
+        self.significance_level = significance_level
+
+    def calculate_var(
+        self,
+        returns: pd.Series,
+        confidence_level: float = 0.95,
+        lookback_window: int = 252,
+        method: str = 'historical'
+    ) -> pd.Series:
+        """
+        Calculate rolling VaR estimates.
+
+        Args:
+            returns: Series of returns
+            confidence_level: VaR confidence level (e.g., 0.95, 0.99)
+            lookback_window: Number of days for VaR calculation
+            method: 'historical', 'parametric', 'ewma', 'cornish_fisher'
+
+        Returns:
+            Series of VaR estimates (as positive values representing potential loss)
+        """
+        var_series = pd.Series(index=returns.index, dtype=float)
+        alpha = 1 - confidence_level
+
+        for i in range(lookback_window, len(returns)):
+            window_returns = returns.iloc[i - lookback_window:i]
+
+            if method == 'historical':
+                # Historical simulation - direct percentile
+                var = -np.percentile(window_returns, alpha * 100)
+
+            elif method == 'parametric':
+                # Parametric (Gaussian) VaR
+                from scipy.stats import norm
+                mu = window_returns.mean()
+                sigma = window_returns.std()
+                z_score = norm.ppf(alpha)
+                var = -(mu + z_score * sigma)
+
+            elif method == 'ewma':
+                # EWMA volatility-based VaR
+                from scipy.stats import norm
+                # Use exponential weighting for volatility
+                lambda_decay = 0.94  # RiskMetrics standard
+                weights = np.array([(1 - lambda_decay) * (lambda_decay ** i)
+                                    for i in range(lookback_window)])
+                weights = weights[::-1]  # Reverse for chronological order
+                weights /= weights.sum()
+
+                weighted_var = np.average(window_returns ** 2, weights=weights)
+                sigma = np.sqrt(weighted_var)
+                mu = window_returns.mean()
+                z_score = norm.ppf(alpha)
+                var = -(mu + z_score * sigma)
+
+            elif method == 'cornish_fisher':
+                # Cornish-Fisher expansion for non-normal returns
+                from scipy.stats import norm, skew, kurtosis
+                mu = window_returns.mean()
+                sigma = window_returns.std()
+                s = skew(window_returns)  # Skewness
+                k = kurtosis(window_returns, fisher=True)  # Excess kurtosis
+
+                z = norm.ppf(alpha)
+                # Cornish-Fisher adjustment
+                z_cf = (z + (z**2 - 1) * s / 6 +
+                        (z**3 - 3*z) * k / 24 -
+                        (2*z**3 - 5*z) * s**2 / 36)
+                var = -(mu + z_cf * sigma)
+            else:
+                raise ValueError(f"Unknown VaR method: {method}")
+
+            var_series.iloc[i] = var
+
+        return var_series
+
+    def backtest_var(
+        self,
+        returns: pd.Series,
+        var_estimates: Optional[pd.Series] = None,
+        confidence_level: float = 0.95,
+        lookback_window: int = 252,
+        method: str = 'historical'
+    ) -> VaRBacktestResult:
+        """
+        Backtest VaR estimates using multiple statistical tests.
+
+        Args:
+            returns: Series of actual returns
+            var_estimates: Pre-calculated VaR estimates (optional)
+            confidence_level: VaR confidence level
+            lookback_window: Window for VaR calculation
+            method: VaR calculation method
+
+        Returns:
+            VaRBacktestResult with comprehensive backtesting metrics
+        """
+        from scipy.stats import chi2
+
+        # Calculate VaR if not provided
+        if var_estimates is None:
+            var_estimates = self.calculate_var(
+                returns, confidence_level, lookback_window, method
+            )
+
+        # Align series and remove NaN
+        aligned = pd.DataFrame({'returns': returns, 'var': var_estimates}).dropna()
+        actual_returns = aligned['returns']
+        var_values = aligned['var']
+
+        n = len(actual_returns)
+        if n < 30:
+            logger.warning(f"Insufficient data for VaR backtesting: {n} observations")
+
+        # Identify violations (loss exceeds VaR)
+        violations = (actual_returns < -var_values).astype(int)
+        n_violations = violations.sum()
+        violation_rate = n_violations / n if n > 0 else 0
+        expected_rate = 1 - confidence_level
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # Kupiec Proportion of Failures (POF) Test
+        # H0: Actual violation rate = expected violation rate
+        # ═══════════════════════════════════════════════════════════════════════
+        kupiec_stat, kupiec_pval = self._kupiec_pof_test(
+            n_violations, n, expected_rate
+        )
+        kupiec_passed = kupiec_pval > self.significance_level
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # Christoffersen Independence Test
+        # H0: Violations are independent (no clustering)
+        # ═══════════════════════════════════════════════════════════════════════
+        chris_ind_stat, chris_ind_pval = self._christoffersen_independence_test(
+            violations
+        )
+        chris_ind_passed = chris_ind_pval > self.significance_level
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # Christoffersen Conditional Coverage Test
+        # Combines POF and independence tests
+        # ═══════════════════════════════════════════════════════════════════════
+        chris_cc_stat = kupiec_stat + chris_ind_stat
+        chris_cc_pval = 1 - chi2.cdf(chris_cc_stat, df=2)
+        chris_cc_passed = chris_cc_pval > self.significance_level
+
+        # ═══════════════════════════════════════════════════════════════════════
+        # Basel Traffic Light System
+        # Standardized to 250-day period
+        # ═══════════════════════════════════════════════════════════════════════
+        basel_zone, basel_mult = self._basel_traffic_light(
+            n_violations, n, confidence_level
+        )
+
+        # Additional metrics
+        avg_var = var_values.mean()
+
+        # Violation sizes (how much worse than VaR)
+        violation_mask = violations == 1
+        if violation_mask.any():
+            violation_sizes = (-actual_returns[violation_mask] - var_values[violation_mask])
+            avg_violation_size = violation_sizes.mean()
+            max_violation_size = violation_sizes.max()
+        else:
+            avg_violation_size = 0.0
+            max_violation_size = 0.0
+
+        # Longest violation streak
+        longest_streak = self._longest_streak(violations)
+
+        return VaRBacktestResult(
+            confidence_level=confidence_level,
+            lookback_window=lookback_window,
+            var_method=method,
+            n_observations=n,
+            n_violations=n_violations,
+            violation_rate=violation_rate,
+            expected_violation_rate=expected_rate,
+            kupiec_statistic=kupiec_stat,
+            kupiec_pvalue=kupiec_pval,
+            kupiec_passed=kupiec_passed,
+            christoffersen_ind_statistic=chris_ind_stat,
+            christoffersen_ind_pvalue=chris_ind_pval,
+            christoffersen_ind_passed=chris_ind_passed,
+            christoffersen_cc_statistic=chris_cc_stat,
+            christoffersen_cc_pvalue=chris_cc_pval,
+            christoffersen_cc_passed=chris_cc_passed,
+            basel_zone=basel_zone,
+            basel_exceptions=n_violations,
+            basel_multiplier=basel_mult,
+            average_var=avg_var,
+            average_violation_size=avg_violation_size,
+            max_violation_size=max_violation_size,
+            longest_violation_streak=longest_streak
+        )
+
+    def _kupiec_pof_test(
+        self,
+        n_violations: int,
+        n_observations: int,
+        expected_rate: float
+    ) -> Tuple[float, float]:
+        """
+        Kupiec Proportion of Failures (POF) Test.
+
+        Tests whether the observed violation rate matches the expected rate
+        under the null hypothesis.
+
+        Returns:
+            (test_statistic, p_value)
+        """
+        from scipy.stats import chi2
+
+        if n_observations == 0:
+            return 0.0, 1.0
+
+        n = n_observations
+        x = n_violations  # Number of violations
+        p = expected_rate  # Expected violation rate
+
+        # Avoid log(0) issues
+        if x == 0:
+            # No violations - test if this is consistent with expected rate
+            # Use exact binomial or approximation
+            lr_stat = -2 * (n * np.log(1 - p))
+        elif x == n:
+            # All violations - extreme case
+            lr_stat = -2 * (n * np.log(p))
+        else:
+            # Standard case: likelihood ratio statistic
+            p_hat = x / n  # Observed violation rate
+
+            # LR = -2 * log(L0/L1)
+            # L0 = p^x * (1-p)^(n-x)  (under H0)
+            # L1 = p_hat^x * (1-p_hat)^(n-x)  (under H1)
+
+            log_L0 = x * np.log(p) + (n - x) * np.log(1 - p)
+            log_L1 = x * np.log(p_hat) + (n - x) * np.log(1 - p_hat)
+            lr_stat = -2 * (log_L0 - log_L1)
+
+        # LR statistic is approximately chi-squared with 1 degree of freedom
+        p_value = 1 - chi2.cdf(lr_stat, df=1)
+
+        return lr_stat, p_value
+
+    def _christoffersen_independence_test(
+        self,
+        violations: pd.Series
+    ) -> Tuple[float, float]:
+        """
+        Christoffersen Independence Test.
+
+        Tests whether violations are independent or clustered.
+        Uses a first-order Markov chain likelihood ratio test.
+
+        Returns:
+            (test_statistic, p_value)
+        """
+        from scipy.stats import chi2
+
+        if len(violations) < 2:
+            return 0.0, 1.0
+
+        violations_array = violations.values
+
+        # Count transitions
+        n00 = 0  # No violation -> No violation
+        n01 = 0  # No violation -> Violation
+        n10 = 0  # Violation -> No violation
+        n11 = 0  # Violation -> Violation
+
+        for i in range(len(violations_array) - 1):
+            if violations_array[i] == 0 and violations_array[i + 1] == 0:
+                n00 += 1
+            elif violations_array[i] == 0 and violations_array[i + 1] == 1:
+                n01 += 1
+            elif violations_array[i] == 1 and violations_array[i + 1] == 0:
+                n10 += 1
+            else:  # violations_array[i] == 1 and violations_array[i + 1] == 1
+                n11 += 1
+
+        # Transition probabilities
+        n0 = n00 + n01  # Total starting from no-violation
+        n1 = n10 + n11  # Total starting from violation
+
+        if n0 == 0 or n1 == 0:
+            # Cannot compute transition probabilities
+            return 0.0, 1.0
+
+        # Estimated transition probabilities
+        pi01 = n01 / n0 if n0 > 0 else 0  # P(violation | no prior violation)
+        pi11 = n11 / n1 if n1 > 0 else 0  # P(violation | prior violation)
+
+        # Under independence, pi01 = pi11 = pi
+        total_violations = n01 + n11
+        total_transitions = n00 + n01 + n10 + n11
+
+        if total_transitions == 0:
+            return 0.0, 1.0
+
+        pi = total_violations / total_transitions  # Unconditional probability
+
+        # Calculate likelihood ratio statistic
+        # Avoid log(0) by checking for zeros
+        def safe_log(x, count):
+            if count == 0:
+                return 0
+            return count * np.log(max(x, 1e-10))
+
+        # Log-likelihood under independence (H0)
+        log_L0 = (safe_log(1 - pi, n00 + n10) + safe_log(pi, n01 + n11))
+
+        # Log-likelihood under dependence (H1)
+        log_L1 = (safe_log(1 - pi01, n00) + safe_log(pi01, n01) +
+                  safe_log(1 - pi11, n10) + safe_log(pi11, n11))
+
+        lr_stat = -2 * (log_L0 - log_L1)
+
+        # LR statistic is approximately chi-squared with 1 degree of freedom
+        p_value = 1 - chi2.cdf(max(lr_stat, 0), df=1)
+
+        return lr_stat, p_value
+
+    def _basel_traffic_light(
+        self,
+        n_violations: int,
+        n_observations: int,
+        confidence_level: float
+    ) -> Tuple[str, float]:
+        """
+        Determine Basel Traffic Light zone.
+
+        Basel II/III requires banks to scale VaR exceptions to a 250-day
+        standard period and classify models as green/yellow/red.
+
+        Returns:
+            (zone_color, capital_multiplier)
+        """
+        # Scale violations to 250-day period
+        if n_observations > 0:
+            scaled_violations = int(n_violations * 250 / n_observations)
+        else:
+            scaled_violations = 0
+
+        # Get thresholds for confidence level
+        conf_pct = int(confidence_level * 100)
+        thresholds = self.BASEL_THRESHOLDS.get(conf_pct, self.BASEL_THRESHOLDS[99])
+
+        # Determine zone
+        if scaled_violations <= thresholds['green_max']:
+            zone = 'green'
+        elif scaled_violations <= thresholds['yellow_max']:
+            zone = 'yellow'
+        else:
+            zone = 'red'
+
+        multiplier = self.BASEL_MULTIPLIERS[zone]
+
+        return zone, multiplier
+
+    def _longest_streak(self, violations: pd.Series) -> int:
+        """Calculate the longest consecutive streak of violations"""
+        max_streak = 0
+        current_streak = 0
+
+        for v in violations:
+            if v == 1:
+                current_streak += 1
+                max_streak = max(max_streak, current_streak)
+            else:
+                current_streak = 0
+
+        return max_streak
+
+    def compare_var_methods(
+        self,
+        returns: pd.Series,
+        confidence_level: float = 0.95,
+        lookback_window: int = 252,
+        methods: Optional[List[str]] = None
+    ) -> Dict[str, VaRBacktestResult]:
+        """
+        Compare multiple VaR calculation methods.
+
+        Args:
+            returns: Series of returns
+            confidence_level: VaR confidence level
+            lookback_window: Lookback window
+            methods: List of methods to compare (default: all)
+
+        Returns:
+            Dictionary of method -> VaRBacktestResult
+        """
+        if methods is None:
+            methods = ['historical', 'parametric', 'ewma', 'cornish_fisher']
+
+        results = {}
+        for method in methods:
+            try:
+                result = self.backtest_var(
+                    returns=returns,
+                    confidence_level=confidence_level,
+                    lookback_window=lookback_window,
+                    method=method
+                )
+                results[method] = result
+                logger.info(f"{method}: {result.n_violations} violations, "
+                           f"zone={result.basel_zone}, kupiec_p={result.kupiec_pvalue:.3f}")
+            except Exception as e:
+                logger.error(f"Error backtesting {method}: {e}")
+
+        return results
+
+    def generate_report(
+        self,
+        result: VaRBacktestResult,
+        include_recommendations: bool = True
+    ) -> str:
+        """
+        Generate a formatted VaR backtest report.
+
+        Args:
+            result: VaRBacktestResult to report on
+            include_recommendations: Whether to include recommendations
+
+        Returns:
+            Formatted report string
+        """
+        report = []
+        report.append("=" * 70)
+        report.append("VaR BACKTESTING REPORT")
+        report.append("=" * 70)
+        report.append("")
+
+        # Configuration
+        report.append("CONFIGURATION")
+        report.append("-" * 40)
+        report.append(f"Confidence Level:     {result.confidence_level:.1%}")
+        report.append(f"Lookback Window:      {result.lookback_window} days")
+        report.append(f"VaR Method:           {result.var_method}")
+        report.append(f"Observations:         {result.n_observations}")
+        report.append("")
+
+        # Violation Analysis
+        report.append("VIOLATION ANALYSIS")
+        report.append("-" * 40)
+        report.append(f"Expected Violations:  {result.expected_violation_rate:.2%} "
+                     f"({result.expected_violation_rate * result.n_observations:.1f})")
+        report.append(f"Actual Violations:    {result.violation_rate:.2%} "
+                     f"({result.n_violations})")
+        report.append(f"Average VaR:          {result.average_var:.4f}")
+        report.append(f"Avg Violation Size:   {result.average_violation_size:.4f}")
+        report.append(f"Max Violation Size:   {result.max_violation_size:.4f}")
+        report.append(f"Longest Streak:       {result.longest_violation_streak} days")
+        report.append("")
+
+        # Statistical Tests
+        report.append("STATISTICAL TESTS")
+        report.append("-" * 40)
+
+        kupiec_status = "✓ PASS" if result.kupiec_passed else "✗ FAIL"
+        report.append(f"Kupiec POF Test:      {kupiec_status}")
+        report.append(f"  Statistic:          {result.kupiec_statistic:.4f}")
+        report.append(f"  P-value:            {result.kupiec_pvalue:.4f}")
+        report.append("")
+
+        chris_ind_status = "✓ PASS" if result.christoffersen_ind_passed else "✗ FAIL"
+        report.append(f"Independence Test:    {chris_ind_status}")
+        report.append(f"  Statistic:          {result.christoffersen_ind_statistic:.4f}")
+        report.append(f"  P-value:            {result.christoffersen_ind_pvalue:.4f}")
+        report.append("")
+
+        chris_cc_status = "✓ PASS" if result.christoffersen_cc_passed else "✗ FAIL"
+        report.append(f"Conditional Coverage: {chris_cc_status}")
+        report.append(f"  Statistic:          {result.christoffersen_cc_statistic:.4f}")
+        report.append(f"  P-value:            {result.christoffersen_cc_pvalue:.4f}")
+        report.append("")
+
+        # Basel Traffic Light
+        zone_emoji = {"green": "🟢", "yellow": "🟡", "red": "🔴"}
+        report.append("BASEL TRAFFIC LIGHT SYSTEM")
+        report.append("-" * 40)
+        report.append(f"Zone:                 {zone_emoji.get(result.basel_zone, '')} "
+                     f"{result.basel_zone.upper()}")
+        report.append(f"Capital Multiplier:   {result.basel_multiplier:.2f}x")
+        report.append("")
+
+        # Recommendations
+        if include_recommendations:
+            report.append("RECOMMENDATIONS")
+            report.append("-" * 40)
+
+            if result.basel_zone == 'red':
+                report.append("⚠️  RED ZONE: VaR model requires immediate review")
+                report.append("   - Investigate model assumptions")
+                report.append("   - Consider alternative VaR methodologies")
+                report.append("   - Increase capital buffer")
+            elif result.basel_zone == 'yellow':
+                report.append("⚠️  YELLOW ZONE: VaR model shows elevated exceptions")
+                report.append("   - Monitor closely for further violations")
+                report.append("   - Review volatility estimation")
+                report.append("   - Consider stress testing calibration")
+            else:
+                report.append("✓  GREEN ZONE: VaR model performing adequately")
+
+            if not result.kupiec_passed:
+                report.append("   - Violation rate differs significantly from expected")
+                if result.violation_rate > result.expected_violation_rate:
+                    report.append("   - Model may be too aggressive (underestimates risk)")
+                else:
+                    report.append("   - Model may be too conservative (overestimates risk)")
+
+            if not result.christoffersen_ind_passed:
+                report.append("   - Violations are clustered (not independent)")
+                report.append("   - Consider regime-switching or GARCH-based VaR")
+
+            if result.longest_violation_streak >= 3:
+                report.append(f"   - Observed {result.longest_violation_streak}-day "
+                             "violation streak suggests regime changes")
+
+        report.append("")
+        report.append("=" * 70)
+
+        return "\n".join(report)
+
+
+# =============================================================================
 # Convenience Functions
 # =============================================================================
 

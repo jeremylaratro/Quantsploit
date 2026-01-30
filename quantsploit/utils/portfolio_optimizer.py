@@ -1455,6 +1455,269 @@ class MarkowitzOptimizer:
 
         return projected
 
+    # =========================================================================
+    # BLACK-LITTERMAN MODEL (Added 2026-01-28)
+    # =========================================================================
+
+    def black_litterman(
+        self,
+        market_caps: np.ndarray,
+        views: Optional[List[Dict]] = None,
+        tau: float = 0.05,
+        risk_aversion: float = 2.5,
+        omega_method: str = 'proportional',
+        constraints: Optional[PortfolioConstraints] = None
+    ) -> Dict:
+        """
+        Black-Litterman model for incorporating investor views into portfolio optimization.
+
+        The Black-Litterman model solves key issues with Markowitz optimization:
+        1. Uses market equilibrium as a prior (CAPM implied returns)
+        2. Allows explicit incorporation of investor views with uncertainty
+        3. Produces more intuitive, diversified portfolios
+        4. Handles estimation error better through Bayesian framework
+
+        ★ Insight ─────────────────────────────────────
+        Black-Litterman addresses the "input sensitivity" problem of MVO:
+        - Instead of raw expected returns (highly error-prone), it starts
+          with market-implied returns derived from equilibrium
+        - Investor views are blended using Bayesian updating
+        - The result is more stable, intuitive allocations
+        ─────────────────────────────────────────────────
+
+        Args:
+            market_caps: Market capitalizations for each asset (used to derive
+                        equilibrium weights and implied returns)
+            views: List of view dictionaries, each containing:
+                - 'assets': List of asset indices involved in view
+                - 'weights': View weights (e.g., [1, -1] for relative view)
+                - 'return': Expected return of the view (e.g., 0.02 for 2%)
+                - 'confidence': Confidence in view (0-1, default 1.0)
+            tau: Scalar indicating uncertainty in equilibrium (typically 0.01-0.10)
+            risk_aversion: Market risk aversion parameter (typically 2-3)
+            omega_method: Method for setting view uncertainty:
+                - 'proportional': Omega = tau * P * Sigma * P' (He-Litterman)
+                - 'confidence': Use view confidence to scale omega
+                - 'idzorek': Idzorek's method for intuitive confidence
+            constraints: Portfolio constraints for final optimization
+
+        Returns:
+            Dictionary with:
+                - weights: Optimal Black-Litterman weights
+                - expected_returns: Posterior expected returns
+                - equilibrium_returns: CAPM implied equilibrium returns (Pi)
+                - prior_cov: Prior covariance (tau * Sigma)
+                - posterior_cov: Posterior covariance matrix
+                - metrics: Portfolio metrics for the optimal portfolio
+
+        Example:
+            >>> # Absolute view: Tech will return 15% next year
+            >>> # Relative view: Financials will outperform Energy by 3%
+            >>> market_caps = np.array([1e12, 500e9, 300e9, 200e9, 150e9])
+            >>> views = [
+            ...     {'assets': [0], 'weights': [1], 'return': 0.15, 'confidence': 0.7},
+            ...     {'assets': [1, 2], 'weights': [1, -1], 'return': 0.03, 'confidence': 0.5}
+            ... ]
+            >>> result = optimizer.black_litterman(market_caps, views)
+            >>> print(f"BL Weights: {result['weights']}")
+
+        References:
+            - Black, F. and Litterman, R. (1992). "Global Portfolio Optimization"
+            - He, G. and Litterman, R. (1999). "The Intuition Behind Black-Litterman"
+            - Idzorek, T. (2005). "A Step-by-Step Guide to the Black-Litterman Model"
+        """
+        market_caps = np.array(market_caps)
+
+        # Step 1: Calculate equilibrium weights from market caps
+        equilibrium_weights = market_caps / np.sum(market_caps)
+
+        # Step 2: Calculate implied equilibrium returns (reverse optimization)
+        # Pi = delta * Sigma * w_mkt
+        # where delta = risk aversion, Sigma = covariance, w_mkt = market weights
+        equilibrium_returns = risk_aversion * self.cov_matrix @ equilibrium_weights
+
+        # Step 3: Prior covariance for returns
+        prior_cov = tau * self.cov_matrix
+
+        # If no views provided, use equilibrium
+        if views is None or len(views) == 0:
+            posterior_returns = equilibrium_returns
+            posterior_cov = prior_cov
+        else:
+            # Step 4: Construct view matrices P and Q
+            n_views = len(views)
+            P = np.zeros((n_views, self.n_assets))
+            Q = np.zeros(n_views)
+            confidences = np.ones(n_views)
+
+            for i, view in enumerate(views):
+                for j, (asset_idx, weight) in enumerate(zip(view['assets'], view['weights'])):
+                    P[i, asset_idx] = weight
+                Q[i] = view['return']
+                confidences[i] = view.get('confidence', 1.0)
+
+            # Step 5: Construct Omega (view uncertainty matrix)
+            if omega_method == 'proportional':
+                # He-Litterman: Omega = tau * P * Sigma * P'
+                # This makes view uncertainty proportional to asset variance
+                Omega = tau * P @ self.cov_matrix @ P.T
+            elif omega_method == 'confidence':
+                # Scale diagonal by inverse confidence
+                base_omega = tau * P @ self.cov_matrix @ P.T
+                confidence_scale = 1 / (confidences ** 2)
+                Omega = base_omega * np.diag(confidence_scale)
+            elif omega_method == 'idzorek':
+                # Idzorek method: confidence maps to "tilt" between prior and 100% view
+                Omega = self._idzorek_omega(P, Q, equilibrium_returns, confidences)
+            else:
+                raise ValueError(f"Unknown omega_method: {omega_method}")
+
+            # Step 6: Black-Litterman formula for posterior
+            # E[R] = [(tau*Sigma)^-1 + P'*Omega^-1*P]^-1 * [(tau*Sigma)^-1*Pi + P'*Omega^-1*Q]
+            prior_precision = np.linalg.inv(prior_cov)
+            omega_inv = np.linalg.inv(Omega)
+
+            # Posterior precision
+            posterior_precision = prior_precision + P.T @ omega_inv @ P
+
+            # Posterior covariance
+            posterior_cov = np.linalg.inv(posterior_precision)
+
+            # Posterior mean (expected returns)
+            posterior_returns = posterior_cov @ (prior_precision @ equilibrium_returns + P.T @ omega_inv @ Q)
+
+        # Step 7: Optimize with posterior returns
+        # Store original expected returns
+        original_returns = self.expected_returns.copy()
+
+        # Use posterior returns for optimization
+        self.expected_returns = posterior_returns
+
+        if constraints is None:
+            constraints = PortfolioConstraints()
+
+        # Optimize using maximum Sharpe with posterior parameters
+        optimal_portfolio = self.optimize_max_sharpe(constraints)
+
+        # Restore original expected returns
+        self.expected_returns = original_returns
+
+        return {
+            'weights': optimal_portfolio.weights,
+            'expected_returns': posterior_returns,
+            'equilibrium_returns': equilibrium_returns,
+            'equilibrium_weights': equilibrium_weights,
+            'prior_cov': prior_cov,
+            'posterior_cov': posterior_cov,
+            'tau': tau,
+            'risk_aversion': risk_aversion,
+            'metrics': optimal_portfolio
+        }
+
+    def _idzorek_omega(
+        self,
+        P: np.ndarray,
+        Q: np.ndarray,
+        equilibrium_returns: np.ndarray,
+        confidences: np.ndarray
+    ) -> np.ndarray:
+        """
+        Idzorek's intuitive method for specifying view uncertainty.
+
+        Maps confidence (0-1) to implied omega such that:
+        - Confidence 0: Weight stays at equilibrium
+        - Confidence 1: Full tilt to view
+
+        Args:
+            P: View matrix (n_views x n_assets)
+            Q: View return vector
+            equilibrium_returns: Prior equilibrium returns
+            confidences: Confidence levels for each view (0-1)
+
+        Returns:
+            Omega diagonal matrix
+        """
+        n_views = len(Q)
+        omega_diag = np.zeros(n_views)
+
+        for i in range(n_views):
+            # View return from equilibrium
+            eq_view_return = P[i] @ equilibrium_returns
+
+            # Target posterior weight deviation
+            # Higher confidence -> smaller omega -> more weight on view
+            if confidences[i] >= 1.0:
+                omega_diag[i] = 1e-10  # Near-certain view
+            elif confidences[i] <= 0.0:
+                omega_diag[i] = 1e10  # No confidence, stay at prior
+            else:
+                # Calibrate omega so that posterior is confidence-weighted blend
+                # This is an approximation of Idzorek's iterative method
+                omega_diag[i] = (P[i] @ self.cov_matrix @ P[i].T) * ((1 - confidences[i]) / confidences[i])
+
+        return np.diag(omega_diag)
+
+    def black_litterman_views_from_forecasts(
+        self,
+        return_forecasts: Dict[str, float],
+        forecast_confidence: float = 0.5,
+        relative_views: Optional[List[Tuple[str, str, float]]] = None,
+        relative_confidence: float = 0.6
+    ) -> List[Dict]:
+        """
+        Helper to construct Black-Litterman views from return forecasts.
+
+        Converts analyst forecasts or model predictions into properly
+        formatted Black-Litterman views.
+
+        Args:
+            return_forecasts: Dict mapping asset names to expected returns
+                            (e.g., {'AAPL': 0.12, 'GOOGL': 0.10})
+            forecast_confidence: Default confidence for absolute forecasts
+            relative_views: List of relative views as tuples:
+                          (outperformer, underperformer, excess_return)
+                          e.g., [('AAPL', 'GOOGL', 0.02)]  # AAPL beats GOOGL by 2%
+            relative_confidence: Default confidence for relative views
+
+        Returns:
+            List of view dictionaries ready for black_litterman()
+
+        Example:
+            >>> forecasts = {'AAPL': 0.15, 'MSFT': 0.12, 'GOOGL': 0.10}
+            >>> relative = [('AAPL', 'GOOGL', 0.05)]  # AAPL +5% vs GOOGL
+            >>> views = optimizer.black_litterman_views_from_forecasts(
+            ...     forecasts, relative_views=relative
+            ... )
+            >>> result = optimizer.black_litterman(market_caps, views)
+        """
+        views = []
+
+        # Convert absolute forecasts to views
+        for asset_name, expected_return in return_forecasts.items():
+            if asset_name in self.asset_names:
+                asset_idx = self.asset_names.index(asset_name)
+                views.append({
+                    'assets': [asset_idx],
+                    'weights': [1.0],
+                    'return': expected_return,
+                    'confidence': forecast_confidence
+                })
+
+        # Add relative views
+        if relative_views is not None:
+            for outperformer, underperformer, excess_return in relative_views:
+                if outperformer in self.asset_names and underperformer in self.asset_names:
+                    out_idx = self.asset_names.index(outperformer)
+                    under_idx = self.asset_names.index(underperformer)
+                    views.append({
+                        'assets': [out_idx, under_idx],
+                        'weights': [1.0, -1.0],
+                        'return': excess_return,
+                        'confidence': relative_confidence
+                    })
+
+        return views
+
     def dynamic_risk_budget(
         self,
         regime: str = 'neutral',
@@ -1687,6 +1950,646 @@ class MarkowitzOptimizer:
             })
 
         return pd.DataFrame(comparison)
+
+
+# =============================================================================
+# CVaR (CONDITIONAL VALUE AT RISK) OPTIMIZATION
+# =============================================================================
+
+@dataclass
+class CVaRResult:
+    """
+    Results from CVaR optimization.
+
+    Attributes:
+        weights: Optimal portfolio weights
+        expected_return: Portfolio expected return
+        var: Value at Risk at specified confidence level
+        cvar: Conditional Value at Risk (Expected Shortfall)
+        cvar_sharpe: Return per unit of CVaR risk
+        optimization_success: Whether optimization converged
+    """
+    weights: np.ndarray
+    expected_return: float
+    var: float
+    cvar: float
+    cvar_sharpe: float
+    optimization_success: bool
+
+
+class CVaROptimizer:
+    """
+    CVaR (Conditional Value at Risk) Portfolio Optimization.
+
+    CVaR, also known as Expected Shortfall (ES), measures the expected loss
+    in the worst α% of cases. Unlike VaR, CVaR is a coherent risk measure
+    satisfying subadditivity, making it theoretically superior for optimization.
+
+    This implementation uses the Rockafellar-Uryasev (2000) linear programming
+    formulation, which converts CVaR optimization into a convex problem.
+
+    ★ Insight ─────────────────────────────────────
+    Why CVaR over VaR?
+    - VaR only tells you the threshold; CVaR tells you expected loss beyond it
+    - CVaR is convex and subadditive (can be optimized reliably)
+    - Better captures tail risk in non-normal return distributions
+    - Preferred by Basel III/IV for internal models
+    ─────────────────────────────────────────────────
+
+    Attributes:
+        returns: Historical return scenarios (DataFrame or array)
+        confidence_level: CVaR confidence level (e.g., 0.95 for 95% CVaR)
+        risk_free_rate: Annual risk-free rate for ratio calculations
+        n_assets: Number of assets
+        n_scenarios: Number of historical scenarios
+
+    Example:
+        >>> optimizer = CVaROptimizer(returns, confidence_level=0.95)
+        >>> result = optimizer.min_cvar(target_return=0.10)
+        >>> print(f"CVaR: {result.cvar:.2%}")
+        >>> print(f"Weights: {result.weights}")
+
+    References:
+        - Rockafellar, R.T. and Uryasev, S. (2000). "Optimization of Conditional
+          Value-at-Risk". Journal of Risk.
+        - Pflug, G. (2000). "Some Remarks on the Value-at-Risk and the
+          Conditional Value-at-Risk". Probabilistic Constrained Optimization.
+    """
+
+    def __init__(
+        self,
+        returns: Union[pd.DataFrame, np.ndarray],
+        confidence_level: float = 0.95,
+        risk_free_rate: float = 0.02,
+        annualization_factor: int = 252
+    ):
+        """
+        Initialize CVaR optimizer.
+
+        Args:
+            returns: Historical returns (rows=scenarios, cols=assets)
+            confidence_level: CVaR confidence level (0.90, 0.95, 0.99)
+            risk_free_rate: Annual risk-free rate
+            annualization_factor: Factor to annualize returns
+        """
+        if isinstance(returns, pd.DataFrame):
+            self.returns = returns.values
+            self.asset_names = list(returns.columns)
+        else:
+            self.returns = np.array(returns)
+            self.asset_names = [f"Asset_{i}" for i in range(returns.shape[1])]
+
+        self.confidence_level = confidence_level
+        self.risk_free_rate = risk_free_rate
+        self.annualization_factor = annualization_factor
+        self.n_scenarios, self.n_assets = self.returns.shape
+
+        # Pre-compute expected returns
+        self.expected_returns = np.mean(self.returns, axis=0) * annualization_factor
+
+    def portfolio_return(self, weights: np.ndarray) -> float:
+        """Calculate annualized portfolio expected return."""
+        return np.dot(weights, self.expected_returns)
+
+    def portfolio_var(self, weights: np.ndarray) -> float:
+        """
+        Calculate portfolio VaR using historical simulation.
+
+        Args:
+            weights: Portfolio weights
+
+        Returns:
+            VaR (positive number representing loss)
+        """
+        portfolio_returns = self.returns @ weights
+        var_percentile = (1 - self.confidence_level) * 100
+        var = -np.percentile(portfolio_returns, var_percentile)
+        return var * np.sqrt(self.annualization_factor)
+
+    def portfolio_cvar(self, weights: np.ndarray) -> float:
+        """
+        Calculate portfolio CVaR (Expected Shortfall) using historical simulation.
+
+        CVaR = E[Loss | Loss > VaR]
+
+        Args:
+            weights: Portfolio weights
+
+        Returns:
+            CVaR (positive number representing expected loss in tail)
+        """
+        portfolio_returns = self.returns @ weights
+        var_threshold = np.percentile(portfolio_returns, (1 - self.confidence_level) * 100)
+        tail_returns = portfolio_returns[portfolio_returns <= var_threshold]
+
+        if len(tail_returns) == 0:
+            return -var_threshold * np.sqrt(self.annualization_factor)
+
+        cvar = -np.mean(tail_returns)
+        return cvar * np.sqrt(self.annualization_factor)
+
+    def min_cvar(
+        self,
+        target_return: Optional[float] = None,
+        max_weight: float = 1.0,
+        min_weight: float = 0.0,
+        long_only: bool = True,
+        group_constraints: Optional[Dict[str, Tuple[List[int], float, float]]] = None
+    ) -> CVaRResult:
+        """
+        Minimize CVaR subject to constraints.
+
+        Uses the Rockafellar-Uryasev formulation:
+
+        min  ζ + (1/(1-α)) * (1/S) * Σ u_s
+        s.t. u_s ≥ -r_s'w - ζ   ∀s
+             u_s ≥ 0            ∀s
+             w'1 = 1
+             w ≥ 0 (if long_only)
+             w'μ ≥ target_return (if specified)
+
+        where ζ is VaR and u_s are auxiliary variables for tail losses.
+
+        Args:
+            target_return: Optional minimum return constraint (annualized)
+            max_weight: Maximum weight per asset
+            min_weight: Minimum weight per asset
+            long_only: If True, no short positions
+            group_constraints: Dict of group constraints:
+                             {name: (asset_indices, min_exposure, max_exposure)}
+
+        Returns:
+            CVaRResult with optimal weights and risk metrics
+
+        Example:
+            >>> result = optimizer.min_cvar(target_return=0.10, max_weight=0.25)
+            >>> print(f"Min CVaR at 10% return: {result.cvar:.2%}")
+        """
+        from scipy.optimize import linprog, minimize
+
+        # Number of variables: n_assets weights + 1 zeta + n_scenarios auxiliary
+        n_vars = self.n_assets + 1 + self.n_scenarios
+
+        # Objective: minimize ζ + (1/(1-α)) * (1/S) * Σ u_s
+        c = np.zeros(n_vars)
+        c[self.n_assets] = 1  # Coefficient for ζ
+        tail_weight = 1 / ((1 - self.confidence_level) * self.n_scenarios)
+        c[self.n_assets + 1:] = tail_weight  # Coefficients for u_s
+
+        # Build inequality constraints: u_s ≥ -r_s'w - ζ → r_s'w + ζ + u_s ≥ 0
+        # In standard form: A_ub @ x ≤ b_ub → -r_s'w - ζ - u_s ≤ 0
+        A_ub = np.zeros((self.n_scenarios, n_vars))
+        for s in range(self.n_scenarios):
+            A_ub[s, :self.n_assets] = -self.returns[s]  # -r_s
+            A_ub[s, self.n_assets] = -1  # -ζ
+            A_ub[s, self.n_assets + 1 + s] = -1  # -u_s
+        b_ub = np.zeros(self.n_scenarios)
+
+        # Equality constraint: sum of weights = 1
+        A_eq = np.zeros((1, n_vars))
+        A_eq[0, :self.n_assets] = 1
+        b_eq = np.array([1.0])
+
+        # Add target return constraint if specified
+        if target_return is not None:
+            # w'μ ≥ target → -w'μ ≤ -target (daily)
+            daily_target = target_return / self.annualization_factor
+            return_row = np.zeros((1, n_vars))
+            return_row[0, :self.n_assets] = -np.mean(self.returns, axis=0)
+            A_ub = np.vstack([A_ub, return_row])
+            b_ub = np.append(b_ub, -daily_target)
+
+        # Add group constraints
+        if group_constraints is not None:
+            for name, (indices, min_exp, max_exp) in group_constraints.items():
+                # Min exposure: sum(w_i for i in group) >= min_exp → -sum ≤ -min_exp
+                min_row = np.zeros((1, n_vars))
+                min_row[0, indices] = -1
+                A_ub = np.vstack([A_ub, min_row])
+                b_ub = np.append(b_ub, -min_exp)
+
+                # Max exposure: sum(w_i for i in group) <= max_exp
+                max_row = np.zeros((1, n_vars))
+                max_row[0, indices] = 1
+                A_ub = np.vstack([A_ub, max_row])
+                b_ub = np.append(b_ub, max_exp)
+
+        # Bounds
+        lb = np.zeros(n_vars)
+        ub = np.full(n_vars, np.inf)
+
+        # Weight bounds
+        if long_only:
+            lb[:self.n_assets] = max(0, min_weight)
+        else:
+            lb[:self.n_assets] = min_weight
+        ub[:self.n_assets] = max_weight
+
+        # ζ can be negative (VaR threshold)
+        lb[self.n_assets] = -np.inf
+
+        # u_s ≥ 0 already set
+
+        bounds = list(zip(lb, ub))
+
+        # Solve LP
+        try:
+            result = linprog(
+                c, A_ub=A_ub, b_ub=b_ub, A_eq=A_eq, b_eq=b_eq,
+                bounds=bounds, method='highs'
+            )
+
+            if result.success:
+                weights = result.x[:self.n_assets]
+                zeta = result.x[self.n_assets]
+
+                # Calculate actual CVaR from solution
+                cvar = self.portfolio_cvar(weights)
+                var = self.portfolio_var(weights)
+                expected_ret = self.portfolio_return(weights)
+
+                # CVaR Sharpe ratio
+                cvar_sharpe = (expected_ret - self.risk_free_rate) / cvar if cvar > 0 else 0
+
+                return CVaRResult(
+                    weights=weights,
+                    expected_return=expected_ret,
+                    var=var,
+                    cvar=cvar,
+                    cvar_sharpe=cvar_sharpe,
+                    optimization_success=True
+                )
+        except Exception as e:
+            warnings.warn(f"LP optimization failed: {e}, falling back to SLSQP")
+
+        # Fallback to direct optimization
+        return self._min_cvar_slsqp(target_return, max_weight, min_weight, long_only)
+
+    def _min_cvar_slsqp(
+        self,
+        target_return: Optional[float],
+        max_weight: float,
+        min_weight: float,
+        long_only: bool
+    ) -> CVaRResult:
+        """Fallback SLSQP optimization for CVaR."""
+        def objective(w):
+            return self.portfolio_cvar(w)
+
+        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+
+        if target_return is not None:
+            constraints.append({
+                'type': 'ineq',
+                'fun': lambda w, tr=target_return: self.portfolio_return(w) - tr
+            })
+
+        lb = max(0, min_weight) if long_only else min_weight
+        bounds = [(lb, max_weight) for _ in range(self.n_assets)]
+
+        x0 = np.ones(self.n_assets) / self.n_assets
+
+        result = minimize(
+            objective, x0, method='SLSQP',
+            bounds=bounds, constraints=constraints,
+            options={'ftol': 1e-10, 'maxiter': 1000}
+        )
+
+        weights = result.x
+        cvar = self.portfolio_cvar(weights)
+        var = self.portfolio_var(weights)
+        expected_ret = self.portfolio_return(weights)
+        cvar_sharpe = (expected_ret - self.risk_free_rate) / cvar if cvar > 0 else 0
+
+        return CVaRResult(
+            weights=weights,
+            expected_return=expected_ret,
+            var=var,
+            cvar=cvar,
+            cvar_sharpe=cvar_sharpe,
+            optimization_success=result.success
+        )
+
+    def max_return_for_cvar(
+        self,
+        target_cvar: float,
+        max_weight: float = 1.0,
+        min_weight: float = 0.0,
+        long_only: bool = True
+    ) -> CVaRResult:
+        """
+        Maximize return subject to CVaR constraint.
+
+        Find the portfolio with highest expected return while keeping
+        CVaR below a specified threshold.
+
+        Args:
+            target_cvar: Maximum allowed CVaR (annualized)
+            max_weight: Maximum weight per asset
+            min_weight: Minimum weight per asset
+            long_only: If True, no short positions
+
+        Returns:
+            CVaRResult with optimal weights
+
+        Example:
+            >>> result = optimizer.max_return_for_cvar(target_cvar=0.15)
+            >>> print(f"Max return at 15% CVaR: {result.expected_return:.2%}")
+        """
+        def objective(w):
+            return -self.portfolio_return(w)  # Negative for maximization
+
+        def cvar_constraint(w):
+            return target_cvar - self.portfolio_cvar(w)
+
+        constraints = [
+            {'type': 'eq', 'fun': lambda w: np.sum(w) - 1},
+            {'type': 'ineq', 'fun': cvar_constraint}
+        ]
+
+        lb = max(0, min_weight) if long_only else min_weight
+        bounds = [(lb, max_weight) for _ in range(self.n_assets)]
+
+        x0 = np.ones(self.n_assets) / self.n_assets
+
+        result = minimize(
+            objective, x0, method='SLSQP',
+            bounds=bounds, constraints=constraints,
+            options={'ftol': 1e-10, 'maxiter': 1000}
+        )
+
+        weights = result.x
+        cvar = self.portfolio_cvar(weights)
+        var = self.portfolio_var(weights)
+        expected_ret = self.portfolio_return(weights)
+        cvar_sharpe = (expected_ret - self.risk_free_rate) / cvar if cvar > 0 else 0
+
+        return CVaRResult(
+            weights=weights,
+            expected_return=expected_ret,
+            var=var,
+            cvar=cvar,
+            cvar_sharpe=cvar_sharpe,
+            optimization_success=result.success
+        )
+
+    def cvar_efficient_frontier(
+        self,
+        n_points: int = 20,
+        max_weight: float = 1.0,
+        min_weight: float = 0.0,
+        long_only: bool = True
+    ) -> pd.DataFrame:
+        """
+        Generate CVaR-efficient frontier.
+
+        Creates a frontier showing the optimal return-CVaR tradeoff,
+        analogous to the mean-variance efficient frontier.
+
+        Args:
+            n_points: Number of points on the frontier
+            max_weight: Maximum weight per asset
+            min_weight: Minimum weight per asset
+            long_only: If True, no short positions
+
+        Returns:
+            DataFrame with columns: return, cvar, var, cvar_sharpe, weights
+
+        Example:
+            >>> frontier = optimizer.cvar_efficient_frontier(n_points=50)
+            >>> frontier.plot(x='cvar', y='return')
+        """
+        # Find min CVaR portfolio (no return constraint)
+        min_cvar_result = self.min_cvar(
+            target_return=None,
+            max_weight=max_weight,
+            min_weight=min_weight,
+            long_only=long_only
+        )
+        min_return = min_cvar_result.expected_return
+
+        # Find max return portfolio
+        max_return = np.max(self.expected_returns)
+
+        # Generate target returns
+        target_returns = np.linspace(min_return, max_return * 0.95, n_points)
+
+        frontier_data = []
+        for target in target_returns:
+            try:
+                result = self.min_cvar(
+                    target_return=target,
+                    max_weight=max_weight,
+                    min_weight=min_weight,
+                    long_only=long_only
+                )
+
+                if result.optimization_success:
+                    frontier_data.append({
+                        'return': result.expected_return,
+                        'cvar': result.cvar,
+                        'var': result.var,
+                        'cvar_sharpe': result.cvar_sharpe,
+                        'weights': result.weights.tolist()
+                    })
+            except Exception:
+                continue
+
+        return pd.DataFrame(frontier_data).sort_values('cvar').reset_index(drop=True)
+
+    def cvar_sharpe_ratio(self, weights: np.ndarray) -> float:
+        """
+        Calculate CVaR-adjusted Sharpe ratio.
+
+        Analogous to Sharpe ratio but using CVaR instead of volatility:
+        CVaR Sharpe = (E[R] - Rf) / CVaR
+
+        Args:
+            weights: Portfolio weights
+
+        Returns:
+            CVaR Sharpe ratio
+        """
+        expected_ret = self.portfolio_return(weights)
+        cvar = self.portfolio_cvar(weights)
+
+        if cvar <= 0:
+            return 0
+
+        return (expected_ret - self.risk_free_rate) / cvar
+
+    def max_cvar_sharpe(
+        self,
+        max_weight: float = 1.0,
+        min_weight: float = 0.0,
+        long_only: bool = True
+    ) -> CVaRResult:
+        """
+        Find portfolio maximizing CVaR Sharpe ratio.
+
+        Analogous to finding the tangency portfolio in mean-variance,
+        but using CVaR as the risk measure.
+
+        Args:
+            max_weight: Maximum weight per asset
+            min_weight: Minimum weight per asset
+            long_only: If True, no short positions
+
+        Returns:
+            CVaRResult with maximum CVaR Sharpe portfolio
+        """
+        def neg_cvar_sharpe(w):
+            expected_ret = self.portfolio_return(w)
+            cvar = self.portfolio_cvar(w)
+            if cvar <= 0:
+                return 0
+            return -(expected_ret - self.risk_free_rate) / cvar
+
+        constraints = [{'type': 'eq', 'fun': lambda w: np.sum(w) - 1}]
+
+        lb = max(0, min_weight) if long_only else min_weight
+        bounds = [(lb, max_weight) for _ in range(self.n_assets)]
+
+        x0 = np.ones(self.n_assets) / self.n_assets
+
+        result = minimize(
+            neg_cvar_sharpe, x0, method='SLSQP',
+            bounds=bounds, constraints=constraints,
+            options={'ftol': 1e-10, 'maxiter': 1000}
+        )
+
+        weights = result.x
+        cvar = self.portfolio_cvar(weights)
+        var = self.portfolio_var(weights)
+        expected_ret = self.portfolio_return(weights)
+        cvar_sharpe = (expected_ret - self.risk_free_rate) / cvar if cvar > 0 else 0
+
+        return CVaRResult(
+            weights=weights,
+            expected_return=expected_ret,
+            var=var,
+            cvar=cvar,
+            cvar_sharpe=cvar_sharpe,
+            optimization_success=result.success
+        )
+
+    def scenario_analysis(
+        self,
+        weights: np.ndarray,
+        worst_n: int = 10
+    ) -> Dict:
+        """
+        Analyze portfolio performance in worst scenarios.
+
+        Provides detailed analysis of portfolio returns in the worst
+        historical scenarios to understand tail risk characteristics.
+
+        Args:
+            weights: Portfolio weights to analyze
+            worst_n: Number of worst scenarios to report
+
+        Returns:
+            Dictionary with:
+                - worst_scenarios: Details of worst N scenarios
+                - tail_statistics: Statistics of tail returns
+                - drawdown_analysis: Drawdown characteristics
+        """
+        portfolio_returns = self.returns @ weights
+        sorted_returns = np.sort(portfolio_returns)
+
+        # VaR threshold
+        var_idx = int(np.floor((1 - self.confidence_level) * self.n_scenarios))
+        var_threshold = sorted_returns[var_idx]
+
+        # Worst scenarios
+        worst_indices = np.argsort(portfolio_returns)[:worst_n]
+        worst_returns = portfolio_returns[worst_indices]
+
+        # Tail statistics
+        tail_returns = sorted_returns[:var_idx + 1]
+
+        # Contribution to CVaR by asset
+        tail_mask = portfolio_returns <= var_threshold
+        if np.sum(tail_mask) > 0:
+            tail_scenarios = self.returns[tail_mask]
+            weighted_tail = tail_scenarios * weights
+            cvar_contribution = np.mean(weighted_tail, axis=0)
+            cvar_contribution_pct = cvar_contribution / np.sum(np.abs(cvar_contribution))
+        else:
+            cvar_contribution_pct = weights
+
+        return {
+            'worst_scenarios': {
+                'indices': worst_indices.tolist(),
+                'returns': (worst_returns * np.sqrt(self.annualization_factor)).tolist(),
+                'annualized_impact': float(np.mean(worst_returns) * self.annualization_factor)
+            },
+            'tail_statistics': {
+                'var': float(-var_threshold * np.sqrt(self.annualization_factor)),
+                'cvar': float(-np.mean(tail_returns) * np.sqrt(self.annualization_factor)),
+                'tail_skewness': float(pd.Series(tail_returns).skew()),
+                'tail_kurtosis': float(pd.Series(tail_returns).kurtosis()),
+                'n_tail_scenarios': len(tail_returns)
+            },
+            'cvar_contribution': dict(zip(self.asset_names, cvar_contribution_pct))
+        }
+
+    def compare_with_mean_variance(
+        self,
+        target_return: float,
+        markowitz_optimizer: 'MarkowitzOptimizer'
+    ) -> pd.DataFrame:
+        """
+        Compare CVaR optimal portfolio with mean-variance optimal.
+
+        Provides side-by-side comparison to understand the difference
+        between volatility-based and tail-risk-based optimization.
+
+        Args:
+            target_return: Target return for both optimizations
+            markowitz_optimizer: MarkowitzOptimizer instance with same assets
+
+        Returns:
+            DataFrame comparing the two approaches
+        """
+        # CVaR optimal
+        cvar_result = self.min_cvar(target_return=target_return)
+
+        # Mean-variance optimal
+        mv_metrics = markowitz_optimizer.optimize_target_return(target_return)
+
+        # Calculate both risk measures for both portfolios
+        cvar_mv = self.portfolio_cvar(mv_metrics.weights)
+        vol_cvar = markowitz_optimizer._portfolio_volatility(cvar_result.weights)
+
+        comparison = pd.DataFrame({
+            'Metric': [
+                'Expected Return',
+                'Volatility',
+                'VaR (95%)',
+                'CVaR (95%)',
+                'Sharpe Ratio',
+                'CVaR Sharpe'
+            ],
+            'CVaR Optimal': [
+                f"{cvar_result.expected_return:.2%}",
+                f"{vol_cvar:.2%}",
+                f"{cvar_result.var:.2%}",
+                f"{cvar_result.cvar:.2%}",
+                f"{(cvar_result.expected_return - self.risk_free_rate) / vol_cvar:.3f}",
+                f"{cvar_result.cvar_sharpe:.3f}"
+            ],
+            'Mean-Variance Optimal': [
+                f"{mv_metrics.expected_return:.2%}",
+                f"{mv_metrics.volatility:.2%}",
+                f"{self.portfolio_var(mv_metrics.weights):.2%}",
+                f"{cvar_mv:.2%}",
+                f"{mv_metrics.sharpe_ratio:.3f}",
+                f"{(mv_metrics.expected_return - self.risk_free_rate) / cvar_mv:.3f}"
+            ]
+        })
+
+        return comparison
 
 
 def create_sample_returns(

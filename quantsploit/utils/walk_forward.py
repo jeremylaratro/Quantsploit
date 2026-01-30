@@ -1007,6 +1007,524 @@ def calculate_walk_forward_efficiency(
     return np.mean(efficiencies), np.std(efficiencies)
 
 
+# =============================================================================
+# PurgedKFoldCV - Time-Series Cross-Validation for ML
+# =============================================================================
+
+@dataclass
+class PurgedKFoldSplit:
+    """
+    Represents a single train/test split from PurgedKFoldCV.
+
+    Attributes:
+        fold_id: Fold number (0-indexed)
+        train_indices: Array of training sample indices
+        test_indices: Array of test sample indices
+        purge_indices: Array of purged sample indices (excluded from both)
+        embargo_indices: Array of embargo sample indices (excluded from train)
+    """
+    fold_id: int
+    train_indices: np.ndarray
+    test_indices: np.ndarray
+    purge_indices: np.ndarray
+    embargo_indices: np.ndarray
+
+    @property
+    def n_train(self) -> int:
+        return len(self.train_indices)
+
+    @property
+    def n_test(self) -> int:
+        return len(self.test_indices)
+
+    @property
+    def n_purged(self) -> int:
+        return len(self.purge_indices)
+
+    @property
+    def n_embargo(self) -> int:
+        return len(self.embargo_indices)
+
+
+class PurgedKFoldCV:
+    """
+    Purged K-Fold Cross-Validation for Time-Series Data.
+
+    This cross-validator is designed specifically for financial ML applications
+    where standard K-Fold CV can lead to data leakage due to:
+    1. Overlapping information between train/test samples
+    2. Autocorrelation in time-series data
+    3. Feature labels computed from future data
+
+    Key Features:
+    - **Purge Gap**: Removes samples between train/test to prevent information leakage
+    - **Embargo Period**: Excludes samples after test set from training to account for
+      autocorrelation decay
+    - **Combinatorial Purging**: Properly handles overlapping samples
+
+    ★ Insight ─────────────────────────────────────
+    Standard K-Fold CV for financial ML is DANGEROUS because:
+    - Features often include lagged values that span multiple bars
+    - Labels (returns) are computed from future prices
+    - Financial data exhibits strong autocorrelation
+
+    PurgedKFoldCV addresses these by adding "buffer zones" around test folds.
+    ─────────────────────────────────────────────────
+
+    Reference:
+    - De Prado, M.L. (2018). Advances in Financial Machine Learning, Ch. 7
+
+    Args:
+        n_splits: Number of folds (default 5)
+        purge_gap: Number of samples to purge between train/test boundaries
+                   Set this >= max feature lookback period
+        embargo_pct: Percentage of test samples to embargo after test set (0.0 to 0.5)
+                     Accounts for autocorrelation decay time
+
+    Example:
+        >>> from quantsploit.utils.walk_forward import PurgedKFoldCV
+        >>> import numpy as np
+        >>>
+        >>> # Create CV with 5 folds, 10-day purge, 1% embargo
+        >>> cv = PurgedKFoldCV(n_splits=5, purge_gap=10, embargo_pct=0.01)
+        >>>
+        >>> # Generate splits
+        >>> X = np.random.randn(1000, 10)  # 1000 samples, 10 features
+        >>> for train_idx, test_idx in cv.split(X):
+        ...     X_train, X_test = X[train_idx], X[test_idx]
+        ...     # Train and evaluate model
+    """
+
+    def __init__(
+        self,
+        n_splits: int = 5,
+        purge_gap: int = 0,
+        embargo_pct: float = 0.0
+    ):
+        """
+        Initialize PurgedKFoldCV.
+
+        Args:
+            n_splits: Number of cross-validation folds (>= 2)
+            purge_gap: Number of samples to exclude between train and test sets
+                       This should be >= your maximum feature lookback window
+            embargo_pct: Percentage of test samples to embargo (0.0 to 0.5)
+                         This accounts for label overlap and autocorrelation
+        """
+        if n_splits < 2:
+            raise ValueError(f"n_splits must be >= 2, got {n_splits}")
+        if purge_gap < 0:
+            raise ValueError(f"purge_gap must be >= 0, got {purge_gap}")
+        if not 0.0 <= embargo_pct <= 0.5:
+            raise ValueError(f"embargo_pct must be in [0.0, 0.5], got {embargo_pct}")
+
+        self.n_splits = n_splits
+        self.purge_gap = purge_gap
+        self.embargo_pct = embargo_pct
+
+    def split(
+        self,
+        X: Union[np.ndarray, pd.DataFrame],
+        y: Optional[Union[np.ndarray, pd.Series]] = None,
+        groups: Optional[np.ndarray] = None
+    ):
+        """
+        Generate train/test indices for purged K-fold cross-validation.
+
+        Args:
+            X: Feature matrix with shape (n_samples, n_features)
+            y: Target array (optional, not used but kept for sklearn compatibility)
+            groups: Group labels (optional, not used)
+
+        Yields:
+            (train_indices, test_indices) tuples for each fold
+
+        Note:
+            Unlike standard K-Fold, this yields arrays of indices rather than
+            boolean masks, and the train set may have "gaps" where purged and
+            embargoed samples are excluded.
+        """
+        n_samples = len(X)
+        indices = np.arange(n_samples)
+
+        # Calculate fold sizes
+        fold_sizes = np.full(self.n_splits, n_samples // self.n_splits, dtype=int)
+        fold_sizes[:n_samples % self.n_splits] += 1
+
+        # Calculate embargo size (same for all folds)
+        test_fold_size = fold_sizes[0]  # Approximate
+        embargo_size = int(np.ceil(test_fold_size * self.embargo_pct))
+
+        current = 0
+        for fold_id in range(self.n_splits):
+            fold_size = fold_sizes[fold_id]
+
+            # Test indices for this fold
+            test_start = current
+            test_end = current + fold_size
+            test_indices = indices[test_start:test_end]
+
+            # Purge indices: samples between train and test that overlap
+            purge_before_start = max(0, test_start - self.purge_gap)
+            purge_before_end = test_start
+            purge_after_start = test_end
+            purge_after_end = min(n_samples, test_end + self.purge_gap)
+
+            purge_before = set(range(purge_before_start, purge_before_end))
+            purge_after = set(range(purge_after_start, purge_after_end))
+            purge_indices = purge_before | purge_after
+
+            # Embargo indices: samples after test set (to account for autocorrelation)
+            embargo_start = purge_after_end
+            embargo_end = min(n_samples, embargo_start + embargo_size)
+            embargo_indices = set(range(embargo_start, embargo_end))
+
+            # Training indices: everything except test, purge, and embargo
+            test_set = set(test_indices)
+            excluded = test_set | purge_indices | embargo_indices
+            train_indices = np.array([i for i in indices if i not in excluded])
+
+            current += fold_size
+
+            yield train_indices, test_indices
+
+    def split_detailed(
+        self,
+        X: Union[np.ndarray, pd.DataFrame],
+        y: Optional[Union[np.ndarray, pd.Series]] = None
+    ) -> List[PurgedKFoldSplit]:
+        """
+        Generate detailed split information including purge and embargo indices.
+
+        This method provides more detailed information about each split,
+        useful for visualization and debugging.
+
+        Args:
+            X: Feature matrix with shape (n_samples, n_features)
+            y: Target array (optional)
+
+        Returns:
+            List of PurgedKFoldSplit objects with detailed split information
+        """
+        n_samples = len(X)
+        indices = np.arange(n_samples)
+
+        # Calculate fold sizes
+        fold_sizes = np.full(self.n_splits, n_samples // self.n_splits, dtype=int)
+        fold_sizes[:n_samples % self.n_splits] += 1
+
+        # Calculate embargo size
+        test_fold_size = fold_sizes[0]
+        embargo_size = int(np.ceil(test_fold_size * self.embargo_pct))
+
+        splits = []
+        current = 0
+
+        for fold_id in range(self.n_splits):
+            fold_size = fold_sizes[fold_id]
+
+            # Test indices
+            test_start = current
+            test_end = current + fold_size
+            test_indices = indices[test_start:test_end]
+
+            # Purge indices
+            purge_before_start = max(0, test_start - self.purge_gap)
+            purge_before_end = test_start
+            purge_after_start = test_end
+            purge_after_end = min(n_samples, test_end + self.purge_gap)
+
+            purge_before = list(range(purge_before_start, purge_before_end))
+            purge_after = list(range(purge_after_start, purge_after_end))
+            purge_indices = np.array(purge_before + purge_after)
+
+            # Embargo indices
+            embargo_start = purge_after_end
+            embargo_end = min(n_samples, embargo_start + embargo_size)
+            embargo_indices = np.array(list(range(embargo_start, embargo_end)))
+
+            # Training indices
+            test_set = set(test_indices)
+            purge_set = set(purge_indices)
+            embargo_set = set(embargo_indices)
+            excluded = test_set | purge_set | embargo_set
+            train_indices = np.array([i for i in indices if i not in excluded])
+
+            split = PurgedKFoldSplit(
+                fold_id=fold_id,
+                train_indices=train_indices,
+                test_indices=test_indices,
+                purge_indices=purge_indices,
+                embargo_indices=embargo_indices
+            )
+            splits.append(split)
+
+            current += fold_size
+
+        return splits
+
+    def get_n_splits(
+        self,
+        X: Optional[np.ndarray] = None,
+        y: Optional[np.ndarray] = None,
+        groups: Optional[np.ndarray] = None
+    ) -> int:
+        """Return the number of splits (sklearn compatibility)."""
+        return self.n_splits
+
+    def visualize_splits(
+        self,
+        n_samples: int,
+        figsize: Tuple[int, int] = (12, 6)
+    ) -> None:
+        """
+        Visualize the cross-validation splits using matplotlib.
+
+        Args:
+            n_samples: Number of samples to visualize
+            figsize: Figure size (width, height)
+        """
+        try:
+            import matplotlib.pyplot as plt
+            import matplotlib.patches as mpatches
+        except ImportError:
+            logger.warning("matplotlib not available for visualization")
+            return
+
+        X_dummy = np.zeros((n_samples, 1))
+        splits = self.split_detailed(X_dummy)
+
+        fig, ax = plt.subplots(figsize=figsize)
+
+        cmap = {
+            'train': '#1f77b4',    # Blue
+            'test': '#2ca02c',     # Green
+            'purge': '#ff7f0e',    # Orange
+            'embargo': '#d62728'   # Red
+        }
+
+        for fold_id, split in enumerate(splits):
+            y_pos = fold_id
+
+            # Create color array for this fold
+            colors = np.full(n_samples, '#e0e0e0')  # Default gray (unused)
+
+            # Fill in the colors
+            colors[split.train_indices] = cmap['train']
+            colors[split.test_indices] = cmap['test']
+            colors[split.purge_indices] = cmap['purge']
+            colors[split.embargo_indices] = cmap['embargo']
+
+            # Plot as horizontal bar segments
+            for i in range(n_samples):
+                ax.barh(y_pos, width=1, left=i, height=0.8,
+                       color=colors[i], edgecolor='none')
+
+        # Create legend
+        legend_patches = [
+            mpatches.Patch(color=cmap['train'], label=f'Train'),
+            mpatches.Patch(color=cmap['test'], label=f'Test'),
+            mpatches.Patch(color=cmap['purge'], label=f'Purge (gap={self.purge_gap})'),
+            mpatches.Patch(color=cmap['embargo'], label=f'Embargo ({self.embargo_pct:.1%})')
+        ]
+        ax.legend(handles=legend_patches, loc='upper right')
+
+        ax.set_yticks(range(self.n_splits))
+        ax.set_yticklabels([f'Fold {i+1}' for i in range(self.n_splits)])
+        ax.set_xlabel('Sample Index')
+        ax.set_ylabel('Fold')
+        ax.set_title(f'PurgedKFoldCV Splits (n_splits={self.n_splits})')
+        ax.set_xlim(0, n_samples)
+
+        plt.tight_layout()
+        plt.show()
+
+    def summary(self, n_samples: int) -> Dict[str, Any]:
+        """
+        Generate a summary of the cross-validation splits.
+
+        Args:
+            n_samples: Number of samples
+
+        Returns:
+            Dictionary with split statistics
+        """
+        X_dummy = np.zeros((n_samples, 1))
+        splits = self.split_detailed(X_dummy)
+
+        train_sizes = [s.n_train for s in splits]
+        test_sizes = [s.n_test for s in splits]
+        purge_sizes = [s.n_purged for s in splits]
+        embargo_sizes = [s.n_embargo for s in splits]
+
+        total_excluded = sum(purge_sizes) + sum(embargo_sizes)
+        unique_excluded = len(set(
+            list(np.concatenate([s.purge_indices for s in splits])) +
+            list(np.concatenate([s.embargo_indices for s in splits]))
+        ))
+
+        return {
+            'n_splits': self.n_splits,
+            'n_samples': n_samples,
+            'purge_gap': self.purge_gap,
+            'embargo_pct': self.embargo_pct,
+            'avg_train_size': np.mean(train_sizes),
+            'avg_test_size': np.mean(test_sizes),
+            'avg_purge_size': np.mean(purge_sizes),
+            'avg_embargo_size': np.mean(embargo_sizes),
+            'train_pct': np.mean(train_sizes) / n_samples * 100,
+            'test_pct': np.mean(test_sizes) / n_samples * 100,
+            'excluded_pct': unique_excluded / n_samples * 100,
+            'fold_details': [
+                {
+                    'fold': i,
+                    'train': s.n_train,
+                    'test': s.n_test,
+                    'purge': s.n_purged,
+                    'embargo': s.n_embargo
+                }
+                for i, s in enumerate(splits)
+            ]
+        }
+
+
+class CombinatorialPurgedKFoldCV:
+    """
+    Combinatorial Purged K-Fold Cross-Validation.
+
+    Extends PurgedKFoldCV by generating all possible combinations of k test
+    folds out of n total folds, providing more test paths for backtesting
+    validation.
+
+    This is particularly useful for:
+    - Strategy backtesting where you want multiple out-of-sample paths
+    - Ensemble methods that combine multiple train/test combinations
+    - More robust performance estimation with limited data
+
+    ★ Insight ─────────────────────────────────────
+    With n_splits=5 and n_test_splits=2, you get C(5,2)=10 different
+    train/test configurations, each with 2/5 of data as test. This
+    provides much more robust performance estimates than standard K-Fold.
+    ─────────────────────────────────────────────────
+
+    Args:
+        n_splits: Total number of folds to create
+        n_test_splits: Number of folds to use as test set (default 2)
+        purge_gap: Number of samples to purge between train/test
+        embargo_pct: Percentage of test samples to embargo
+
+    Example:
+        >>> cv = CombinatorialPurgedKFoldCV(n_splits=5, n_test_splits=2, purge_gap=5)
+        >>> for train_idx, test_idx in cv.split(X):
+        ...     # 10 different train/test combinations
+        ...     model.fit(X[train_idx], y[train_idx])
+    """
+
+    def __init__(
+        self,
+        n_splits: int = 5,
+        n_test_splits: int = 2,
+        purge_gap: int = 0,
+        embargo_pct: float = 0.0
+    ):
+        if n_test_splits >= n_splits:
+            raise ValueError(f"n_test_splits ({n_test_splits}) must be < n_splits ({n_splits})")
+
+        self.n_splits = n_splits
+        self.n_test_splits = n_test_splits
+        self.purge_gap = purge_gap
+        self.embargo_pct = embargo_pct
+
+    def split(
+        self,
+        X: Union[np.ndarray, pd.DataFrame],
+        y: Optional[np.ndarray] = None,
+        groups: Optional[np.ndarray] = None
+    ):
+        """
+        Generate combinatorial train/test indices.
+
+        Args:
+            X: Feature matrix
+            y: Target array (optional)
+            groups: Group labels (optional)
+
+        Yields:
+            (train_indices, test_indices) tuples for each combination
+        """
+        from itertools import combinations
+
+        n_samples = len(X)
+        indices = np.arange(n_samples)
+
+        # Calculate fold boundaries
+        fold_sizes = np.full(self.n_splits, n_samples // self.n_splits, dtype=int)
+        fold_sizes[:n_samples % self.n_splits] += 1
+
+        # Create fold index ranges
+        fold_ranges = []
+        current = 0
+        for size in fold_sizes:
+            fold_ranges.append((current, current + size))
+            current += size
+
+        # Calculate embargo size
+        avg_test_size = sum(fold_sizes[i] for i in range(self.n_test_splits)) // self.n_test_splits
+        embargo_size = int(np.ceil(avg_test_size * self.embargo_pct))
+
+        # Generate all combinations of test folds
+        for test_fold_combo in combinations(range(self.n_splits), self.n_test_splits):
+            # Test indices: union of selected folds
+            test_indices = []
+            for fold_id in test_fold_combo:
+                start, end = fold_ranges[fold_id]
+                test_indices.extend(range(start, end))
+            test_indices = np.array(test_indices)
+            test_set = set(test_indices)
+
+            # Purge and embargo indices
+            purge_set = set()
+            embargo_set = set()
+
+            for fold_id in test_fold_combo:
+                start, end = fold_ranges[fold_id]
+
+                # Purge before test fold
+                purge_start = max(0, start - self.purge_gap)
+                for i in range(purge_start, start):
+                    if i not in test_set:
+                        purge_set.add(i)
+
+                # Purge after test fold
+                purge_end = min(n_samples, end + self.purge_gap)
+                for i in range(end, purge_end):
+                    if i not in test_set:
+                        purge_set.add(i)
+
+                # Embargo after purge
+                embargo_start = purge_end
+                embargo_end = min(n_samples, embargo_start + embargo_size)
+                for i in range(embargo_start, embargo_end):
+                    if i not in test_set and i not in purge_set:
+                        embargo_set.add(i)
+
+            # Training indices
+            excluded = test_set | purge_set | embargo_set
+            train_indices = np.array([i for i in indices if i not in excluded])
+
+            yield train_indices, test_indices
+
+    def get_n_splits(
+        self,
+        X: Optional[np.ndarray] = None,
+        y: Optional[np.ndarray] = None,
+        groups: Optional[np.ndarray] = None
+    ) -> int:
+        """Return the number of unique combinations."""
+        from math import comb
+        return comb(self.n_splits, self.n_test_splits)
+
+
 def run_quick_walk_forward(
     data: pd.DataFrame,
     strategy_func: Callable,
@@ -1066,3 +1584,571 @@ def run_quick_walk_forward(
         )
 
     return optimizer.generate_walk_forward_report(report)
+
+
+# =============================================================================
+# BLOCK BOOTSTRAP FOR TIME SERIES
+# =============================================================================
+
+@dataclass
+class BlockBootstrapResult:
+    """
+    Results from block bootstrap analysis.
+
+    Attributes:
+        statistic_name: Name of the statistic being bootstrapped
+        original_statistic: Statistic from the original sample
+        bootstrap_mean: Mean of bootstrap distribution
+        bootstrap_std: Standard deviation of bootstrap distribution
+        confidence_interval: Tuple of (lower, upper) CI bounds
+        confidence_level: Confidence level used (e.g., 0.95)
+        p_value: P-value for hypothesis test (if applicable)
+        n_bootstrap: Number of bootstrap samples
+        block_length: Block length used
+        bootstrap_distribution: Array of bootstrap statistics
+    """
+    statistic_name: str
+    original_statistic: float
+    bootstrap_mean: float
+    bootstrap_std: float
+    confidence_interval: Tuple[float, float]
+    confidence_level: float
+    p_value: Optional[float]
+    n_bootstrap: int
+    block_length: int
+    bootstrap_distribution: np.ndarray
+
+
+class BlockBootstrap:
+    """
+    Block Bootstrap for Time Series Data.
+
+    Block bootstrap preserves temporal dependence in time series data
+    by resampling contiguous blocks rather than individual observations.
+    This is essential for financial time series which exhibit serial
+    correlation and volatility clustering.
+
+    Supports multiple block bootstrap methods:
+    - Non-overlapping block bootstrap (NBB)
+    - Moving block bootstrap (MBB)
+    - Circular block bootstrap (CBB)
+    - Stationary bootstrap (Politis & Romano, 1994)
+
+    ★ Insight ─────────────────────────────────────
+    Why block bootstrap for finance?
+    - Returns exhibit autocorrelation (momentum, mean reversion)
+    - Volatility is clustered (GARCH effects)
+    - Standard bootstrap destroys these dependencies
+    - Block bootstrap preserves within-block dependence structure
+    ─────────────────────────────────────────────────
+
+    Example:
+        >>> bb = BlockBootstrap(returns, block_length=20)
+        >>> result = bb.bootstrap_statistic(np.mean, n_bootstrap=10000)
+        >>> print(f"95% CI: {result.confidence_interval}")
+
+    References:
+        - Künsch, H.R. (1989). "The Jackknife and the Bootstrap for General
+          Stationary Observations". Annals of Statistics.
+        - Politis, D. & Romano, J. (1994). "The Stationary Bootstrap".
+          Journal of the American Statistical Association.
+        - Lahiri, S.N. (2003). "Resampling Methods for Dependent Data". Springer.
+    """
+
+    def __init__(
+        self,
+        data: Union[pd.Series, pd.DataFrame, np.ndarray],
+        block_length: Optional[int] = None,
+        method: str = 'moving',
+        seed: Optional[int] = None
+    ):
+        """
+        Initialize Block Bootstrap.
+
+        Args:
+            data: Time series data (1D or 2D)
+            block_length: Length of blocks. If None, automatically selected
+                         using optimal block length methods.
+            method: Bootstrap method:
+                   - 'moving': Moving block bootstrap (default)
+                   - 'circular': Circular block bootstrap
+                   - 'nonoverlapping': Non-overlapping block bootstrap
+                   - 'stationary': Stationary bootstrap (random block lengths)
+            seed: Random seed for reproducibility
+        """
+        # Convert to numpy array
+        if isinstance(data, pd.DataFrame):
+            self.data = data.values
+            self.columns = list(data.columns)
+            self.is_multivariate = True
+        elif isinstance(data, pd.Series):
+            self.data = data.values
+            self.columns = [data.name] if data.name else ['value']
+            self.is_multivariate = False
+        else:
+            self.data = np.array(data)
+            self.columns = None
+            self.is_multivariate = len(self.data.shape) > 1
+
+        if self.is_multivariate and len(self.data.shape) == 1:
+            self.data = self.data.reshape(-1, 1)
+
+        self.n = len(self.data)
+        self.method = method.lower()
+
+        if seed is not None:
+            np.random.seed(seed)
+        self.seed = seed
+
+        # Set or estimate block length
+        if block_length is not None:
+            self.block_length = block_length
+        else:
+            self.block_length = self._optimal_block_length()
+
+        # For stationary bootstrap, block_length is expected (mean) length
+        self.p = 1 / self.block_length  # Geometric probability for stationary
+
+    def _optimal_block_length(self) -> int:
+        """
+        Estimate optimal block length.
+
+        Uses Politis & White (2004) automatic block length selection
+        based on the spectral density of the data.
+
+        For simplicity, uses the rule of thumb: n^(1/3) for variance estimation
+        and n^(1/4) for distribution estimation.
+        """
+        # Rule of thumb: n^(1/3) is often used
+        # More sophisticated methods could use spectral density estimation
+        b_opt = int(np.ceil(self.n ** (1/3)))
+
+        # Ensure reasonable bounds
+        b_opt = max(5, min(b_opt, self.n // 3))
+
+        return b_opt
+
+    def _generate_moving_block_indices(self) -> np.ndarray:
+        """Generate indices using moving block bootstrap."""
+        n_blocks = int(np.ceil(self.n / self.block_length))
+        indices = []
+
+        # Sample starting positions
+        max_start = self.n - self.block_length + 1
+        if max_start <= 0:
+            max_start = 1
+
+        starts = np.random.randint(0, max_start, n_blocks)
+
+        for start in starts:
+            end = min(start + self.block_length, self.n)
+            indices.extend(range(start, end))
+
+        return np.array(indices[:self.n])
+
+    def _generate_circular_block_indices(self) -> np.ndarray:
+        """Generate indices using circular block bootstrap."""
+        n_blocks = int(np.ceil(self.n / self.block_length))
+        indices = []
+
+        # Sample starting positions (can wrap around)
+        starts = np.random.randint(0, self.n, n_blocks)
+
+        for start in starts:
+            for i in range(self.block_length):
+                indices.append((start + i) % self.n)
+
+        return np.array(indices[:self.n])
+
+    def _generate_nonoverlapping_block_indices(self) -> np.ndarray:
+        """Generate indices using non-overlapping block bootstrap."""
+        n_complete_blocks = self.n // self.block_length
+        n_blocks_needed = int(np.ceil(self.n / self.block_length))
+
+        # Sample from available complete blocks
+        block_starts = np.arange(0, n_complete_blocks * self.block_length, self.block_length)
+        selected_blocks = np.random.choice(block_starts, n_blocks_needed, replace=True)
+
+        indices = []
+        for start in selected_blocks:
+            end = min(start + self.block_length, self.n)
+            indices.extend(range(start, end))
+
+        return np.array(indices[:self.n])
+
+    def _generate_stationary_indices(self) -> np.ndarray:
+        """
+        Generate indices using stationary bootstrap (Politis & Romano).
+
+        Block lengths are random, drawn from geometric distribution.
+        This produces strictly stationary bootstrap samples.
+        """
+        indices = []
+        current_pos = np.random.randint(0, self.n)  # Random start
+
+        while len(indices) < self.n:
+            # Add current position
+            indices.append(current_pos)
+
+            # Decide whether to start new block (with probability p)
+            if np.random.random() < self.p:
+                # Start new block at random position
+                current_pos = np.random.randint(0, self.n)
+            else:
+                # Continue current block (circular)
+                current_pos = (current_pos + 1) % self.n
+
+        return np.array(indices[:self.n])
+
+    def generate_bootstrap_sample(self) -> np.ndarray:
+        """
+        Generate a single bootstrap sample.
+
+        Returns:
+            Bootstrap sample as numpy array
+        """
+        if self.method == 'moving':
+            indices = self._generate_moving_block_indices()
+        elif self.method == 'circular':
+            indices = self._generate_circular_block_indices()
+        elif self.method == 'nonoverlapping':
+            indices = self._generate_nonoverlapping_block_indices()
+        elif self.method == 'stationary':
+            indices = self._generate_stationary_indices()
+        else:
+            raise ValueError(f"Unknown method: {self.method}")
+
+        return self.data[indices]
+
+    def bootstrap_statistic(
+        self,
+        statistic_func: Callable,
+        n_bootstrap: int = 10000,
+        confidence_level: float = 0.95,
+        statistic_name: str = 'statistic'
+    ) -> BlockBootstrapResult:
+        """
+        Bootstrap any statistic with block bootstrap.
+
+        Args:
+            statistic_func: Function that takes data array and returns scalar
+            n_bootstrap: Number of bootstrap replications
+            confidence_level: Confidence level for CI (e.g., 0.95)
+            statistic_name: Name for reporting
+
+        Returns:
+            BlockBootstrapResult with bootstrap distribution and CI
+
+        Example:
+            >>> # Bootstrap Sharpe ratio
+            >>> def sharpe_ratio(returns):
+            ...     return np.mean(returns) / np.std(returns) * np.sqrt(252)
+            >>> result = bb.bootstrap_statistic(sharpe_ratio, n_bootstrap=10000)
+        """
+        # Calculate original statistic
+        original_stat = statistic_func(self.data)
+
+        # Generate bootstrap distribution
+        bootstrap_stats = np.zeros(n_bootstrap)
+
+        for i in range(n_bootstrap):
+            bootstrap_sample = self.generate_bootstrap_sample()
+            bootstrap_stats[i] = statistic_func(bootstrap_sample)
+
+        # Calculate statistics of bootstrap distribution
+        bootstrap_mean = np.mean(bootstrap_stats)
+        bootstrap_std = np.std(bootstrap_stats)
+
+        # Confidence interval (percentile method)
+        alpha = 1 - confidence_level
+        ci_lower = np.percentile(bootstrap_stats, alpha / 2 * 100)
+        ci_upper = np.percentile(bootstrap_stats, (1 - alpha / 2) * 100)
+
+        return BlockBootstrapResult(
+            statistic_name=statistic_name,
+            original_statistic=original_stat,
+            bootstrap_mean=bootstrap_mean,
+            bootstrap_std=bootstrap_std,
+            confidence_interval=(ci_lower, ci_upper),
+            confidence_level=confidence_level,
+            p_value=None,
+            n_bootstrap=n_bootstrap,
+            block_length=self.block_length,
+            bootstrap_distribution=bootstrap_stats
+        )
+
+    def bootstrap_sharpe_ratio(
+        self,
+        n_bootstrap: int = 10000,
+        confidence_level: float = 0.95,
+        annualization_factor: int = 252
+    ) -> BlockBootstrapResult:
+        """
+        Bootstrap Sharpe ratio specifically.
+
+        Args:
+            n_bootstrap: Number of bootstrap samples
+            confidence_level: Confidence level for CI
+            annualization_factor: Factor to annualize (252 for daily)
+
+        Returns:
+            BlockBootstrapResult for Sharpe ratio
+        """
+        def sharpe_ratio(data):
+            if self.is_multivariate:
+                data = data[:, 0]  # Use first column
+            mean_ret = np.mean(data)
+            std_ret = np.std(data)
+            if std_ret == 0:
+                return 0
+            return mean_ret / std_ret * np.sqrt(annualization_factor)
+
+        return self.bootstrap_statistic(
+            sharpe_ratio,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            statistic_name='sharpe_ratio'
+        )
+
+    def bootstrap_max_drawdown(
+        self,
+        n_bootstrap: int = 10000,
+        confidence_level: float = 0.95
+    ) -> BlockBootstrapResult:
+        """
+        Bootstrap maximum drawdown.
+
+        Args:
+            n_bootstrap: Number of bootstrap samples
+            confidence_level: Confidence level for CI
+
+        Returns:
+            BlockBootstrapResult for max drawdown
+        """
+        def max_drawdown(data):
+            if self.is_multivariate:
+                data = data[:, 0]
+            # Calculate cumulative returns
+            cum_returns = np.cumprod(1 + data)
+            running_max = np.maximum.accumulate(cum_returns)
+            drawdowns = (running_max - cum_returns) / running_max
+            return np.max(drawdowns)
+
+        return self.bootstrap_statistic(
+            max_drawdown,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            statistic_name='max_drawdown'
+        )
+
+    def hypothesis_test(
+        self,
+        statistic_func: Callable,
+        null_value: float = 0,
+        alternative: str = 'two-sided',
+        n_bootstrap: int = 10000
+    ) -> BlockBootstrapResult:
+        """
+        Perform bootstrap hypothesis test.
+
+        Tests H0: statistic = null_value vs H1 based on alternative.
+
+        Args:
+            statistic_func: Function to compute statistic
+            null_value: Value under null hypothesis
+            alternative: 'two-sided', 'greater', or 'less'
+            n_bootstrap: Number of bootstrap samples
+
+        Returns:
+            BlockBootstrapResult with p-value
+
+        Example:
+            >>> # Test if Sharpe ratio is significantly > 0
+            >>> result = bb.hypothesis_test(
+            ...     sharpe_func, null_value=0, alternative='greater'
+            ... )
+        """
+        # Get bootstrap distribution
+        result = self.bootstrap_statistic(
+            statistic_func,
+            n_bootstrap=n_bootstrap,
+            confidence_level=0.95,
+            statistic_name='test_statistic'
+        )
+
+        # Center bootstrap distribution under null
+        centered_dist = result.bootstrap_distribution - result.bootstrap_mean + null_value
+
+        # Calculate p-value
+        original = result.original_statistic
+
+        if alternative == 'two-sided':
+            p_value = 2 * min(
+                np.mean(centered_dist >= original),
+                np.mean(centered_dist <= original)
+            )
+        elif alternative == 'greater':
+            p_value = np.mean(centered_dist >= original)
+        elif alternative == 'less':
+            p_value = np.mean(centered_dist <= original)
+        else:
+            raise ValueError(f"Unknown alternative: {alternative}")
+
+        return BlockBootstrapResult(
+            statistic_name=result.statistic_name,
+            original_statistic=result.original_statistic,
+            bootstrap_mean=result.bootstrap_mean,
+            bootstrap_std=result.bootstrap_std,
+            confidence_interval=result.confidence_interval,
+            confidence_level=result.confidence_level,
+            p_value=p_value,
+            n_bootstrap=n_bootstrap,
+            block_length=self.block_length,
+            bootstrap_distribution=result.bootstrap_distribution
+        )
+
+    def bootstrap_var(
+        self,
+        confidence_level: float = 0.95,
+        var_level: float = 0.05,
+        n_bootstrap: int = 10000
+    ) -> BlockBootstrapResult:
+        """
+        Bootstrap Value at Risk (VaR) confidence interval.
+
+        Args:
+            confidence_level: Confidence level for CI around VaR
+            var_level: VaR probability level (e.g., 0.05 for 5% VaR)
+            n_bootstrap: Number of bootstrap samples
+
+        Returns:
+            BlockBootstrapResult for VaR
+        """
+        def var_statistic(data):
+            if self.is_multivariate:
+                data = data[:, 0]
+            return -np.percentile(data, var_level * 100)
+
+        return self.bootstrap_statistic(
+            var_statistic,
+            n_bootstrap=n_bootstrap,
+            confidence_level=confidence_level,
+            statistic_name=f'VaR_{int(var_level*100)}%'
+        )
+
+    def bootstrap_covariance_matrix(
+        self,
+        n_bootstrap: int = 5000
+    ) -> Dict[str, Any]:
+        """
+        Bootstrap covariance matrix for multivariate data.
+
+        Returns bootstrap distribution of covariance matrix elements.
+
+        Args:
+            n_bootstrap: Number of bootstrap samples
+
+        Returns:
+            Dictionary with mean covariance, std, and confidence intervals
+        """
+        if not self.is_multivariate or self.data.shape[1] < 2:
+            raise ValueError("Need multivariate data for covariance bootstrap")
+
+        n_assets = self.data.shape[1]
+        original_cov = np.cov(self.data, rowvar=False)
+
+        # Store bootstrap covariances
+        bootstrap_covs = np.zeros((n_bootstrap, n_assets, n_assets))
+
+        for i in range(n_bootstrap):
+            bootstrap_sample = self.generate_bootstrap_sample()
+            bootstrap_covs[i] = np.cov(bootstrap_sample, rowvar=False)
+
+        mean_cov = np.mean(bootstrap_covs, axis=0)
+        std_cov = np.std(bootstrap_covs, axis=0)
+        ci_lower = np.percentile(bootstrap_covs, 2.5, axis=0)
+        ci_upper = np.percentile(bootstrap_covs, 97.5, axis=0)
+
+        return {
+            'original_covariance': original_cov,
+            'mean_covariance': mean_cov,
+            'std_covariance': std_cov,
+            'ci_lower_2.5%': ci_lower,
+            'ci_upper_97.5%': ci_upper,
+            'n_bootstrap': n_bootstrap,
+            'block_length': self.block_length
+        }
+
+    def bootstrap_correlation(
+        self,
+        n_bootstrap: int = 5000,
+        confidence_level: float = 0.95
+    ) -> Dict[str, Any]:
+        """
+        Bootstrap correlation matrix for multivariate data.
+
+        Args:
+            n_bootstrap: Number of bootstrap samples
+            confidence_level: Confidence level for CI
+
+        Returns:
+            Dictionary with correlation statistics
+        """
+        if not self.is_multivariate or self.data.shape[1] < 2:
+            raise ValueError("Need multivariate data for correlation bootstrap")
+
+        n_assets = self.data.shape[1]
+        original_corr = np.corrcoef(self.data, rowvar=False)
+
+        bootstrap_corrs = np.zeros((n_bootstrap, n_assets, n_assets))
+
+        for i in range(n_bootstrap):
+            bootstrap_sample = self.generate_bootstrap_sample()
+            bootstrap_corrs[i] = np.corrcoef(bootstrap_sample, rowvar=False)
+
+        alpha = 1 - confidence_level
+        ci_lower = np.percentile(bootstrap_corrs, alpha / 2 * 100, axis=0)
+        ci_upper = np.percentile(bootstrap_corrs, (1 - alpha / 2) * 100, axis=0)
+
+        return {
+            'original_correlation': original_corr,
+            'mean_correlation': np.mean(bootstrap_corrs, axis=0),
+            'std_correlation': np.std(bootstrap_corrs, axis=0),
+            f'ci_lower_{alpha/2*100:.1f}%': ci_lower,
+            f'ci_upper_{(1-alpha/2)*100:.1f}%': ci_upper,
+            'n_bootstrap': n_bootstrap,
+            'block_length': self.block_length
+        }
+
+    def generate_bootstrap_paths(
+        self,
+        n_paths: int = 1000
+    ) -> np.ndarray:
+        """
+        Generate multiple bootstrap return paths.
+
+        Useful for Monte Carlo simulation with bootstrapped returns.
+
+        Args:
+            n_paths: Number of paths to generate
+
+        Returns:
+            Array of shape (n_paths, n_observations, n_features)
+        """
+        paths = np.zeros((n_paths, self.n) + self.data.shape[1:])
+
+        for i in range(n_paths):
+            paths[i] = self.generate_bootstrap_sample()
+
+        return paths
+
+    def summary(self) -> Dict[str, Any]:
+        """Return summary of bootstrap configuration."""
+        return {
+            'n_observations': self.n,
+            'method': self.method,
+            'block_length': self.block_length,
+            'is_multivariate': self.is_multivariate,
+            'n_features': self.data.shape[1] if self.is_multivariate else 1,
+            'seed': self.seed
+        }

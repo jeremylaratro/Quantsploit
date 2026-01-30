@@ -1,0 +1,644 @@
+{% extends "base.html" %}
+
+{% block title %}Stock Analyzer - Quantsploit{% endblock %}
+
+{% block extra_css %}
+<style>
+    .metric-card {
+        text-align: center;
+        padding: 1rem;
+        border-radius: 10px;
+        margin-bottom: 1rem;
+    }
+    .metric-card.positive {
+        background: linear-gradient(135deg, rgba(39, 174, 96, 0.1) 0%, rgba(39, 174, 96, 0.2) 100%);
+        border: 1px solid rgba(39, 174, 96, 0.3);
+    }
+    .metric-card.negative {
+        background: linear-gradient(135deg, rgba(231, 76, 60, 0.1) 0%, rgba(231, 76, 60, 0.2) 100%);
+        border: 1px solid rgba(231, 76, 60, 0.3);
+    }
+    .metric-card.neutral {
+        background: #f8f9fa;
+    }
+    .metric-value {
+        font-size: 1.8rem;
+        font-weight: 700;
+    }
+    .metric-label {
+        font-size: 0.8rem;
+        text-transform: uppercase;
+        color: #666;
+    }
+    .strategy-row {
+        transition: background-color 0.2s;
+    }
+    .strategy-row:hover {
+        background-color: rgba(102, 126, 234, 0.1);
+    }
+    .rank-badge {
+        width: 30px;
+        height: 30px;
+        border-radius: 50%;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: bold;
+    }
+    .rank-1 { background: gold; color: #333; }
+    .rank-2 { background: silver; color: #333; }
+    .rank-3 { background: #cd7f32; color: white; }
+    .positive { color: #27ae60; }
+    .negative { color: #e74c3c; }
+    .price-chart { height: 350px; }
+    .indicator-btn {
+        margin: 2px;
+    }
+    .indicator-btn.active {
+        background-color: #667eea;
+        color: white;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <h2><i class="fas fa-chart-bar"></i> Stock Analyzer</h2>
+    <a href="/analysis" class="btn btn-outline-secondary">
+        <i class="fas fa-arrow-left"></i> Back to Hub
+    </a>
+</div>
+
+<!-- Symbol Input -->
+<div class="card mb-4">
+    <div class="card-body">
+        <div class="row align-items-end">
+            <div class="col-md-4">
+                <label class="form-label">Symbol</label>
+                <div class="input-group">
+                    <input type="text" class="form-control form-control-lg"
+                           id="symbol-input" placeholder="AAPL" value="{{ symbol or '' }}"
+                           onkeypress="if(event.key==='Enter') loadStockAnalysis()">
+                    <button class="btn btn-primary" onclick="loadStockAnalysis()">
+                        <i class="fas fa-search"></i> Analyze
+                    </button>
+                </div>
+            </div>
+            <div class="col-md-3">
+                <label class="form-label">Period</label>
+                <select class="form-select" id="period-select" onchange="loadStockAnalysis()">
+                    <option value="1mo">1 Month</option>
+                    <option value="3mo">3 Months</option>
+                    <option value="6mo">6 Months</option>
+                    <option value="1y" selected>1 Year</option>
+                    <option value="2y">2 Years</option>
+                    <option value="5y">5 Years</option>
+                </select>
+            </div>
+            <div class="col-md-5 text-end">
+                <div id="stock-info" style="display: none;">
+                    <h3 class="mb-0" id="current-price">-</h3>
+                    <small class="text-muted" id="price-change">-</small>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading State -->
+<div id="loading-state" style="display: none;">
+    <div class="text-center py-5">
+        <div class="spinner-border text-primary" role="status"></div>
+        <p class="mt-3 text-muted">Loading analysis...</p>
+    </div>
+</div>
+
+<!-- Results Container -->
+<div id="results-container" style="display: none;">
+    <!-- Key Metrics -->
+    <div class="row mb-4" id="key-metrics"></div>
+
+    <!-- Price Chart -->
+    <div class="card mb-4">
+        <div class="card-header d-flex justify-content-between align-items-center">
+            <h5 class="mb-0"><i class="fas fa-chart-line"></i> Price Chart</h5>
+            <div id="indicator-buttons"></div>
+        </div>
+        <div class="card-body">
+            <div id="price-chart" class="price-chart"></div>
+        </div>
+    </div>
+
+    <!-- Tabs -->
+    <ul class="nav nav-tabs">
+        <li class="nav-item">
+            <button class="nav-link active" data-bs-toggle="tab" data-bs-target="#technicals-tab">
+                <i class="fas fa-chart-area"></i> Technical Analysis
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#strategies-tab">
+                <i class="fas fa-chess"></i> Strategy Performance
+            </button>
+        </li>
+        <li class="nav-item">
+            <button class="nav-link" data-bs-toggle="tab" data-bs-target="#fundamentals-tab">
+                <i class="fas fa-building"></i> Fundamentals
+            </button>
+        </li>
+    </ul>
+
+    <div class="tab-content mt-3">
+        <!-- Technical Analysis Tab -->
+        <div class="tab-pane fade show active" id="technicals-tab">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Trend Indicators</h5>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm" id="trend-table"></table>
+                        </div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Momentum Indicators</h5>
+                        </div>
+                        <div class="card-body">
+                            <table class="table table-sm" id="momentum-table"></table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Strategy Performance Tab -->
+        <div class="tab-pane fade" id="strategies-tab">
+            <div class="card">
+                <div class="card-body">
+                    <table class="table table-hover">
+                        <thead class="table-dark">
+                            <tr>
+                                <th>Rank</th>
+                                <th>Strategy</th>
+                                <th>Return</th>
+                                <th>Win Rate</th>
+                                <th>Sharpe</th>
+                                <th>Max DD</th>
+                                <th>Trades</th>
+                            </tr>
+                        </thead>
+                        <tbody id="strategies-table"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- Fundamentals Tab -->
+        <div class="tab-pane fade" id="fundamentals-tab">
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Company Info</h5>
+                        </div>
+                        <div class="card-body" id="company-info"></div>
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="card">
+                        <div class="card-header">
+                            <h5 class="mb-0">Key Statistics</h5>
+                        </div>
+                        <div class="card-body" id="key-stats"></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Empty State -->
+<div id="empty-state">
+    <div class="text-center py-5">
+        <i class="fas fa-chart-bar fa-4x text-muted mb-4"></i>
+        <h4 class="text-muted">Enter a symbol to analyze</h4>
+        <p class="text-muted">Get comprehensive analysis including technicals, strategy performance, and fundamentals</p>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+let stockData = null;
+let priceData = null;
+let activeIndicators = new Set(['sma20', 'sma50']);
+
+// Load on page load if symbol is provided
+document.addEventListener('DOMContentLoaded', () => {
+    const urlSymbol = '{{ symbol or "" }}';
+    if (urlSymbol) {
+        document.getElementById('symbol-input').value = urlSymbol;
+        loadStockAnalysis();
+    }
+});
+
+async function loadStockAnalysis() {
+    const symbol = document.getElementById('symbol-input').value.trim().toUpperCase();
+    const period = document.getElementById('period-select').value;
+
+    if (!symbol) return;
+
+    // Update URL
+    window.history.replaceState({}, '', `/analysis/stock/${symbol}`);
+
+    // Show loading
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('results-container').style.display = 'none';
+    document.getElementById('loading-state').style.display = 'block';
+
+    try {
+        // Fetch stock data and analysis in parallel
+        const [stockResponse, analysisResponse] = await Promise.all([
+            fetch(`/api/analysis/stock/${symbol}?period=${period}`),
+            fetch(`/api/analysis/indicators/${symbol}?period=${period}`)
+        ]);
+
+        const stockResult = await stockResponse.json();
+        const analysisResult = await analysisResponse.json();
+
+        document.getElementById('loading-state').style.display = 'none';
+
+        if (stockResult.success) {
+            stockData = stockResult;
+            priceData = analysisResult.success ? analysisResult : null;
+            displayResults();
+        } else {
+            showError(stockResult.error || 'Failed to load stock data');
+        }
+
+    } catch (error) {
+        document.getElementById('loading-state').style.display = 'none';
+        showError('Network error: ' + error.message);
+    }
+}
+
+function displayResults() {
+    document.getElementById('results-container').style.display = 'block';
+
+    // Show stock info
+    document.getElementById('stock-info').style.display = 'block';
+    const currentPrice = stockData.current_price || stockData.price || 0;
+    document.getElementById('current-price').textContent = '$' + currentPrice.toFixed(2);
+
+    const change = stockData.change_pct || 0;
+    const changeEl = document.getElementById('price-change');
+    changeEl.textContent = (change >= 0 ? '+' : '') + change.toFixed(2) + '%';
+    changeEl.className = change >= 0 ? 'text-success' : 'text-danger';
+
+    // Key Metrics
+    displayKeyMetrics();
+
+    // Price Chart
+    displayPriceChart();
+
+    // Indicator buttons
+    displayIndicatorButtons();
+
+    // Technical Analysis
+    displayTechnicalAnalysis();
+
+    // Strategy Performance
+    displayStrategyPerformance();
+
+    // Fundamentals
+    displayFundamentals();
+}
+
+function displayKeyMetrics() {
+    const container = document.getElementById('key-metrics');
+    container.replaceChildren();
+
+    const metrics = [
+        { label: 'Market Cap', value: formatLargeNumber(stockData.market_cap), type: 'neutral' },
+        { label: '52W High', value: '$' + (stockData.high_52w || 0).toFixed(2), type: 'neutral' },
+        { label: '52W Low', value: '$' + (stockData.low_52w || 0).toFixed(2), type: 'neutral' },
+        { label: 'Volume', value: formatLargeNumber(stockData.volume), type: 'neutral' },
+        { label: 'RSI (14)', value: (stockData.rsi || 50).toFixed(1), type: getRSIType(stockData.rsi) },
+        { label: 'Avg Volume', value: formatLargeNumber(stockData.avg_volume), type: 'neutral' }
+    ];
+
+    metrics.forEach(metric => {
+        const col = document.createElement('div');
+        col.className = 'col-md-2 col-4';
+
+        const card = document.createElement('div');
+        card.className = `metric-card ${metric.type}`;
+
+        const value = document.createElement('div');
+        value.className = 'metric-value';
+        value.textContent = metric.value;
+
+        const label = document.createElement('div');
+        label.className = 'metric-label';
+        label.textContent = metric.label;
+
+        card.appendChild(value);
+        card.appendChild(label);
+        col.appendChild(card);
+        container.appendChild(col);
+    });
+}
+
+function displayPriceChart() {
+    if (!priceData || !priceData.price_data) return;
+
+    const data = priceData.price_data;
+    const dates = data.map(d => d.date);
+    const prices = data.map(d => d.close);
+
+    const traces = [
+        { x: dates, y: prices, name: 'Price', type: 'scatter', mode: 'lines', line: { color: '#2c3e50' } }
+    ];
+
+    // Add indicators
+    if (activeIndicators.has('sma20') && data[0].sma20) {
+        traces.push({
+            x: dates, y: data.map(d => d.sma20),
+            name: 'SMA 20', type: 'scatter', mode: 'lines',
+            line: { color: '#3498db', dash: 'dash' }
+        });
+    }
+    if (activeIndicators.has('sma50') && data[0].sma50) {
+        traces.push({
+            x: dates, y: data.map(d => d.sma50),
+            name: 'SMA 50', type: 'scatter', mode: 'lines',
+            line: { color: '#e74c3c', dash: 'dash' }
+        });
+    }
+    if (activeIndicators.has('bb') && data[0].bb_upper) {
+        traces.push({
+            x: dates, y: data.map(d => d.bb_upper),
+            name: 'BB Upper', type: 'scatter', mode: 'lines',
+            line: { color: '#95a5a6' }
+        });
+        traces.push({
+            x: dates, y: data.map(d => d.bb_lower),
+            name: 'BB Lower', type: 'scatter', mode: 'lines',
+            line: { color: '#95a5a6' }
+        });
+    }
+
+    Plotly.newPlot('price-chart', traces, {
+        showlegend: true,
+        xaxis: { title: 'Date' },
+        yaxis: { title: 'Price' },
+        margin: { t: 20 }
+    });
+}
+
+function displayIndicatorButtons() {
+    const container = document.getElementById('indicator-buttons');
+    container.replaceChildren();
+
+    const indicators = [
+        { id: 'sma20', label: 'SMA 20' },
+        { id: 'sma50', label: 'SMA 50' },
+        { id: 'bb', label: 'Bollinger Bands' }
+    ];
+
+    indicators.forEach(ind => {
+        const btn = document.createElement('button');
+        btn.className = `btn btn-sm btn-outline-secondary indicator-btn ${activeIndicators.has(ind.id) ? 'active' : ''}`;
+        btn.textContent = ind.label;
+        btn.addEventListener('click', () => toggleIndicator(ind.id, btn));
+        container.appendChild(btn);
+    });
+}
+
+function toggleIndicator(id, btn) {
+    if (activeIndicators.has(id)) {
+        activeIndicators.delete(id);
+        btn.classList.remove('active');
+    } else {
+        activeIndicators.add(id);
+        btn.classList.add('active');
+    }
+    displayPriceChart();
+}
+
+function displayTechnicalAnalysis() {
+    // Trend indicators
+    const trendTable = document.getElementById('trend-table');
+    trendTable.replaceChildren();
+
+    const trendIndicators = [
+        { name: 'Price vs SMA 20', value: stockData.above_sma20 ? 'Above' : 'Below', signal: stockData.above_sma20 },
+        { name: 'Price vs SMA 50', value: stockData.above_sma50 ? 'Above' : 'Below', signal: stockData.above_sma50 },
+        { name: 'Price vs SMA 200', value: stockData.above_sma200 ? 'Above' : 'Below', signal: stockData.above_sma200 },
+        { name: 'ADX (Trend Strength)', value: (stockData.adx || 0).toFixed(1), signal: (stockData.adx || 0) > 25 }
+    ];
+
+    trendIndicators.forEach(ind => {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.textContent = ind.name;
+
+        const valueCell = document.createElement('td');
+        valueCell.className = ind.signal ? 'positive' : 'negative';
+        valueCell.textContent = ind.value;
+
+        row.appendChild(nameCell);
+        row.appendChild(valueCell);
+        trendTable.appendChild(row);
+    });
+
+    // Momentum indicators
+    const momentumTable = document.getElementById('momentum-table');
+    momentumTable.replaceChildren();
+
+    const momentumIndicators = [
+        { name: 'RSI (14)', value: (stockData.rsi || 50).toFixed(1), signal: stockData.rsi > 30 && stockData.rsi < 70 },
+        { name: 'MACD Signal', value: stockData.macd_signal || 'Neutral', signal: stockData.macd_signal === 'Bullish' },
+        { name: 'Stochastic %K', value: (stockData.stoch_k || 50).toFixed(1), signal: stockData.stoch_k > 20 && stockData.stoch_k < 80 },
+        { name: 'Volume vs Avg', value: ((stockData.volume_ratio || 1) * 100).toFixed(0) + '%', signal: (stockData.volume_ratio || 1) > 1 }
+    ];
+
+    momentumIndicators.forEach(ind => {
+        const row = document.createElement('tr');
+        const nameCell = document.createElement('td');
+        nameCell.textContent = ind.name;
+
+        const valueCell = document.createElement('td');
+        valueCell.className = ind.signal ? 'positive' : 'negative';
+        valueCell.textContent = ind.value;
+
+        row.appendChild(nameCell);
+        row.appendChild(valueCell);
+        momentumTable.appendChild(row);
+    });
+}
+
+function displayStrategyPerformance() {
+    const tbody = document.getElementById('strategies-table');
+    tbody.replaceChildren();
+
+    const strategies = stockData.strategy_performance || [];
+    if (strategies.length === 0) {
+        const row = document.createElement('tr');
+        const cell = document.createElement('td');
+        cell.colSpan = 7;
+        cell.className = 'text-center text-muted';
+        cell.textContent = 'Run a backtest to see strategy performance for this stock';
+        row.appendChild(cell);
+        tbody.appendChild(row);
+        return;
+    }
+
+    strategies.sort((a, b) => (b.total_return || 0) - (a.total_return || 0));
+
+    strategies.forEach((strat, idx) => {
+        const row = document.createElement('tr');
+        row.className = 'strategy-row';
+
+        // Rank
+        const rankCell = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = `rank-badge ${idx < 3 ? 'rank-' + (idx + 1) : 'bg-secondary text-white'}`;
+        badge.textContent = idx + 1;
+        rankCell.appendChild(badge);
+
+        // Strategy name
+        const nameCell = document.createElement('td');
+        nameCell.textContent = strat.name || strat.strategy;
+
+        // Return
+        const returnCell = document.createElement('td');
+        const ret = strat.total_return || 0;
+        returnCell.className = ret >= 0 ? 'positive' : 'negative';
+        returnCell.textContent = (ret >= 0 ? '+' : '') + ret.toFixed(2) + '%';
+
+        // Win rate
+        const winCell = document.createElement('td');
+        winCell.textContent = ((strat.win_rate || 0) * 100).toFixed(1) + '%';
+
+        // Sharpe
+        const sharpeCell = document.createElement('td');
+        sharpeCell.textContent = (strat.sharpe_ratio || 0).toFixed(2);
+
+        // Max DD
+        const ddCell = document.createElement('td');
+        ddCell.className = 'negative';
+        ddCell.textContent = '-' + Math.abs(strat.max_drawdown || 0).toFixed(2) + '%';
+
+        // Trades
+        const tradesCell = document.createElement('td');
+        tradesCell.textContent = strat.total_trades || 0;
+
+        row.appendChild(rankCell);
+        row.appendChild(nameCell);
+        row.appendChild(returnCell);
+        row.appendChild(winCell);
+        row.appendChild(sharpeCell);
+        row.appendChild(ddCell);
+        row.appendChild(tradesCell);
+        tbody.appendChild(row);
+    });
+}
+
+function displayFundamentals() {
+    // Company info
+    const companyInfo = document.getElementById('company-info');
+    companyInfo.replaceChildren();
+
+    const info = [
+        { label: 'Sector', value: stockData.sector || '-' },
+        { label: 'Industry', value: stockData.industry || '-' },
+        { label: 'Exchange', value: stockData.exchange || '-' },
+        { label: 'Currency', value: stockData.currency || 'USD' }
+    ];
+
+    const infoList = document.createElement('dl');
+    infoList.className = 'row mb-0';
+
+    info.forEach(item => {
+        const dt = document.createElement('dt');
+        dt.className = 'col-sm-4';
+        dt.textContent = item.label;
+
+        const dd = document.createElement('dd');
+        dd.className = 'col-sm-8';
+        dd.textContent = item.value;
+
+        infoList.appendChild(dt);
+        infoList.appendChild(dd);
+    });
+
+    companyInfo.appendChild(infoList);
+
+    // Key stats
+    const keyStats = document.getElementById('key-stats');
+    keyStats.replaceChildren();
+
+    const stats = [
+        { label: 'P/E Ratio', value: stockData.pe_ratio ? stockData.pe_ratio.toFixed(2) : '-' },
+        { label: 'EPS', value: stockData.eps ? '$' + stockData.eps.toFixed(2) : '-' },
+        { label: 'Dividend Yield', value: stockData.dividend_yield ? (stockData.dividend_yield * 100).toFixed(2) + '%' : '-' },
+        { label: 'Beta', value: stockData.beta ? stockData.beta.toFixed(2) : '-' }
+    ];
+
+    const statsList = document.createElement('dl');
+    statsList.className = 'row mb-0';
+
+    stats.forEach(item => {
+        const dt = document.createElement('dt');
+        dt.className = 'col-sm-5';
+        dt.textContent = item.label;
+
+        const dd = document.createElement('dd');
+        dd.className = 'col-sm-7';
+        dd.textContent = item.value;
+
+        statsList.appendChild(dt);
+        statsList.appendChild(dd);
+    });
+
+    keyStats.appendChild(statsList);
+}
+
+function showError(message) {
+    document.getElementById('empty-state').style.display = 'block';
+    const emptyState = document.getElementById('empty-state');
+    emptyState.replaceChildren();
+
+    const alert = document.createElement('div');
+    alert.className = 'alert alert-danger text-center';
+    const icon = document.createElement('i');
+    icon.className = 'fas fa-exclamation-triangle me-2';
+    alert.appendChild(icon);
+    alert.appendChild(document.createTextNode(message));
+    emptyState.appendChild(alert);
+}
+
+// Utility functions
+function formatLargeNumber(num) {
+    if (!num) return '-';
+    if (num >= 1e12) return '$' + (num / 1e12).toFixed(2) + 'T';
+    if (num >= 1e9) return '$' + (num / 1e9).toFixed(2) + 'B';
+    if (num >= 1e6) return '$' + (num / 1e6).toFixed(2) + 'M';
+    if (num >= 1e3) return num.toLocaleString();
+    return num;
+}
+
+function getRSIType(rsi) {
+    if (!rsi) return 'neutral';
+    if (rsi < 30) return 'positive'; // Oversold = potential buy
+    if (rsi > 70) return 'negative'; // Overbought = potential sell
+    return 'neutral';
+}
+</script>
+{% endblock %}

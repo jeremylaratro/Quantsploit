@@ -18,10 +18,22 @@ def ema(close: pd.Series, length: int = 20) -> pd.Series:
 
 
 def rsi(close: pd.Series, length: int = 14) -> pd.Series:
-    """Relative Strength Index"""
+    """
+    Relative Strength Index using Wilder's Smoothing (EWMA)
+
+    Wilder's smoothing uses alpha = 1/length, which is the industry standard
+    for RSI calculation. This differs from simple moving average (SMA) which
+    gives equal weight to all periods.
+
+    The EWMA approach provides:
+    - More responsiveness to recent price changes
+    - Smoother transitions between values
+    - Consistency with trading platforms like TradingView, Bloomberg
+    """
     delta = close.diff()
-    gain = (delta.where(delta > 0, 0)).rolling(window=length).mean()
-    loss = (-delta.where(delta < 0, 0)).rolling(window=length).mean()
+    # Use Wilder's smoothing (EWMA with alpha=1/length) instead of SMA
+    gain = delta.where(delta > 0, 0).ewm(alpha=1/length, adjust=False).mean()
+    loss = (-delta.where(delta < 0, 0)).ewm(alpha=1/length, adjust=False).mean()
     rs = gain / loss
     return 100 - (100 / (1 + rs))
 

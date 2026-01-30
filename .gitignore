@@ -26,9 +26,10 @@ ENV/
 env/
 .venv
 
-# IDEs
+# IDEs and Editors
 .vscode/
 .idea/
+.obsidian/
 *.swp
 *.swo
 *~
@@ -37,7 +38,6 @@ env/
 *.db
 *.sqlite
 *.sqlite3
-quantsploit.db
 
 # Jupyter
 .ipynb_checkpoints
@@ -46,6 +46,8 @@ quantsploit.db
 .pytest_cache/
 .coverage
 htmlcov/
+coverage.xml
+*.cover
 
 # OS
 .DS_Store
@@ -53,10 +55,22 @@ Thumbs.db
 
 # Logs
 *.log
+*.save
 
-# Local config
+# Local/Private config
 local_config.yaml
+config.local.yaml
 
 # Backtest results (keep directory structure only)
 backtest_results/*
 !backtest_results/.gitkeep
+
+# Data cache (generated at runtime)
+data/ticker_cache_metadata.json
+data/valid_tickers.json
+quantsploit/data/
+
+# Personal analysis scripts (dated files)
+*_[0-9][0-9][A-Z][A-Z][A-Z][0-9][0-9][0-9][0-9].py
+*_[0-9][0-9][A-Z][A-Z][A-Z][0-9][0-9][0-9][0-9].md
+scripts/analysis/

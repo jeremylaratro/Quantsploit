@@ -780,8 +780,9 @@ class ComprehensiveBacktester:
         self.adapter = StrategyAdapter(self.data_fetcher)
 
         # Define available strategies
+        # Keys match strategy_api.py for web UI compatibility
         self.all_strategies = {
-            # Basic strategies (kept for comparison)
+            # Core strategies
             'sma_crossover': {
                 'name': 'SMA Crossover (20/50)',
                 'function': self.adapter.sma_crossover_strategy,
@@ -792,47 +793,32 @@ class ComprehensiveBacktester:
                 'function': self.adapter.mean_reversion_strategy,
                 'params': {'lookback': 20, 'entry_threshold': -60, 'exit_threshold': 40}
             },
-            'momentum': {
+            'momentum_signals': {
                 'name': 'Momentum (10/20/50)',
                 'function': self.adapter.momentum_strategy,
                 'params': {'periods': [10, 20, 50], 'entry_threshold': 60, 'exit_threshold': -40}
             },
-
-            # Advanced strategies
             'multifactor_scoring': {
                 'name': 'Multi-Factor Scoring',
                 'function': self.adapter.multifactor_strategy,
                 'params': {'lookback': 20}
             },
+
+            # Advanced strategies
             'kalman_adaptive': {
                 'name': 'Kalman Adaptive Filter',
                 'function': self.adapter.kalman_adaptive_strategy,
                 'params': {'threshold': 0.5, 'process_noise': 0.01}
-            },
-            'kalman_adaptive_sensitive': {
-                'name': 'Kalman Adaptive (Sensitive)',
-                'function': self.adapter.kalman_adaptive_strategy,
-                'params': {'threshold': 0.3, 'process_noise': 0.05}
             },
             'volume_profile_swing': {
                 'name': 'Volume Profile Swing',
                 'function': self.adapter.volume_profile_strategy,
                 'params': {'profile_period': 20, 'num_levels': 50}
             },
-            'volume_profile_swing_fast': {
-                'name': 'Volume Profile (Fast)',
-                'function': self.adapter.volume_profile_strategy,
-                'params': {'profile_period': 10, 'num_levels': 30}
-            },
             'hmm_regime_detection': {
                 'name': 'HMM Regime Detection',
                 'function': self.adapter.hmm_regime_strategy,
                 'params': {'lookback': 20}
-            },
-            'hmm_regime_detection_long': {
-                'name': 'HMM Regime (Long-term)',
-                'function': self.adapter.hmm_regime_strategy,
-                'params': {'lookback': 50}
             },
             'ml_swing_trading': {
                 'name': 'ML Swing Trading',
@@ -843,7 +829,23 @@ class ComprehensiveBacktester:
                 'name': 'Pairs Trading',
                 'function': self.adapter.pairs_trading_strategy,
                 'params': {'lookback': 20, 'entry_threshold': 2.0, 'exit_threshold': 0.5}
-            }
+            },
+            # Options strategies use technical indicators as proxy for IV
+            'options_volatility': {
+                'name': 'Options Volatility',
+                'function': self.adapter.hmm_regime_strategy,  # Uses regime as vol proxy
+                'params': {'lookback': 14}
+            },
+            'options_spreads': {
+                'name': 'Options Spreads',
+                'function': self.adapter.mean_reversion_strategy,  # Spread strategies are mean-reverting
+                'params': {'lookback': 14, 'entry_threshold': -50, 'exit_threshold': 50}
+            },
+            'reddit_sentiment_strategy': {
+                'name': 'Reddit Sentiment',
+                'function': self.adapter.momentum_strategy,  # Sentiment drives momentum
+                'params': {'periods': [5, 10, 20], 'entry_threshold': 50, 'exit_threshold': -30}
+            },
         }
 
         # Filter strategies if specified

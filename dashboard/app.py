@@ -17,7 +17,7 @@ if str(_DASHBOARD_DIR) not in sys.path:
 if str(_QUANTSPLOIT_ROOT) not in sys.path:
     sys.path.insert(0, str(_QUANTSPLOIT_ROOT))
 
-from flask import Flask, render_template, jsonify, request
+from flask import Flask, render_template, jsonify, request, redirect, url_for, session
 import json
 import markdown
 import pandas as pd
@@ -30,10 +30,21 @@ from ticker_universe import (
     get_market_cap_class, get_all_universes
 )
 
+# Security imports
+from security import (
+    init_security, require_auth, rate_limit, csrf_protect,
+    ThreadSafeDict, is_authenticated, check_password,
+    validate_timestamp, validate_scanner_id,
+    RATE_LIMIT_DEFAULT, RATE_LIMIT_EXPENSIVE
+)
+
 app = Flask(__name__)
 app.config['TEMPLATES_AUTO_RELOAD'] = True
 # Disable caching for API responses
 app.config['SEND_FILE_MAX_AGE_DEFAULT'] = 0
+
+# Initialize security (auth, CSRF, headers, rate limiting)
+init_security(app)
 
 # Path to backtest results
 RESULTS_DIR = Path(__file__).resolve().parent.parent / 'backtest_results'
@@ -665,7 +676,61 @@ def add_no_cache_headers(response):
     return response
 
 
+# =============================================================================
+# AUTHENTICATION ROUTES
+# =============================================================================
+
+def is_safe_redirect_url(target: str) -> bool:
+    """Check if redirect URL is safe (same origin only)."""
+    from urllib.parse import urlparse, urljoin
+    if not target:
+        return False
+    ref_url = urlparse(request.host_url)
+    test_url = urlparse(urljoin(request.host_url, target))
+    return test_url.scheme in ('http', 'https') and ref_url.netloc == test_url.netloc
+
+
+@app.route('/login', methods=['GET', 'POST'])
+@rate_limit(5, 300)  # 5 attempts per 5 minutes to prevent brute force
+def login():
+    """Login page and authentication handler"""
+    if is_authenticated():
+        return redirect(url_for('index'))
+
+    error = None
+    next_url = request.args.get('next') or request.form.get('next')
+
+    # Validate redirect URL to prevent open redirect
+    if next_url and not is_safe_redirect_url(next_url):
+        next_url = None
+
+    if request.method == 'POST':
+        password = request.form.get('password', '')
+        if check_password(password):
+            # Clear and regenerate session to prevent fixation attacks
+            session.clear()
+            session['authenticated'] = True
+            session.permanent = True
+            return redirect(next_url or url_for('index'))
+        else:
+            error = 'Invalid password'
+
+    return render_template('login.html', error=error, next=next_url)
+
+
+@app.route('/logout')
+def logout():
+    """Logout and clear session"""
+    session.clear()
+    return redirect(url_for('login'))
+
+
+# =============================================================================
+# MAIN DASHBOARD ROUTES
+# =============================================================================
+
 @app.route('/')
+@require_auth
 def index():
     """Main dashboard page"""
     runs = data_loader.get_available_runs()
@@ -701,8 +766,12 @@ def api_runs():
 
 
 @app.route('/api/summary/<timestamp>')
+@require_auth
 def api_summary(timestamp):
     """API: Get summary data for a specific run"""
+    if not validate_timestamp(timestamp):
+        return jsonify({'error': 'Invalid timestamp format'}), 400
+
     summary = data_loader.load_summary(timestamp)
     if summary is None:
         return jsonify({'error': 'Run not found'}), 404
@@ -711,8 +780,12 @@ def api_summary(timestamp):
 
 
 @app.route('/api/detailed/<timestamp>')
+@require_auth
 def api_detailed(timestamp):
     """API: Get detailed results for a specific run"""
+    if not validate_timestamp(timestamp):
+        return jsonify({'error': 'Invalid timestamp format'}), 400
+
     df = data_loader.load_detailed_results(timestamp)
     if df is None:
         return jsonify({'error': 'Run not found'}), 404
@@ -722,39 +795,55 @@ def api_detailed(timestamp):
 
 
 @app.route('/api/quarterly/<timestamp>')
+@require_auth
 def api_quarterly(timestamp):
     """API: Get quarterly comparison data"""
+    if not validate_timestamp(timestamp):
+        return jsonify({'error': 'Invalid timestamp format'}), 400
     data = data_loader.get_quarterly_comparison(timestamp)
     return jsonify(data)
 
 
 @app.route('/api/strategies/<timestamp>')
+@require_auth
 def api_strategies(timestamp):
     """API: Get strategy comparison data"""
+    if not validate_timestamp(timestamp):
+        return jsonify({'error': 'Invalid timestamp format'}), 400
     data = data_loader.get_strategy_comparison(timestamp)
     return jsonify(data)
 
 
 @app.route('/api/symbols/<timestamp>')
+@require_auth
 def api_symbols(timestamp):
     """API: Get symbol performance data"""
+    if not validate_timestamp(timestamp):
+        return jsonify({'error': 'Invalid timestamp format'}), 400
     data = data_loader.get_symbol_performance(timestamp)
     return jsonify(data)
 
 
 @app.route('/strategy/<timestamp>/<strategy_name>')
+@require_auth
 def strategy_detail(timestamp, strategy_name):
     """Strategy detail page"""
+    if not validate_timestamp(timestamp):
+        return jsonify({'error': 'Invalid timestamp format'}), 400
     return render_template('strategy_detail.html', timestamp=timestamp, strategy_name=strategy_name)
 
 
 @app.route('/period/<timestamp>/<period_name>')
+@require_auth
 def period_detail(timestamp, period_name):
     """Period detail page"""
+    if not validate_timestamp(timestamp):
+        return jsonify({'error': 'Invalid timestamp format'}), 400
     return render_template('period_detail.html', timestamp=timestamp, period_name=period_name)
 
 
 @app.route('/comparison')
+@require_auth
 def comparison():
     """Multi-run comparison page"""
     runs = data_loader.get_available_runs()
@@ -986,11 +1075,14 @@ def api_strategy_options(strategy_id):
         return jsonify({'success': False, 'error': str(e)}), 500
 
 
-# Strategy execution jobs
-strategy_jobs = {}
+# Strategy execution jobs (thread-safe)
+strategy_jobs = ThreadSafeDict()
 
 
 @app.route('/api/strategies/run', methods=['POST'])
+@require_auth
+@rate_limit(RATE_LIMIT_EXPENSIVE)
+@csrf_protect
 def api_run_strategy():
     """API: Execute a strategy with given parameters"""
     import threading
@@ -1041,6 +1133,7 @@ def api_strategy_status(job_id):
 
 
 @app.route('/backtest-launcher')
+@require_auth
 def backtest_launcher():
     """Backtest Launcher Page"""
     universes = get_all_universes()
@@ -1053,6 +1146,9 @@ def backtest_launcher():
 
 
 @app.route('/api/launch-backtest', methods=['POST'])
+@require_auth
+@rate_limit(RATE_LIMIT_EXPENSIVE)
+@csrf_protect
 def api_launch_backtest():
     """API: Launch a new backtest"""
     import subprocess
@@ -1348,25 +1444,27 @@ def api_candlestick(timestamp, strategy_name, symbol):
         return jsonify({'error': str(e)}), 500
 
 
-# Global dict to store backtest job status
-backtest_jobs = {}
+# Global dict to store backtest job status (thread-safe)
+backtest_jobs = ThreadSafeDict()
 
 
 # =============================================================================
 # SCANNER ROUTES
 # =============================================================================
 
-# Global scanner cache - initialized on startup
-scanner_cache = {}
+# Global scanner cache - initialized on startup (thread-safe)
+scanner_cache = ThreadSafeDict()
 
 
 @app.route('/scanners')
+@require_auth
 def scanners_dashboard():
     """Scanners Dashboard Page"""
     return render_template('scanners_dashboard.html')
 
 
 @app.route('/api/scanners/info')
+@require_auth
 def api_scanner_info():
     """API: Get metadata about all available scanners"""
     try:
@@ -1378,14 +1476,22 @@ def api_scanner_info():
 
 
 @app.route('/api/scanners/status')
+@require_auth
 def api_scanner_status():
     """API: Get status of all scanners"""
-    return jsonify(scanner_cache)
+    return jsonify(scanner_cache.to_dict())
 
 
 @app.route('/api/scanners/<scanner_id>/run', methods=['POST'])
+@require_auth
+@rate_limit(RATE_LIMIT_EXPENSIVE)
+@csrf_protect
 def api_run_scanner(scanner_id):
     """API: Run/refresh a specific scanner"""
+    # Validate scanner_id format
+    if not validate_scanner_id(scanner_id):
+        return jsonify({'success': False, 'error': 'Invalid scanner ID format'}), 400
+
     try:
         from scanner_engine import refresh_scanner
         options = request.json if request.is_json else None
@@ -1396,8 +1502,13 @@ def api_run_scanner(scanner_id):
 
 
 @app.route('/api/scanners/<scanner_id>/results')
+@require_auth
 def api_scanner_results(scanner_id):
     """API: Get results for a specific scanner"""
+    # Validate scanner_id format
+    if not validate_scanner_id(scanner_id):
+        return jsonify({'success': False, 'error': 'Invalid scanner ID format'}), 400
+
     if scanner_id not in scanner_cache:
         return jsonify({'success': False, 'error': 'Scanner not found'}), 404
     return jsonify(scanner_cache[scanner_id])
@@ -1661,37 +1772,54 @@ if __name__ == '__main__':
     import logging
 
     parser = argparse.ArgumentParser(description='Quantsploit Backtesting Dashboard')
-    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to')
-    parser.add_argument('--port', type=int, default=5000, help='Port to bind to')
-    parser.add_argument('--production', action='store_true', help='Run in production mode (suppresses request logging)')
+    parser.add_argument('--host', default='127.0.0.1', help='Host to bind to (default: 127.0.0.1)')
+    parser.add_argument('--host-lan', action='store_true', help='Bind to 0.0.0.0 for LAN access (requires authentication)')
+    parser.add_argument('--port', type=int, default=5000, help='Port to bind to (default: 5000)')
+    parser.add_argument('--debug', action='store_true', help='Enable debug mode (WARNING: security risk)')
     parser.add_argument('--no-scanners', action='store_true', help='Disable scanner initialization on startup')
     args = parser.parse_args()
+
+    # Determine host binding
+    host = '0.0.0.0' if args.host_lan else args.host
 
     # Initialize scanners on startup (unless disabled)
     if not args.no_scanners:
         init_scanner_cache()
 
-    # Configure logging based on mode
-    if args.production:
-        # Suppress Flask's request logging in production
-        log = logging.getLogger('werkzeug')
-        log.setLevel(logging.ERROR)
+    # Security warning for LAN access
+    if args.host_lan:
+        import os
+        if not os.environ.get('DASHBOARD_PASSWORD'):
+            print("\n" + "!" * 60)
+            print("  WARNING: LAN access enabled without authentication!")
+            print("  Set DASHBOARD_PASSWORD environment variable for security.")
+            print("!" * 60 + "\n")
 
-        # Only log startup info
-        print(f"Quantsploit Dashboard started on http://{args.host}:{args.port}")
-        print(f"Results directory: {RESULTS_DIR}")
-        print(f"Available runs: {len(data_loader.get_available_runs())}")
+    # Security warning for debug mode
+    if args.debug:
+        print("\n" + "!" * 60)
+        print("  WARNING: Debug mode enabled!")
+        print("  This exposes the Werkzeug debugger which can execute code.")
+        print("  Do NOT use in production or on untrusted networks.")
+        print("!" * 60 + "\n")
 
-        # Run in production mode
-        app.run(debug=False, host=args.host, port=args.port, threaded=True)
+    # Configure logging - suppress verbose request logging by default
+    log = logging.getLogger('werkzeug')
+    if args.debug:
+        log.setLevel(logging.DEBUG)
     else:
-        # Development mode with full output
-        print("\n" + "="*60)
-        print("  Quantsploit Backtesting Dashboard")
-        print("="*60)
-        print(f"\n  📊 Dashboard URL: http://{args.host}:{args.port}")
-        print(f"  📁 Results Directory: {RESULTS_DIR}")
-        print(f"  🔄 Available Runs: {len(data_loader.get_available_runs())}")
-        print("\n" + "="*60 + "\n")
+        log.setLevel(logging.WARNING)
 
-        app.run(debug=True, host=args.host, port=args.port)
+    # Startup info
+    print("\n" + "=" * 60)
+    print("  Quantsploit Backtesting Dashboard")
+    print("=" * 60)
+    print(f"  URL: http://{host}:{args.port}")
+    print(f"  Results: {RESULTS_DIR}")
+    print(f"  Runs: {len(data_loader.get_available_runs())}")
+    print(f"  Debug: {'ENABLED' if args.debug else 'disabled'}")
+    print(f"  Auth: {'ENABLED' if is_authenticated.__module__ else 'check security.py'}")
+    print("=" * 60 + "\n")
+
+    # Run the app (debug=False by default for security)
+    app.run(debug=args.debug, host=host, port=args.port, threaded=True)

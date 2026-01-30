@@ -379,7 +379,13 @@ Contributions are welcome. Please:
 
 ## License
 
-MIT License - See LICENSE file for details
+This project is licensed under **CC BY-NC-SA 4.0** (Creative Commons Attribution-NonCommercial-ShareAlike 4.0 International).
+
+You are free to share and adapt this work for non-commercial purposes, provided you give appropriate credit and distribute any derivatives under the same license.
+
+**For commercial licensing inquiries, contact the copyright holder.**
+
+See [LICENSE](LICENSE) for full terms.
 
 ## Acknowledgments
 

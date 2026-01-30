@@ -500,10 +500,15 @@ def execute_v020_strategy(strategy_id: str, options: Dict[str, Any]) -> Dict[str
             if df is None or df.empty:
                 return {'success': False, 'error': f'No data found for {symbol}'}
 
-            strategy = strategy_class(df)
+            strategy = strategy_class(
+                df,
+                bb_period=int(options.get('BB_PERIOD', 20)),
+                bb_std=float(options.get('BB_STD', 2.0)),
+                kc_period=int(options.get('KC_PERIOD', 20)),
+                kc_mult=float(options.get('KC_MULT', 1.5))
+            )
             signals = strategy.generate_signals(
-                atr_multiplier=float(options.get('ATR_MULTIPLIER', 2.0)),
-                lookback=int(options.get('LOOKBACK', 20))
+                min_squeeze_duration=int(options.get('MIN_SQUEEZE_DURATION', 5))
             )
 
             return {
@@ -514,27 +519,152 @@ def execute_v020_strategy(strategy_id: str, options: Dict[str, Any]) -> Dict[str
                     'symbol': symbol,
                     'signals': convert_numpy_types([{
                         'date': str(s.date),
-                        'signal_type': s.signal_type,
-                        'price': s.price,
-                        'upper_band': s.upper_band,
-                        'lower_band': s.lower_band
+                        'direction': s.direction,
+                        'strength': s.strength,
+                        'squeeze_duration': s.squeeze_duration,
+                        'atr_expansion': s.atr_expansion,
+                        'volume_confirmation': s.volume_confirmation
                     } for s in signals[-10:]]),  # Last 10 signals
-                    'total_signals': len(signals)
+                    'total_signals': len(signals),
+                    'current_in_squeeze': bool(strategy.detect_squeeze().iloc[-1]) if len(strategy.data) > 0 else False
                 }
             }
 
-        elif strategy_id in ['fama_french', 'earnings_momentum', 'adaptive_allocation',
-                            'options_vol_arb', 'vwap_execution']:
-            # These strategies require more complex setup
-            # Return a placeholder with info about the strategy
+        elif strategy_id == 'fama_french':
+            # Fama-French factor analysis - works on single symbol with momentum/quality proxies
+            symbol = options.get('SYMBOL') or options.get('SYMBOLS', 'AAPL').split(',')[0]
+            df = fetcher.get_stock_data(symbol, period, '1d')
+
+            if df is None or df.empty:
+                return {'success': False, 'error': f'No data found for {symbol}'}
+
+            # Calculate factor proxies
+            close = df['Close']
+            returns = close.pct_change().dropna()
+
+            # Momentum factor (60-day ROC)
+            lookback = int(options.get('LOOKBACK', 60))
+            if len(close) > lookback:
+                momentum = (close.iloc[-1] - close.iloc[-lookback]) / close.iloc[-lookback]
+            else:
+                momentum = 0
+
+            # Volatility proxy for quality
+            vol_20 = returns.iloc[-20:].std() if len(returns) >= 20 else returns.std()
+            vol_60 = returns.iloc[-60:].std() if len(returns) >= 60 else returns.std()
+            quality_score = 1 - (vol_20 / vol_60) if vol_60 > 0 else 0.5
+
+            # Composite score
+            factor_score = (momentum * 50 + quality_score * 50)
+
             return {
                 'success': True,
                 'strategy_id': strategy_id,
                 'strategy_name': metadata['name'],
                 'results': {
-                    'message': f'{metadata["name"]} requires specialized data. Use the CLI for full execution.',
-                    'trading_guide': metadata.get('trading_guide', ''),
-                    'options_provided': options
+                    'symbol': symbol,
+                    'factor_scores': {
+                        'momentum': float(momentum),
+                        'quality_proxy': float(quality_score),
+                        'composite': float(factor_score)
+                    },
+                    'signal': 'LONG' if factor_score > 0.6 else ('SHORT' if factor_score < 0.4 else 'NEUTRAL'),
+                    'note': 'Using momentum and volatility as factor proxies. Full factor analysis requires multi-stock universe.'
+                }
+            }
+
+        elif strategy_id == 'adaptive_allocation':
+            # Adaptive allocation - regime detection for single symbol
+            symbols_str = options.get('SYMBOLS', 'SPY,TLT,GLD')
+            symbols = [s.strip() for s in symbols_str.split(',')]
+
+            # Fetch data for primary symbol
+            symbol = symbols[0]
+            df = fetcher.get_stock_data(symbol, period, '1d')
+
+            if df is None or df.empty:
+                return {'success': False, 'error': f'No data found for {symbol}'}
+
+            close = df['Close']
+            returns = close.pct_change().dropna()
+
+            # Regime detection
+            momentum_lookback = int(options.get('REGIME_LOOKBACK', 60))
+            vol_lookback = 20
+
+            roc = (close.iloc[-1] - close.iloc[-momentum_lookback]) / close.iloc[-momentum_lookback] if len(close) > momentum_lookback else 0
+            current_vol = returns.iloc[-vol_lookback:].std() * np.sqrt(252) if len(returns) >= vol_lookback else 0.2
+            historical_vol = returns.iloc[-momentum_lookback:].std() * np.sqrt(252) if len(returns) >= momentum_lookback else 0.2
+            sma_50 = close.rolling(50).mean().iloc[-1] if len(close) >= 50 else close.iloc[-1]
+            trend_bullish = close.iloc[-1] > sma_50
+
+            # Determine regime
+            if roc > 0.05 and trend_bullish:
+                regime = 'BULL'
+                allocation_suggestion = 'Risk-on: Higher equity allocation'
+            elif roc < -0.05 or not trend_bullish:
+                regime = 'BEAR'
+                allocation_suggestion = 'Risk-off: Higher bond/gold allocation'
+            else:
+                regime = 'SIDEWAYS'
+                allocation_suggestion = 'Neutral: Balanced allocation'
+
+            vol_elevated = current_vol > historical_vol * 1.3
+
+            return {
+                'success': True,
+                'strategy_id': strategy_id,
+                'strategy_name': metadata['name'],
+                'results': {
+                    'symbol': symbol,
+                    'regime': regime,
+                    'regime_indicators': {
+                        'momentum_roc': float(roc),
+                        'current_volatility': float(current_vol),
+                        'historical_volatility': float(historical_vol),
+                        'volatility_elevated': vol_elevated,
+                        'price_above_sma50': bool(trend_bullish)
+                    },
+                    'allocation_suggestion': allocation_suggestion
+                }
+            }
+
+        elif strategy_id == 'earnings_momentum':
+            return {
+                'success': True,
+                'strategy_id': strategy_id,
+                'strategy_name': metadata['name'],
+                'results': {
+                    'status': 'requires_data',
+                    'message': 'Earnings Momentum requires earnings announcement data (EPS, estimates, dates) which must be configured from an external provider.',
+                    'required_data': ['earnings_dates', 'actual_eps', 'estimated_eps'],
+                    'trading_guide': metadata.get('trading_guide', '')
+                }
+            }
+
+        elif strategy_id == 'options_vol_arb':
+            return {
+                'success': True,
+                'strategy_id': strategy_id,
+                'strategy_name': metadata['name'],
+                'results': {
+                    'status': 'requires_data',
+                    'message': 'Options Vol Arb requires implied volatility data from options chains which must be configured from an external provider.',
+                    'required_data': ['implied_volatility', 'options_chain', 'greeks'],
+                    'trading_guide': metadata.get('trading_guide', '')
+                }
+            }
+
+        elif strategy_id == 'vwap_execution':
+            return {
+                'success': True,
+                'strategy_id': strategy_id,
+                'strategy_name': metadata['name'],
+                'results': {
+                    'status': 'requires_data',
+                    'message': 'VWAP Execution requires intraday (minute-level) price and volume data. This is an execution algorithm for order slicing, not a signal generator.',
+                    'required_data': ['intraday_prices', 'intraday_volume', 'volume_profile'],
+                    'trading_guide': metadata.get('trading_guide', '')
                 }
             }
 

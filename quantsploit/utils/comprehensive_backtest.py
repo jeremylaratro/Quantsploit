@@ -23,6 +23,11 @@ from quantsploit.modules.strategies.momentum_signals import MomentumSignals
 from quantsploit.modules.strategies.multifactor_scoring import MultiFactorScoring
 from quantsploit.utils.ta_compat import rsi, atr, adx, bbands, macd
 
+# v0.2.0 strategy imports for batch backtest integration
+from quantsploit.modules.strategies.risk_parity import RiskParityStrategy
+from quantsploit.modules.strategies.volatility_breakout import VolatilityBreakoutStrategy
+from quantsploit.modules.strategies.adaptive_allocation import AdaptiveAssetAllocation
+
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -290,6 +295,8 @@ class StrategyAdapter:
 
     def __init__(self, data_fetcher: DataFetcher):
         self.data_fetcher = data_fetcher
+        # Track strategies we've warned about missing data to avoid log spam
+        self._warned_strategies = set()
 
     def sma_crossover_strategy(self, backtester: Backtester, date: pd.Timestamp,
                                row: pd.Series, symbol: str, data: pd.DataFrame,
@@ -750,6 +757,279 @@ class StrategyAdapter:
             if current_position is not None:
                 backtester.exit_position(symbol, date, row['Close'])
 
+    # =========================================================================
+    # v0.2.0 STRATEGY ADAPTERS
+    # These adapt standalone v0.2.0 strategy classes to work with backtesting
+    # =========================================================================
+
+    def risk_parity_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                            row: pd.Series, symbol: str, data: pd.DataFrame,
+                            lookback: int = 30, volatility_threshold: float = 1.15):
+        """
+        Risk Parity Strategy Adapter
+
+        Adapts the RiskParityStrategy for single-symbol tactical signals.
+        Uses volatility regime to determine position sizing (risk-on vs risk-off).
+
+        When volatility is low relative to historical average: full position (risk-on)
+        When volatility is high: reduce/exit position (risk-off)
+        """
+        history = data.loc[:date]
+
+        # Reduced minimum data requirement
+        min_data = lookback + 5
+        if len(history) < min_data:
+            return
+
+        # Calculate rolling volatility
+        returns = history['Close'].pct_change().dropna()
+        if len(returns) < lookback:
+            return
+
+        # Use shorter window for current vol (more responsive)
+        short_window = min(15, lookback // 2)
+        current_vol = returns.iloc[-short_window:].std() * np.sqrt(252)
+        historical_vol = returns.iloc[-lookback:].std() * np.sqrt(252)
+
+        if historical_vol == 0 or pd.isna(current_vol):
+            return
+
+        vol_ratio = current_vol / historical_vol
+
+        current_position = backtester.positions.get(symbol)
+
+        # Risk-on: Low volatility environment - enter long
+        if vol_ratio < volatility_threshold:
+            if current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+
+        # Risk-off: High volatility environment - exit (tighter threshold for more exits)
+        elif vol_ratio > volatility_threshold * 1.1:
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+    def volatility_breakout_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                                    row: pd.Series, symbol: str, data: pd.DataFrame,
+                                    bb_period: int = 20, bb_std: float = 2.0,
+                                    kc_period: int = 20, kc_mult: float = 1.5):
+        """
+        Volatility Breakout Strategy Adapter
+
+        Uses Bollinger Band squeeze detection (BB inside Keltner Channel) to
+        identify low volatility periods, then trades breakouts when the
+        squeeze releases.
+        """
+        history = data.loc[:date]
+
+        if len(history) < max(bb_period, kc_period) + 20:
+            return
+
+        close = history['Close']
+        high = history['High']
+        low = history['Low']
+
+        # Bollinger Bands
+        bb_middle = close.rolling(bb_period).mean()
+        bb_std_val = close.rolling(bb_period).std()
+        bb_upper = bb_middle + bb_std * bb_std_val
+        bb_lower = bb_middle - bb_std * bb_std_val
+
+        # True Range and ATR for Keltner Channel
+        tr = np.maximum(
+            high - low,
+            np.maximum(
+                abs(high - close.shift(1)),
+                abs(low - close.shift(1))
+            )
+        )
+        atr_val = tr.ewm(span=14, adjust=False).mean()
+
+        # Keltner Channel
+        kc_middle = close.ewm(span=kc_period, adjust=False).mean()
+        kc_upper = kc_middle + kc_mult * atr_val
+        kc_lower = kc_middle - kc_mult * atr_val
+
+        # Squeeze detection (BB inside KC)
+        squeeze = (bb_lower.iloc[-1] > kc_lower.iloc[-1]) and (bb_upper.iloc[-1] < kc_upper.iloc[-1])
+        prev_squeeze = (bb_lower.iloc[-2] > kc_lower.iloc[-2]) and (bb_upper.iloc[-2] < kc_upper.iloc[-2])
+
+        # Momentum direction
+        momentum = close.iloc[-1] - close.iloc[-bb_period]
+
+        current_position = backtester.positions.get(symbol)
+
+        # Squeeze release with bullish momentum - enter long
+        if prev_squeeze and not squeeze and momentum > 0:
+            if current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+
+        # Exit on squeeze or bearish momentum
+        elif (squeeze or momentum < 0) and current_position is not None:
+            backtester.exit_position(symbol, date, row['Close'])
+
+    def fama_french_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                            row: pd.Series, symbol: str, data: pd.DataFrame,
+                            momentum_lookback: int = 30, rebalance_freq: int = 15):
+        """
+        Fama-French Factor Strategy Adapter
+
+        Adapts factor-based investing for single-symbol signals using
+        momentum as a proxy for factor scores (since we don't have
+        multi-stock factor data in batch backtest).
+        """
+        history = data.loc[:date]
+
+        # Reduced minimum data requirement
+        min_data = momentum_lookback + 10
+        if len(history) < min_data:
+            return
+
+        close = history['Close']
+        returns = close.pct_change().dropna()
+
+        if len(returns) < momentum_lookback:
+            return
+
+        # Calculate momentum factor proxy (rate of change)
+        roc = (close.iloc[-1] - close.iloc[-momentum_lookback]) / close.iloc[-momentum_lookback]
+
+        # Calculate quality factor proxy (low volatility = high quality)
+        short_vol_window = min(15, momentum_lookback // 2)
+        vol_short = returns.iloc[-short_vol_window:].std() if len(returns) >= short_vol_window else returns.std()
+        vol_long = returns.iloc[-momentum_lookback:].std()
+
+        # Quality score: lower short-term vol relative to long-term = higher quality
+        quality_score = 1 - (vol_short / vol_long) if vol_long > 0 else 0.5
+
+        # Composite factor score (momentum + quality)
+        # Normalize ROC to typical range and combine with quality
+        factor_score = (roc * 100 + quality_score * 50)  # More responsive scaling
+
+        current_position = backtester.positions.get(symbol)
+
+        # Enter on positive factor score (relaxed threshold)
+        if factor_score > 5:
+            if current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+
+        # Exit on negative factor score (relaxed threshold)
+        elif factor_score < -5:
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+    def adaptive_allocation_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                                    row: pd.Series, symbol: str, data: pd.DataFrame,
+                                    momentum_lookback: int = 30, vol_lookback: int = 15):
+        """
+        Adaptive Asset Allocation Strategy Adapter
+
+        Adapts regime-based allocation for single-symbol tactical signals.
+        Detects market regime (bull/bear/sideways) and adjusts exposure.
+        """
+        history = data.loc[:date]
+
+        # Reduced minimum data requirement for faster signal generation
+        min_data = max(momentum_lookback, vol_lookback) + 10
+        if len(history) < min_data:
+            return
+
+        close = history['Close']
+        returns = close.pct_change().dropna()
+
+        if len(returns) < momentum_lookback:
+            return
+
+        # Calculate regime indicators
+        # Momentum: Rate of change
+        roc = (close.iloc[-1] - close.iloc[-momentum_lookback]) / close.iloc[-momentum_lookback]
+
+        # Volatility regime
+        current_vol = returns.iloc[-vol_lookback:].std() * np.sqrt(252) if len(returns) >= vol_lookback else 0.2
+        historical_vol = returns.iloc[-momentum_lookback:].std() * np.sqrt(252)
+
+        # Trend: Price vs SMA (use shorter SMA for faster signals)
+        sma_period = min(20, len(close) - 1)
+        sma = close.rolling(sma_period).mean().iloc[-1]
+        trend_bullish = close.iloc[-1] > sma
+
+        # Determine regime with relaxed thresholds for more signals
+        if roc > 0.02 and trend_bullish:
+            regime = 'BULL'
+        elif roc < -0.02 or not trend_bullish:
+            regime = 'BEAR'
+        else:
+            regime = 'SIDEWAYS'
+
+        # High volatility modifier (relaxed threshold)
+        vol_elevated = current_vol > historical_vol * 1.2 if historical_vol > 0 else False
+
+        current_position = backtester.positions.get(symbol)
+
+        # BULL regime and not elevated vol: full exposure
+        if regime == 'BULL' and not vol_elevated:
+            if current_position is None:
+                backtester.enter_long(symbol, date, row['Close'])
+
+        # BEAR regime or elevated vol: reduce/exit
+        elif regime == 'BEAR' or vol_elevated:
+            if current_position is not None:
+                backtester.exit_position(symbol, date, row['Close'])
+
+        # SIDEWAYS: maintain position but don't add
+        # (no action needed - just hold if we have position)
+
+    def earnings_momentum_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                                  row: pd.Series, symbol: str, data: pd.DataFrame,
+                                  **kwargs):
+        """
+        Earnings Momentum Strategy Adapter
+
+        SKIPPED: Requires earnings announcement data (dates, EPS, estimates)
+        which is not available in the standard batch backtest data pipeline.
+
+        To use this strategy, configure external earnings data source.
+        """
+        warn_key = f'earnings_momentum_{symbol}'
+        if warn_key not in self._warned_strategies:
+            logger.warning(f"Skipping Earnings Momentum for {symbol}: Requires earnings data not available in batch backtest")
+            self._warned_strategies.add(warn_key)
+        return  # No trades - will be filtered by validation
+
+    def options_vol_arb_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                                row: pd.Series, symbol: str, data: pd.DataFrame,
+                                **kwargs):
+        """
+        Options Volatility Arbitrage Strategy Adapter
+
+        SKIPPED: Requires implied volatility data from options chain
+        which is not available in the standard batch backtest data pipeline.
+
+        To use this strategy, configure options data source.
+        """
+        warn_key = f'options_vol_arb_{symbol}'
+        if warn_key not in self._warned_strategies:
+            logger.warning(f"Skipping Options Vol Arb for {symbol}: Requires IV data not available in batch backtest")
+            self._warned_strategies.add(warn_key)
+        return  # No trades - will be filtered by validation
+
+    def vwap_execution_strategy(self, backtester: Backtester, date: pd.Timestamp,
+                               row: pd.Series, symbol: str, data: pd.DataFrame,
+                               **kwargs):
+        """
+        VWAP Execution Strategy Adapter
+
+        SKIPPED: Requires intraday (minute-level) price and volume data
+        which is not available in the standard batch backtest data pipeline.
+
+        VWAP is an execution algorithm, not a signal generator - it's designed
+        for optimal order execution rather than determining when to trade.
+        """
+        warn_key = f'vwap_execution_{symbol}'
+        if warn_key not in self._warned_strategies:
+            logger.warning(f"Skipping VWAP Execution for {symbol}: Requires intraday data and is an execution algorithm, not a signal strategy")
+            self._warned_strategies.add(warn_key)
+        return  # No trades - will be filtered by validation
+
 
 class ComprehensiveBacktester:
     """
@@ -845,6 +1125,46 @@ class ComprehensiveBacktester:
                 'name': 'Reddit Sentiment',
                 'function': self.adapter.momentum_strategy,  # Sentiment drives momentum
                 'params': {'periods': [5, 10, 20], 'entry_threshold': 50, 'exit_threshold': -30}
+            },
+
+            # =========================================================================
+            # v0.2.0 STRATEGIES
+            # These strategies are adapted from standalone analysis classes
+            # =========================================================================
+            'risk_parity': {
+                'name': 'Risk Parity',
+                'function': self.adapter.risk_parity_strategy,
+                'params': {'lookback': 30, 'volatility_threshold': 1.15}  # Reduced lookback for faster signal generation
+            },
+            'volatility_breakout': {
+                'name': 'Volatility Breakout',
+                'function': self.adapter.volatility_breakout_strategy,
+                'params': {'bb_period': 20, 'bb_std': 2.0, 'kc_period': 20, 'kc_mult': 1.5}
+            },
+            'fama_french': {
+                'name': 'Fama-French Factors',
+                'function': self.adapter.fama_french_strategy,
+                'params': {'momentum_lookback': 30, 'rebalance_freq': 15}  # Reduced lookback for faster signal generation
+            },
+            'adaptive_allocation': {
+                'name': 'Adaptive Allocation',
+                'function': self.adapter.adaptive_allocation_strategy,
+                'params': {'momentum_lookback': 30, 'vol_lookback': 15}  # Reduced lookback for faster signal generation
+            },
+            'earnings_momentum': {
+                'name': 'Earnings Momentum (Requires Data)',
+                'function': self.adapter.earnings_momentum_strategy,
+                'params': {}
+            },
+            'options_vol_arb': {
+                'name': 'Options Vol Arb (Requires IV Data)',
+                'function': self.adapter.options_vol_arb_strategy,
+                'params': {}
+            },
+            'vwap_execution': {
+                'name': 'VWAP Execution (Requires Intraday)',
+                'function': self.adapter.vwap_execution_strategy,
+                'params': {}
             },
         }
 

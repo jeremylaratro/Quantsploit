@@ -2,7 +2,7 @@ from setuptools import setup, find_packages
 
 setup(
     name="quantsploit",
-    version="0.2.0",
+    version="0.2.1",
     description="Quantitative Analysis Trading Framework with Interactive TUI",
     author="Quantsploit Team",
     packages=find_packages(),

@@ -1108,25 +1108,30 @@ def api_launch_backtest():
 
             # Add strategies filter if specified
             if strategies:
-                # Import to check which strategies are actually available
-                from quantsploit.utils.comprehensive_backtest import ComprehensiveBacktester
-                temp_bt = ComprehensiveBacktester.__new__(ComprehensiveBacktester)
-                temp_bt.data_fetcher = None
-                temp_bt.adapter = None
-                temp_bt.strategy_keys_filter = None
-                # Manually get available strategy keys
-                available_keys = ['sma_crossover', 'mean_reversion', 'momentum_signals',
-                                 'multifactor_scoring', 'kalman_adaptive', 'volume_profile_swing',
-                                 'hmm_regime_detection', 'ml_swing_trading', 'pairs_trading',
-                                 'options_volatility', 'options_spreads', 'reddit_sentiment_strategy']
+                # All strategies now available in comprehensive_backtest.py
+                # Core + Advanced strategies
+                available_keys = [
+                    'sma_crossover', 'mean_reversion', 'momentum_signals',
+                    'multifactor_scoring', 'kalman_adaptive', 'volume_profile_swing',
+                    'hmm_regime_detection', 'ml_swing_trading', 'pairs_trading',
+                    'options_volatility', 'options_spreads', 'reddit_sentiment_strategy',
+                    # v0.2.0 strategies (now integrated)
+                    'risk_parity', 'volatility_breakout', 'fama_french',
+                    'adaptive_allocation', 'earnings_momentum', 'options_vol_arb', 'vwap_execution'
+                ]
 
                 # Filter to only valid strategies
                 valid_strategies = [s for s in strategies if s in available_keys]
                 invalid_strategies = [s for s in strategies if s not in available_keys]
 
                 if invalid_strategies:
-                    backtest_jobs[job_id]['log'] += f'Warning: {len(invalid_strategies)} strategies not available for backtest: {", ".join(invalid_strategies)}\n'
-                    backtest_jobs[job_id]['log'] += f'(v0.2.0 strategies require specialized data and are not yet integrated into batch backtest)\n'
+                    backtest_jobs[job_id]['log'] += f'Warning: {len(invalid_strategies)} unknown strategies: {", ".join(invalid_strategies)}\n'
+
+                # Note which v0.2.0 strategies will skip due to data requirements
+                skip_strategies = ['earnings_momentum', 'options_vol_arb', 'vwap_execution']
+                selected_skip = [s for s in valid_strategies if s in skip_strategies]
+                if selected_skip:
+                    backtest_jobs[job_id]['log'] += f'Note: {", ".join(selected_skip)} require specialized data and will be skipped\n'
 
                 if valid_strategies:
                     kwargs['strategy_keys'] = valid_strategies
@@ -1134,7 +1139,7 @@ def api_launch_backtest():
                 else:
                     backtest_jobs[job_id]['log'] += f'No valid strategies selected. Using all available strategies.\n'
             else:
-                backtest_jobs[job_id]['log'] += 'Using all available strategies\n'
+                backtest_jobs[job_id]['log'] += 'Using all available strategies (19 total)\n'
 
             # Add period configuration
             if period_config.get('mode') == 'custom':

@@ -5,6 +5,36 @@ All notable changes to Quantsploit will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1] - 2026-01-29
+
+### Changed
+
+- Complete README.md rewrite with professional formatting
+  - Fixed clipped ASCII art banner
+  - Removed all emojis for professional tone
+  - Updated feature list to reflect v0.2.0 (19 strategies instead of 4)
+  - Fixed GitHub URL from placeholder to actual repository
+  - Added new CLI commands documentation (webserver, analyze, compare)
+  - Added Risk Parity and Options Analytics sections
+  - Added Dashboard API endpoints documentation
+  - Updated architecture section with accurate module counts
+
+### Fixed
+
+- Strategy adapters in comprehensive_backtest.py for improved signal generation
+  - Reduced lookback periods from 60 to 30 days for faster signals
+  - Relaxed entry/exit thresholds for more trade opportunities
+  - Fixed risk_parity_strategy, fama_french_strategy, and adaptive_allocation_strategy
+  - Strategies now produce valid backtest results instead of being filtered out
+- Dashboard API enhancements
+  - Added /api/all-strategies endpoint for retrieving all available strategies
+  - Enhanced /api/backtest/<strategy_name> with proper error handling
+  - Improved strategy loading and validation logic
+
+### Removed
+
+- Broken references to deleted documentation files (ADVANCED_STRATEGIES.md, DASHBOARD.md)
+
 ## [0.2.0] - 2026-01-28
 
 ### Added - Advanced Strategy Implementations

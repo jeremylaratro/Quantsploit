@@ -1,20 +1,5 @@
 # Quantsploit
 
-```
-╔════════════════════════════════════════════════════════════════════════╗
-║                                                                        ║
-║    ██████╗ ██╗   ██╗ █████╗ ███╗   ██╗████████╗███████╗██████╗ ██╗     ║
-║   ██╔═══██╗██║   ██║██╔══██╗████╗  ██║╚══██╔══╝██╔════╝██╔══██╗██║     ║
-║   ██║   ██║██║   ██║███████║██╔██╗ ██║   ██║   ███████╗██████╔╝██║     ║
-║   ██║▄▄ ██║██║   ██║██╔══██║██║╚██╗██║   ██║   ╚════██║██╔═══╝ ██║     ║
-║   ╚██████╔╝╚██████╔╝██║  ██║██║ ╚████║   ██║   ███████║██║     ███████╗║
-║    ╚══▀▀═╝  ╚═════╝ ╚═╝  ╚═╝╚═╝  ╚═══╝   ╚═╝   ╚══════╝╚═╝     ╚══════╝║
-║                                                                        ║
-║                        EXPLOIT THE MARKET                              ║
-║                                                                        ║
-╚════════════════════════════════════════════════════════════════════════╝
-```
-
 **Quantitative Analysis Trading Framework with Interactive TUI**
 
 Quantsploit is a modular quantitative trading framework inspired by penetration testing tools like Metasploit. It provides an interactive command-line interface for running financial analysis modules, algorithms, and trading strategies with a comprehensive web-based analytics dashboard.

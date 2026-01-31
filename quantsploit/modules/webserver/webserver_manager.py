@@ -21,6 +21,7 @@ class WebserverManager:
     def __init__(self):
         self.port = "5000"
         self.host = "127.0.0.1"
+        self.lan_mode = False  # If True, bind to 0.0.0.0 for LAN access
         self.action = None
 
     @property
@@ -67,17 +68,19 @@ class WebserverManager:
         except (ValueError, FileNotFoundError):
             return None
 
-    def start(self, port: str = None, host: str = None):
+    def start(self, port: str = None, host: str = None, lan: bool = False):
         """Start the webserver in background"""
         if port:
             self.port = port
         if host:
             self.host = host
+        if lan:
+            self.lan_mode = True
 
         self._ensure_dirs()
 
         if self._is_running():
-            console.print("\n[bold red]✗ Webserver is already running[/bold red]")
+            console.print("\n[bold red]Webserver is already running[/bold red]")
             console.print(f"  [cyan]PID:[/cyan] {self._get_pid()}")
             console.print(f"  [cyan]URL:[/cyan] http://{self.host}:{self.port}\n")
             return False
@@ -88,9 +91,14 @@ class WebserverManager:
         app_file = dashboard_dir / 'app.py'
 
         if not app_file.exists():
-            console.print(f"\n[bold red]✗ Dashboard app not found[/bold red]")
+            console.print(f"\n[bold red]Dashboard app not found[/bold red]")
             console.print(f"  [red]Expected at: {app_file}[/red]\n")
             return False
+
+        # Security warning for LAN mode without password
+        if self.lan_mode and not os.environ.get('DASHBOARD_PASSWORD'):
+            console.print("\n[bold yellow]WARNING: LAN mode enabled without DASHBOARD_PASSWORD![/bold yellow]")
+            console.print("[yellow]Set DASHBOARD_PASSWORD environment variable for security.[/yellow]\n")
 
         # Prepare environment
         env = os.environ.copy()
@@ -103,13 +111,20 @@ class WebserverManager:
             log_file = open(self.log_file, 'a')
             log_file.write(f"\n{'='*60}\n")
             log_file.write(f"Webserver started at {time.strftime('%Y-%m-%d %H:%M:%S')}\n")
-            log_file.write(f"Host: {self.host}, Port: {self.port}\n")
+            log_file.write(f"Host: {self.host}, Port: {self.port}, LAN: {self.lan_mode}\n")
             log_file.write(f"{'='*60}\n\n")
             log_file.flush()
 
+            # Build command args (debug is off by default for security)
+            cmd = [sys.executable, str(app_file), '--port', self.port]
+            if self.lan_mode:
+                cmd.append('--host-lan')
+            else:
+                cmd.extend(['--host', self.host])
+
             # Start the Flask app
             process = subprocess.Popen(
-                [sys.executable, str(app_file), '--host', self.host, '--port', self.port, '--production'],
+                cmd,
                 cwd=str(dashboard_dir),
                 env=env,
                 stdout=log_file,
@@ -214,7 +229,7 @@ class WebserverManager:
         console.print()
         return running
 
-    def restart(self, port: str = None, host: str = None):
+    def restart(self, port: str = None, host: str = None, lan: bool = False):
         """Restart the webserver"""
         # Stop if running
         if self._is_running():
@@ -222,4 +237,4 @@ class WebserverManager:
             time.sleep(1)
 
         # Start
-        return self.start(port, host)
+        return self.start(port, host, lan)

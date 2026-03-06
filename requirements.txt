@@ -18,7 +18,7 @@ requests==2.31.0
 
 # Web Dashboard
 flask==3.0.0
-markdown==3.5.1
+markdown==3.8.1
 
 # Security Extensions
 flask-limiter==3.5.0
